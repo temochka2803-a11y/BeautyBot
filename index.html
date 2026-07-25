@@ -248,7 +248,21 @@ const TIMES = ['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','
    реальная защита данных обеспечивается policies (RLS) в базе, а не секретностью ключа. */
 const SUPABASE_URL = 'https://ditjrowiacckqqxtqdbx.supabase.co/rest/v1/';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRpdGpyb3dpYWNja3FxeHRxZGJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5OTk1NTMsImV4cCI6MjEwMDU3NTU1M30.IkmBR9AeptjNrimoWFJjmEEhHvw-1oRTt9nlSImP_DU';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let sb = null;
+let SUPABASE_INIT_ERROR = null;
+try{
+  if(!window.supabase || typeof window.supabase.createClient !== 'function'){
+    throw new Error('Supabase SDK не загрузился (проверьте интернет/блокировщики рекламы или что <script> с cdn.jsdelivr.net не удалён из index.html)');
+  }
+  if(SUPABASE_URL.includes('YOUR-PROJECT') || SUPABASE_ANON_KEY.includes('YOUR-ANON-KEY')){
+    throw new Error('В коде остались значения-заглушки SUPABASE_URL / SUPABASE_ANON_KEY — вставьте реальные из Supabase Dashboard → Project Settings → API');
+  }
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}catch(e){
+  SUPABASE_INIT_ERROR = e.message || String(e);
+  console.error('Supabase init failed:', e);
+}
 
 /* Персональные данные (shared:false) привязываются к Telegram ID текущего пользователя.
    Вне Telegram (тестирование в браузере) используется временный тестовый идентификатор. */
@@ -260,7 +274,7 @@ function ownerId(){
 async function sget(key, shared=false){
   try{
     const scopeKey = shared ? key : (ownerId()+':'+key);
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('app_storage').select('value')
       .eq('scope_key', scopeKey).eq('shared', shared).maybeSingle();
     if(error || !data) return null;
@@ -270,7 +284,7 @@ async function sget(key, shared=false){
 async function sset(key, value, shared=false){
   try{
     const scopeKey = shared ? key : (ownerId()+':'+key);
-    const { error } = await supabase.from('app_storage')
+    const { error } = await sb.from('app_storage')
       .upsert({ scope_key:scopeKey, shared, value, updated_at:new Date().toISOString() }, { onConflict:'scope_key,shared' });
     if(error) console.error('sset failed', error);
   }catch(e){ console.error('sset failed', e); }
@@ -279,7 +293,7 @@ async function slist(prefix, shared=false){
   try{
     const base = shared ? '' : (ownerId()+':');
     const fullPrefix = base + (prefix||'');
-    const { data, error } = await supabase.from('app_storage')
+    const { data, error } = await sb.from('app_storage')
       .select('scope_key').eq('shared', shared).like('scope_key', fullPrefix+'%');
     if(error || !data) return [];
     return data.map(r => shared ? r.scope_key : r.scope_key.slice(base.length));
@@ -413,7 +427,7 @@ async function removeMasterFromIndex(id){
 async function sdelete(key, shared=false){
   try{
     const scopeKey = shared ? key : (ownerId()+':'+key);
-    await supabase.from('app_storage').delete().eq('scope_key', scopeKey).eq('shared', shared);
+    await sb.from('app_storage').delete().eq('scope_key', scopeKey).eq('shared', shared);
   }catch(e){ /* row may not exist */ }
 }
 
@@ -438,6 +452,10 @@ function detectTelegramIdentity(){
 }
 
 async function init(){
+  if(SUPABASE_INIT_ERROR){
+    renderSetupError(SUPABASE_INIT_ERROR);
+    return;
+  }
   detectTelegramIdentity();
   await seedIfEmpty();
   state.myMasterId = await sget('my-master-id', false);
@@ -453,6 +471,17 @@ async function init(){
   render();
 }
 
+function renderSetupError(message){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div style="padding:60px 24px;text-align:center;font-family:'Inter',sans-serif;">
+      <div style="font-size:40px;margin-bottom:14px;">⚠️</div>
+      <div style="font-family:'Fraunces',serif;font-weight:600;font-size:19px;color:#34202C;margin-bottom:10px;">Приложение не настроено</div>
+      <div style="font-size:13.5px;color:#7C6670;line-height:1.6;max-width:340px;margin:0 auto;">${escapeHtml(message)}</div>
+      <div style="margin-top:18px;font-size:12px;color:#7C6670;">Откройте index.html и проверьте значения SUPABASE_URL и SUPABASE_ANON_KEY в начале &lt;script&gt;.</div>
+    </div>`;
+}
+
 /* ============ RENDER ROOT ============ */
 function render(){
   const app = document.getElementById('app');
@@ -465,6 +494,7 @@ function render(){
   html += '</div>' + renderNav();
   if(state.toast) html += `<div class="toast">${escapeHtml(state.toast)}</div>`;
   app.innerHTML = html;
+  app.dataset.rendered = 'true';
   // async fill-ins after paint
   if(state.view==='catalog' && !state.selectedMasterId) fillCatalog();
   if(state.view==='catalog' && state.selectedMasterId) fillMasterDetail();
@@ -1370,6 +1400,20 @@ async function adminSaveEdit(id){
 window.adminSaveEdit = adminSaveEdit;
 
 /* ============ GO ============ */
+/* ============ SAFETY NET ============
+   Если что-то всё же упадёт при загрузке (опечатка при редактировании и т.п.),
+   показываем понятную ошибку вместо белого экрана. */
+window.addEventListener('error', function(e){
+  const app = document.getElementById('app');
+  if(app && !app.dataset.rendered){
+    app.innerHTML = `<div style="padding:60px 24px;text-align:center;font-family:sans-serif;">
+      <div style="font-size:40px;margin-bottom:14px;">⚠️</div>
+      <div style="font-weight:700;font-size:16px;color:#34202C;margin-bottom:8px;">Ошибка при загрузке приложения</div>
+      <div style="font-size:12.5px;color:#7C6670;word-break:break-word;">${(e.message||'').toString().replace(/</g,'&lt;')}</div>
+    </div>`;
+  }
+});
+
 init();
 </script>
 </body>
