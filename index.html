@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>BeautyHub — площадка бьюти-мастеров</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root{
+  --bg:#F7F2F4;
+  --surface:#FFFFFF;
+  --ink:#34202C;
+  --ink-soft:#7C6670;
+  --rose:#B94B6C;
+  --rose-deep:#8C3B52;
+  --gold:#C89B4A;
+  --teal:#3E7A6F;
+  --line:#EBDEE3;
+  --danger:#B9464B;
+  --shadow: 0 8px 24px rgba(60,20,35,0.08);
+  --radius: 18px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  font-family:'Inter',sans-serif;
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,.display{font-family:'Fraunces',serif;}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
+input,select,textarea{font-family:inherit;}
+::-webkit-scrollbar{display:none;}
+
+#frame{
+  max-width:430px;
+  margin:0 auto;
+  min-height:100vh;
+  background:var(--bg);
+  position:relative;
+  padding-bottom:78px;
+}
+
+/* header */
+.topbar{
+  position:sticky;top:0;z-index:20;
+  background:var(--bg);
+  padding:18px 18px 10px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.brand{display:flex;align-items:center;gap:8px;}
+.brand .mark{
+  width:32px;height:32px;border-radius:10px;
+  background:linear-gradient(135deg,var(--rose),var(--rose-deep));
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;
+}
+.brand .word{font-family:'Fraunces',serif;font-weight:600;font-size:19px;letter-spacing:-0.2px;}
+.brand .word em{font-style:italic;color:var(--rose);}
+.hdr-icon{width:36px;height:36px;border-radius:50%;background:var(--surface);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-size:15px;}
+
+.section-pad{padding:0 18px;}
+
+/* chips */
+.chiprow{display:flex;gap:8px;overflow-x:auto;padding:2px 18px 12px;scroll-snap-type:x proximity;}
+.chip{
+  flex:0 0 auto;padding:8px 14px;border-radius:100px;background:var(--surface);
+  font-size:13px;font-weight:600;color:var(--ink-soft);border:1px solid var(--line);
+  white-space:nowrap;transition:.15s;
+}
+.chip.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+.filterbar{display:flex;gap:8px;padding:0 18px 12px;}
+.selectbox{
+  flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:9px 10px;font-size:13px;font-weight:600;color:var(--ink);
+}
+
+/* master cards */
+.mcard{
+  background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:14px;margin:0 18px 14px;display:flex;gap:12px;align-items:flex-start;
+}
+.avatar{
+  width:58px;height:58px;border-radius:16px;flex:0 0 58px;
+  display:flex;align-items:center;justify-content:center;font-size:26px;
+  background:var(--bg);
+}
+.mcard-body{flex:1;min-width:0;}
+.mcard-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;}
+.mcard-name{font-family:'Fraunces',serif;font-weight:600;font-size:16.5px;line-height:1.2;}
+.mcard-city{color:var(--ink-soft);font-size:12.5px;margin-top:2px;}
+.tag{
+  display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;
+  padding:3px 9px;border-radius:100px;margin-top:6px;
+}
+.stars{color:var(--gold);font-size:13px;letter-spacing:1px;}
+.rating-row{display:flex;align-items:center;gap:5px;margin-top:7px;font-size:12.5px;color:var(--ink-soft);}
+.price-from{font-weight:700;color:var(--rose-deep);font-size:13px;}
+
+.empty{
+  text-align:center;color:var(--ink-soft);padding:60px 30px;font-size:14px;line-height:1.6;
+}
+.empty .big{font-size:34px;margin-bottom:10px;}
+
+/* bottom nav */
+.navbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:30;
+  display:flex;justify-content:center;
+}
+.navbar-inner{
+  width:100%;max-width:430px;background:var(--surface);
+  box-shadow:0 -6px 20px rgba(60,20,35,0.08);
+  display:flex;border-top:1px solid var(--line);
+}
+.navbtn{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:11px 0 9px;font-size:10.5px;font-weight:700;color:var(--ink-soft);position:relative;
+}
+.navbtn.active{color:var(--rose-deep);}
+.navbtn .ic{font-size:19px;}
+.navdot{
+  position:absolute;top:6px;right:28%;width:8px;height:8px;border-radius:50%;background:var(--danger);
+  border:2px solid var(--surface);
+}
+
+/* buttons */
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:13px 18px;border-radius:14px;font-weight:700;font-size:14.5px;
+  background:var(--ink);color:#fff;width:100%;
+}
+.btn.primary{background:linear-gradient(135deg,var(--rose),var(--rose-deep));}
+.btn.ghost{background:var(--surface);color:var(--ink);border:1px solid var(--line);}
+.btn.teal{background:var(--teal);}
+.btn.danger{background:transparent;color:var(--danger);border:1px solid #ecd0d1;}
+.btn.small{padding:9px 12px;font-size:13px;border-radius:11px;width:auto;}
+.btn:disabled{opacity:.45;}
+
+.card{
+  background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:16px;margin:0 18px 14px;
+}
+.field{margin-bottom:12px;}
+.field label{display:block;font-size:12.5px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;}
+.field input,.field select,.field textarea{
+  width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);
+  background:var(--bg);font-size:14px;color:var(--ink);
+}
+.field textarea{resize:vertical;min-height:70px;}
+.row2{display:flex;gap:10px;}
+.row2 .field{flex:1;}
+
+.hero{
+  padding:26px 18px 6px;
+}
+.hero h1{font-size:26px;margin:0 0 6px;line-height:1.15;letter-spacing:-.3px;}
+.hero p{color:var(--ink-soft);font-size:14px;margin:0;line-height:1.5;}
+
+.subnav{display:flex;gap:6px;padding:4px 18px 14px;overflow-x:auto;}
+.subnav button{
+  flex:0 0 auto;padding:8px 13px;border-radius:11px;font-size:12.5px;font-weight:700;
+  background:var(--surface);color:var(--ink-soft);border:1px solid var(--line);
+}
+.subnav button.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+.badge{display:inline-block;padding:3px 9px;border-radius:100px;font-size:11px;font-weight:700;}
+.badge.pending{background:#FBEFD6;color:#8A5A1F;}
+.badge.confirmed{background:#DDEDE6;color:#2E6B52;}
+.badge.cancelled{background:#F3D8DE;color:#8C3B52;}
+.badge.active{background:#DDEDE6;color:#2E6B52;}
+.badge.inactive{background:#F3D8DE;color:#8C3B52;}
+.badge.demo{background:#E4DCF3;color:#4B3B7A;}
+
+.gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;}
+.gallery img{width:100%;height:78px;object-fit:cover;border-radius:10px;background:var(--line);}
+
+.svc-row{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);}
+.svc-row:last-child{border-bottom:none;}
+.svc-name{font-weight:600;font-size:14px;}
+.svc-meta{color:var(--ink-soft);font-size:12px;margin-top:2px;}
+.svc-price{font-weight:700;color:var(--rose-deep);}
+
+.slot{
+  padding:8px 4px;border-radius:10px;background:var(--bg);border:1px solid var(--line);
+  text-align:center;font-size:12.5px;font-weight:700;
+}
+.slot.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+.slot.taken{opacity:.35;text-decoration:line-through;}
+.slotgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px;}
+
+.review{padding:12px 0;border-bottom:1px solid var(--line);}
+.review:last-child{border-bottom:none;}
+.review-top{display:flex;justify-content:space-between;align-items:center;}
+.review-name{font-weight:700;font-size:13.5px;}
+.review-date{font-size:11px;color:var(--ink-soft);}
+.review-text{font-size:13.5px;color:var(--ink);margin-top:5px;line-height:1.5;}
+
+.backbar{display:flex;align-items:center;gap:10px;padding:16px 18px 4px;}
+.backbtn{width:34px;height:34px;border-radius:50%;background:var(--surface);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;}
+
+.toast{
+  position:fixed;bottom:92px;left:50%;transform:translateX(-50%);
+  background:var(--ink);color:#fff;padding:12px 18px;border-radius:100px;font-size:13px;font-weight:600;
+  box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:100;max-width:380px;text-align:center;
+  animation:toastin .25s ease;
+}
+@keyframes toastin{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+
+.pillnote{
+  background:#F3E7EC;border:1px solid #EAD3DC;color:var(--rose-deep);
+  padding:10px 12px;border-radius:12px;font-size:12px;line-height:1.5;margin:0 18px 14px;
+}
+.divider{height:1px;background:var(--line);margin:14px 0;}
+.notif-item{display:flex;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);}
+.notif-item:last-child{border-bottom:none;}
+.notif-ic{width:34px;height:34px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;flex:0 0 34px;}
+.notif-text{font-size:13px;line-height:1.4;}
+.notif-time{font-size:11px;color:var(--ink-soft);margin-top:2px;}
+.loading{display:flex;align-items:center;justify-content:center;padding:60px 0;color:var(--ink-soft);font-size:13px;}
+.starpick{display:flex;gap:6px;font-size:26px;}
+.starpick span{cursor:pointer;color:var(--line);}
+.starpick span.on{color:var(--gold);}
+.link-btn{color:var(--rose-deep);font-weight:700;font-size:13px;}
+</style>
+</head>
+<body>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<div id="frame"><div id="app"></div></div>
+
+<script>
+/* ============ CONFIG ============ */
+const OWNER_TELEGRAM_IDS = ['8078091086']; // владелец платформы — доступ к кабинету только с этого Telegram-аккаунта
+const SPECS = {
+  manicure:{label:'Маникюр', icon:'💅'},
+  brows:{label:'Брови', icon:'🪞'},
+  tattoo:{label:'Тату', icon:'🖋️'},
+  piercing:{label:'Пирсинг', icon:'💎'},
+  lashes:{label:'Ресницы', icon:'👁️'},
+};
+const TIMES = ['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'];
+
+/* ============ STORAGE HELPERS ============ */
+async function sget(key, shared=false){
+  try{ const r = await window.storage.get(key, shared); return r ? JSON.parse(r.value) : null; }
+  catch(e){ return null; }
+}
+async function sset(key, value, shared=false){
+  try{ await window.storage.set(key, JSON.stringify(value), shared); }catch(e){ console.error('storage set failed', e); }
+}
+async function slist(prefix, shared=false){
+  try{ const r = await window.storage.list(prefix, shared); return r ? r.keys : []; }catch(e){ return []; }
+}
+
+function uid(){ return Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4); }
+function todayISO(offset=0){ const d=new Date(); d.setDate(d.getDate()+offset); return d.toISOString().slice(0,10); }
+function fmtDate(iso){
+  const d = new Date(iso+'T00:00:00');
+  return d.toLocaleDateString('ru-RU',{day:'numeric',month:'short',weekday:'short'});
+}
+function ratingOf(m){ return m.ratingCount ? (m.ratingSum/m.ratingCount) : 0; }
+function starsStr(avg){
+  const r = Math.round(avg);
+  return '★'.repeat(r) + '☆'.repeat(5-r);
+}
+function priceFrom(m){
+  if(!m.services || !m.services.length) return null;
+  return Math.min(...m.services.map(s=>s.price));
+}
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ============ SEED DEMO DATA (first run only, shared) ============ */
+async function seedIfEmpty(){
+  const seeded = await sget('seeded-v1', true);
+  if(seeded) return;
+  const seedMasters = [
+    {spec:'manicure', name:'Алина Ковалёва', city:'Москва', address:'ул. Тверская, 12', bio:'Маникюр и покрытие гель-лак с 2018 года. Аккуратный аппаратный маникюр, дизайн любой сложности.',
+      services:[{name:'Маникюр классический',price:1500,duration:60},{name:'Гель-лак',price:2200,duration:90},{name:'Дизайн (1 ноготь)',price:150,duration:10}],
+      portfolio:['https://picsum.photos/seed/nails1/400/300','https://picsum.photos/seed/nails2/400/300','https://picsum.photos/seed/nails3/400/300'],
+      reviews:[{name:'Мария',rating:5,comment:'Очень аккуратно и стойко держится, буду записываться ещё!'},{name:'Ольга',rating:5,comment:'Лучший мастер в городе, супер дизайн'}]},
+    {spec:'brows', name:'Диана Смирнова', city:'Санкт-Петербург', address:'Невский пр-т, 45', bio:'Архитектура бровей, ламинирование, окрашивание хной. Индивидуальный подбор формы.',
+      services:[{name:'Коррекция + окрашивание',price:1200,duration:45},{name:'Ламинирование бровей',price:1800,duration:60}],
+      portfolio:['https://picsum.photos/seed/brows1/400/300','https://picsum.photos/seed/brows2/400/300'],
+      reviews:[{name:'Катя',rating:4,comment:'Форма отличная, но пришлось немного подождать'}]},
+    {spec:'lashes', name:'Юлия Петрова', city:'Москва', address:'Кутузовский пр-т, 3', bio:'Наращивание ресниц 2D-3D, ламинирование ресниц. Гипоаллергенные материалы.',
+      services:[{name:'Наращивание 2D',price:1800,duration:120},{name:'Ламинирование ресниц',price:1600,duration:60}],
+      portfolio:['https://picsum.photos/seed/lash1/400/300','https://picsum.photos/seed/lash2/400/300','https://picsum.photos/seed/lash3/400/300'],
+      reviews:[{name:'Настя',rating:5,comment:'Реснички держатся уже 3 недели, выглядят супер натурально'}]},
+    {spec:'tattoo', name:'Игорь Волков', city:'Казань', address:'ул. Баумана, 20', bio:'Тату-мастер, стили: минимализм, лайнворк, чёрно-белая графика. Опыт 7 лет.',
+      services:[{name:'Тату малая (до 5см)',price:3000,duration:60},{name:'Тату средняя',price:7000,duration:150}],
+      portfolio:['https://picsum.photos/seed/tattoo1/400/300','https://picsum.photos/seed/tattoo2/400/300'],
+      reviews:[{name:'Денис',rating:5,comment:'Линии идеально ровные, всё стерильно'}]},
+    {spec:'piercing', name:'Марк Соколов', city:'Санкт-Петербург', address:'ул. Рубинштейна, 9', bio:'Профессиональный пирсинг любой сложности. Только имплант-титан.',
+      services:[{name:'Пирсинг мочки',price:1200,duration:20},{name:'Пирсинг хряща',price:1800,duration:30}],
+      portfolio:['https://picsum.photos/seed/pierce1/400/300','https://picsum.photos/seed/pierce2/400/300'],
+      reviews:[]},
+  ];
+  const ids=[];
+  for(const sm of seedMasters){
+    const id = uid();
+    ids.push(id);
+    const services = sm.services.map(s=>({id:uid(),...s}));
+    const portfolio = sm.portfolio.map(url=>({id:uid(),url,caption:''}));
+    const reviews = sm.reviews.map(r=>({id:uid(),masterId:id,name:r.name,rating:r.rating,comment:r.comment,createdAt:Date.now()-Math.random()*1e10}));
+    const ratingSum = reviews.reduce((a,r)=>a+r.rating,0);
+    const slots = {};
+    for(let i=0;i<10;i++){ slots[todayISO(i)] = TIMES.filter(()=>Math.random()>0.4); }
+    const master = {
+      id, specialization:sm.spec, name:sm.name, city:sm.city, address:sm.address, bio:sm.bio,
+      services, portfolio, slots, subscriptionActive:true, subscriptionUntil: todayISO(30),
+      ratingSum, ratingCount:reviews.length, createdAt:Date.now(), isDemo:false, disabledByAdmin:false
+    };
+    await sset('master:'+id, master, true);
+    await sset('reviews:'+id, reviews, true);
+    await sset('bookings:'+id, [], true);
+  }
+  await sset('masters-index', ids, true);
+  await sset('seeded-v1', true, true);
+}
+
+/* ============ STATE ============ */
+const ADMIN_PASSWORD = 'admin2026';
+
+const state = {
+  view:'catalog', // catalog | mybookings | master | admin
+  catalogStep:'city', // city | specs | list
+  filters:{spec:'all', city:null, sort:'rating'},
+  selectedMasterId:null,
+  adminAuthed:false,
+  adminEditingId:null,
+  masterDetailTab:'about',
+  booking:null, // {serviceId, date, time}
+  masterTab:'profile',
+  masterScheduleDate: todayISO(0),
+  myMasterId:null,
+  myMaster:null,
+  clientName:'',
+  clientContact:'',
+  demoMode:false,
+  toast:null,
+  loading:true,
+  isTelegramContext:false, // true when actually opened inside Telegram
+  tgUser:null,
+  isOwner:false,
+};
+
+function showToast(msg){
+  state.toast = msg;
+  render();
+  setTimeout(()=>{ state.toast=null; render(); }, 2600);
+}
+
+/* ============ DATA ACCESS ============ */
+async function loadAllMasters(){
+  const ids = await sget('masters-index', true) || [];
+  const list = [];
+  for(const id of ids){
+    const m = await sget('master:'+id, true);
+    if(m) list.push(m);
+  }
+  return list;
+}
+async function loadMaster(id){ return await sget('master:'+id, true); }
+async function saveMaster(m){ await sset('master:'+m.id, m, true); }
+async function loadBookings(masterId){ return await sget('bookings:'+masterId, true) || []; }
+async function saveBookings(masterId, arr){ await sset('bookings:'+masterId, arr, true); }
+async function loadReviews(masterId){ return await sget('reviews:'+masterId, true) || []; }
+async function saveReviews(masterId, arr){ await sset('reviews:'+masterId, arr, true); }
+async function addMasterToIndex(id){
+  const ids = await sget('masters-index', true) || [];
+  if(!ids.includes(id)){ ids.push(id); await sset('masters-index', ids, true); }
+}
+async function removeMasterFromIndex(id){
+  const ids = await sget('masters-index', true) || [];
+  await sset('masters-index', ids.filter(x=>x!==id), true);
+}
+async function sdelete(key, shared=false){
+  try{ await window.storage.delete(key, shared); }catch(e){ /* key may not exist */ }
+}
+
+/* ============ INIT ============ */
+function detectTelegramIdentity(){
+  try{
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if(tg && tg.initData && tg.initData.length > 0){
+      tg.ready(); tg.expand();
+      state.isTelegramContext = true;
+      state.tgUser = (tg.initDataUnsafe && tg.initDataUnsafe.user) || null;
+      const idStr = state.tgUser ? String(state.tgUser.id) : null;
+      state.isOwner = !!idStr && OWNER_TELEGRAM_IDS.includes(idStr);
+    } else {
+      state.isTelegramContext = false;
+      state.isOwner = false;
+    }
+  }catch(e){
+    state.isTelegramContext = false;
+    state.isOwner = false;
+  }
+}
+
+async function init(){
+  detectTelegramIdentity();
+  await seedIfEmpty();
+  state.myMasterId = await sget('my-master-id', false);
+  if(state.myMasterId){ state.myMaster = await loadMaster(state.myMasterId); }
+  state.clientName = await sget('my-client-name', false) || '';
+  state.clientContact = await sget('my-client-contact', false) || '';
+  // Prefill client name from Telegram profile if available and not set yet
+  if(state.isTelegramContext && state.tgUser && !state.clientName){
+    const full = [state.tgUser.first_name, state.tgUser.last_name].filter(Boolean).join(' ');
+    if(full) state.clientName = full;
+  }
+  state.loading = false;
+  render();
+}
+
+/* ============ RENDER ROOT ============ */
+function render(){
+  const app = document.getElementById('app');
+  if(state.loading){ app.innerHTML = '<div class="loading">Загрузка…</div>'; return; }
+  let html = renderTopbar() + '<div id="content">';
+  if(state.view==='catalog') html += renderCatalogPlaceholder();
+  else if(state.view==='mybookings') html += renderMyBookingsPlaceholder();
+  else if(state.view==='master') html += renderMasterAreaPlaceholder();
+  else if(state.view==='admin') html += `<div class="loading">Загрузка…</div>`;
+  html += '</div>' + renderNav();
+  if(state.toast) html += `<div class="toast">${escapeHtml(state.toast)}</div>`;
+  app.innerHTML = html;
+  // async fill-ins after paint
+  if(state.view==='catalog' && !state.selectedMasterId) fillCatalog();
+  if(state.view==='catalog' && state.selectedMasterId) fillMasterDetail();
+  if(state.view==='mybookings') fillMyBookings();
+  if(state.view==='master') fillMasterArea();
+  if(state.view==='admin') fillAdmin();
+}
+
+function renderTopbar(){
+  return `
+  <div class="topbar">
+    <div class="brand"><div class="mark">💄</div><div class="word">Beauty<em>Hub</em></div></div>
+    <div class="hdr-icon">✨</div>
+  </div>`;
+}
+
+function renderNav(){
+  const pendingBadge = state._pendingCount ? `<span class="navdot"></span>` : '';
+  const showAdminTab = state.isOwner || !state.isTelegramContext; // hidden entirely for non-owners inside real Telegram
+  const adminTab = showAdminTab ? `<button class="navbtn ${state.view==='admin'?'active':''}" onclick="goto('admin')"><span class="ic">🛠️</span>Владельцу</button>` : '';
+  return `
+  <div class="navbar"><div class="navbar-inner">
+    <button class="navbtn ${state.view==='catalog'?'active':''}" onclick="goto('catalog')"><span class="ic">🔎</span>Каталог</button>
+    <button class="navbtn ${state.view==='mybookings'?'active':''}" onclick="goto('mybookings')"><span class="ic">🗓️</span>Мои записи</button>
+    <button class="navbtn ${state.view==='master'?'active':''}" onclick="goto('master')">${pendingBadge}<span class="ic">💼</span>Мастеру</button>
+    ${adminTab}
+  </div></div>`;
+}
+
+function goto(view){
+  if(view==='admin' && state.isTelegramContext && !state.isOwner) return; // safety net, tab hidden anyway
+  state.view = view;
+  if(view==='catalog') state.selectedMasterId=null;
+  render();
+}
+window.goto = goto;
+
+/* placeholders shown instantly, replaced by fill* functions */
+function renderCatalogPlaceholder(){ return `<div class="loading">Загрузка мастеров…</div>`; }
+function renderMyBookingsPlaceholder(){ return `<div class="loading">Загрузка…</div>`; }
+function renderMasterAreaPlaceholder(){ return `<div class="loading">Загрузка…</div>`; }
+
+/* ============================================================
+   CATALOG (CLIENT)
+   ============================================================ */
+async function fillCatalog(){
+  const allMasters = await loadAllMasters();
+  const liveMasters = allMasters.filter(m=>m.subscriptionActive && !m.isDemo && !m.disabledByAdmin);
+
+  if(!state.filters.city){ return renderCityStep(liveMasters); }
+  if(state.catalogStep==='specs'){ return renderSpecStep(liveMasters); }
+  return renderListStep(liveMasters);
+}
+
+/* --- STEP 1: choose city --- */
+function renderCityStep(masters){
+  const counts = {};
+  masters.forEach(m=>{ counts[m.city] = (counts[m.city]||0)+1; });
+  const cities = Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+
+  const hero = `<div class="hero"><h1>В каком вы городе?</h1><p>Покажем мастеров маникюра, бровей, ресниц, тату и пирсинга рядом с вами.</p></div>`;
+
+  const cityList = cities.length ? `<div class="card" style="padding:8px 6px;">
+    ${cities.map(c=>`<div class="svc-row" style="padding:12px 10px;cursor:pointer;" onclick="chooseCity('${escapeHtml(c).replace(/'/g,"\\'")}')">
+      <div class="svc-name">📍 ${escapeHtml(c)}</div>
+      <div class="svc-meta" style="margin:0;color:var(--ink-soft)">${counts[c]} мастер${counts[c]===1?'':counts[c]<5?'а':'ов'} →</div>
+    </div>`).join('')}
+  </div>` : `<div class="empty" style="padding:20px 30px"><div class="big">🏙️</div>Мастеров пока нет ни в одном городе.</div>`;
+
+  const manual = `<div class="section-pad">
+    <div class="field"><label>Или введите город вручную</label><input id="cityManual" placeholder="Например, Екатеринбург"></div>
+    <button class="btn ghost" onclick="chooseCityManual()">Найти мастеров в этом городе</button>
+  </div>`;
+
+  document.getElementById('content').innerHTML = hero + cityList + manual;
+}
+function chooseCity(c){
+  state.filters.city = c;
+  state.filters.spec = 'all';
+  state.catalogStep = 'specs';
+  fillCatalog();
+}
+function chooseCityManual(){
+  const v = document.getElementById('cityManual').value.trim();
+  if(!v){ showToast('Введите название города'); return; }
+  chooseCity(v);
+}
+window.chooseCity=chooseCity; window.chooseCityManual=chooseCityManual;
+
+function changeCity(){
+  state.filters.city = null;
+  state.catalogStep = 'city';
+  fillCatalog();
+}
+window.changeCity = changeCity;
+
+/* --- STEP 2: choose specialization group within city --- */
+function renderSpecStep(masters){
+  const inCity = masters.filter(m=>m.city===state.filters.city);
+  const cityBar = `<div class="backbar"><button class="backbtn" onclick="changeCity()">←</button><div style="font-weight:700">📍 ${escapeHtml(state.filters.city)}</div></div>`;
+  const hero = `<div class="hero" style="padding-top:6px"><h1 style="font-size:21px;">Кого ищете?</h1><p>Выберите специализацию — покажем мастеров в вашем городе.</p></div>`;
+
+  const groups = Object.entries(SPECS).map(([k,v])=>{
+    const count = inCity.filter(m=>m.specialization===k).length;
+    return `<div class="mcard" style="align-items:center;${count?'':'opacity:.4;'}" ${count?`onclick="chooseSpec('${k}')"`:''}>
+      <div class="avatar" style="font-size:28px;">${v.icon}</div>
+      <div class="mcard-body">
+        <div class="mcard-name">${v.label}</div>
+        <div class="mcard-city">${count} мастер${count===1?'':count<5?'а':'ов'} в городе</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const allBtn = `<div class="section-pad"><button class="btn ghost" onclick="chooseSpec('all')">Показать всех мастеров города (${inCity.length})</button></div>`;
+
+  document.getElementById('content').innerHTML = cityBar + hero + groups + allBtn;
+}
+function chooseSpec(k){
+  state.filters.spec = k;
+  state.catalogStep = 'list';
+  fillCatalog();
+}
+window.chooseSpec = chooseSpec;
+
+/* --- STEP 3: master list for city + specialization --- */
+function renderListStep(masters){
+  const inCity = masters.filter(m=>m.city===state.filters.city);
+  let list = inCity.filter(m=> state.filters.spec==='all' || m.specialization===state.filters.spec);
+
+  if(state.filters.sort==='rating') list.sort((a,b)=>ratingOf(b)-ratingOf(a));
+  else if(state.filters.sort==='name') list.sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+  else if(state.filters.sort==='price') list.sort((a,b)=>(priceFrom(a)||0)-(priceFrom(b)||0));
+
+  const cityBar = `<div class="backbar"><button class="backbtn" onclick="backToSpecs()">←</button><div style="font-weight:700">📍 ${escapeHtml(state.filters.city)} · ${state.filters.spec==='all'?'Все специалисты':SPECS[state.filters.spec].label}</div></div>`;
+
+  const chips = `<div class="chiprow">
+    <button class="chip ${state.filters.spec==='all'?'active':''}" onclick="chooseSpec('all')">Все</button>
+    ${Object.entries(SPECS).map(([k,v])=>`<button class="chip ${state.filters.spec===k?'active':''}" onclick="chooseSpec('${k}')">${v.icon} ${v.label}</button>`).join('')}
+  </div>`;
+
+  const filterbar = `<div class="filterbar">
+    <select class="selectbox" onchange="setSort(this.value)">
+      <option value="rating" ${state.filters.sort==='rating'?'selected':''}>По рейтингу</option>
+      <option value="price" ${state.filters.sort==='price'?'selected':''}>По цене</option>
+      <option value="name" ${state.filters.sort==='name'?'selected':''}>По имени</option>
+    </select>
+    <button class="selectbox" style="flex:0 0 auto;font-weight:700;" onclick="changeCity()">Сменить город</button>
+  </div>`;
+
+  let cardsHtml;
+  if(!list.length){
+    cardsHtml = `<div class="empty"><div class="big">🪄</div>В этой категории пока нет мастеров в вашем городе.<br>Попробуйте другую специализацию.</div>`;
+  } else {
+    cardsHtml = list.map(m=>{
+      const spec = SPECS[m.specialization];
+      const avg = ratingOf(m);
+      const pf = priceFrom(m);
+      return `<div class="mcard" onclick="openMaster('${m.id}')">
+        <div class="avatar">${spec.icon}</div>
+        <div class="mcard-body">
+          <div class="mcard-top">
+            <div>
+              <div class="mcard-name">${escapeHtml(m.name)}</div>
+              <div class="mcard-city">📍 ${escapeHtml(m.city)}</div>
+            </div>
+            ${pf!=null?`<div class="price-from">от ${pf}₽</div>`:''}
+          </div>
+          <span class="tag" style="background:${specBg(m.specialization)};color:${specFg(m.specialization)}">${spec.icon} ${spec.label}</span>
+          <div class="rating-row"><span class="stars">${starsStr(avg)}</span> ${avg? avg.toFixed(1):'нет оценок'} ${m.ratingCount?`· ${m.ratingCount} отзыв.`:''}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('content').innerHTML = cityBar + chips + filterbar + cardsHtml;
+}
+function backToSpecs(){ state.catalogStep='specs'; fillCatalog(); }
+window.backToSpecs = backToSpecs;
+
+function specBg(k){ return {manicure:'#F3D8DE',brows:'#E4DCF3',tattoo:'#D8E3F3',piercing:'#DDEDE6',lashes:'#F6E6D2'}[k]; }
+function specFg(k){ return {manicure:'#8C3B52',brows:'#4B3B7A',tattoo:'#2C4E7A',piercing:'#2E6B52',lashes:'#8A5A1F'}[k]; }
+
+function setSort(s){ state.filters.sort=s; fillCatalog(); }
+window.setSort=setSort;
+
+function openMaster(id){
+  state.selectedMasterId = id;
+  state.masterDetailTab='about';
+  state.booking = null;
+  render();
+}
+window.openMaster = openMaster;
+
+/* ============================================================
+   MASTER DETAIL (CLIENT VIEW)
+   ============================================================ */
+async function fillMasterDetail(){
+  const m = await loadMaster(state.selectedMasterId);
+  if(!m){ document.getElementById('content').innerHTML = `<div class="empty">Мастер не найден</div>`; return; }
+  const reviews = await loadReviews(m.id);
+  const bookings = await loadBookings(m.id);
+  const spec = SPECS[m.specialization];
+  const avg = ratingOf(m);
+
+  const back = `<div class="backbar"><button class="backbtn" onclick="backToCatalog()">←</button><div style="font-weight:700">${escapeHtml(m.name)}</div></div>`;
+
+  const header = `<div class="card" style="display:flex;gap:12px;align-items:center;">
+    <div class="avatar" style="width:64px;height:64px;font-size:30px;">${spec.icon}</div>
+    <div>
+      <div class="mcard-name" style="font-size:18px;">${escapeHtml(m.name)}</div>
+      <div class="mcard-city">📍 ${escapeHtml(m.city)}${m.address?', '+escapeHtml(m.address):''}</div>
+      <div class="rating-row" style="margin-top:6px;"><span class="stars">${starsStr(avg)}</span> ${avg?avg.toFixed(1):'нет оценок'} ${m.ratingCount?`· ${m.ratingCount} отзыв.`:''}</div>
+    </div>
+  </div>`;
+
+  const tabs = `<div class="subnav">
+    <button class="${state.masterDetailTab==='about'?'active':''}" onclick="setDTab('about')">О мастере</button>
+    <button class="${state.masterDetailTab==='services'?'active':''}" onclick="setDTab('services')">Услуги</button>
+    <button class="${state.masterDetailTab==='portfolio'?'active':''}" onclick="setDTab('portfolio')">Работы</button>
+    <button class="${state.masterDetailTab==='reviews'?'active':''}" onclick="setDTab('reviews')">Отзывы (${reviews.length})</button>
+    <button class="${state.masterDetailTab==='book'?'active':''}" onclick="setDTab('book')">Записаться</button>
+  </div>`;
+
+  let body='';
+  if(state.masterDetailTab==='about'){
+    body = `<div class="card"><p style="margin:0;font-size:14px;line-height:1.6;color:var(--ink)">${escapeHtml(m.bio)||'Мастер пока не добавил описание.'}</p></div>`;
+  } else if(state.masterDetailTab==='services'){
+    body = `<div class="card">${
+      m.services.length? m.services.map(s=>`<div class="svc-row"><div><div class="svc-name">${escapeHtml(s.name)}</div><div class="svc-meta">${s.duration} мин</div></div><div class="svc-price">${s.price}₽</div></div>`).join('')
+      : '<div class="empty" style="padding:20px 0">Пока нет услуг</div>'
+    }</div>`;
+  } else if(state.masterDetailTab==='portfolio'){
+    body = `<div class="card"><div class="gallery">${
+      m.portfolio.length? m.portfolio.map(p=>`<img src="${p.url}" loading="lazy">`).join('') : ''
+    }</div>${!m.portfolio.length?'<div class="empty" style="padding:20px 0">Работ пока нет</div>':''}</div>`;
+  } else if(state.masterDetailTab==='reviews'){
+    body = `<div class="card">
+      ${reviews.length? reviews.slice().sort((a,b)=>b.createdAt-a.createdAt).map(r=>`
+        <div class="review">
+          <div class="review-top"><span class="review-name">${escapeHtml(r.name)}</span><span class="stars">${starsStr(r.rating)}</span></div>
+          <div class="review-text">${escapeHtml(r.comment)}</div>
+        </div>`).join('') : '<div class="empty" style="padding:10px 0 20px">Пока нет отзывов — станьте первым!</div>'}
+      <div class="divider"></div>
+      <div class="field"><label>Ваше имя</label><input id="rvName" value="${escapeHtml(state.clientName)}" placeholder="Имя"></div>
+      <div class="field"><label>Оценка</label><div class="starpick" id="rvStars">${[1,2,3,4,5].map(i=>`<span data-i="${i}" onclick="pickStar(${i})">★</span>`).join('')}</div></div>
+      <div class="field"><label>Отзыв</label><textarea id="rvText" placeholder="Расскажите, как всё прошло"></textarea></div>
+      <button class="btn primary" onclick="submitReview('${m.id}')">Оставить отзыв</button>
+    </div>`;
+  } else if(state.masterDetailTab==='book'){
+    body = renderBookingForm(m, bookings);
+  }
+
+  document.getElementById('content').innerHTML = back + header + tabs + body;
+  if(state.masterDetailTab==='reviews' && state._pickedStar){
+    document.querySelectorAll('#rvStars span').forEach(el=>{
+      if(parseInt(el.dataset.i)<=state._pickedStar) el.classList.add('on');
+    });
+  }
+}
+function backToCatalog(){ state.selectedMasterId=null; state.view='catalog'; render(); }
+window.backToCatalog=backToCatalog;
+function setDTab(t){ state.masterDetailTab=t; if(t!=='book') state.booking=null; fillMasterDetail(); }
+window.setDTab=setDTab;
+function pickStar(i){ state._pickedStar=i; fillMasterDetail(); }
+window.pickStar=pickStar;
+
+async function submitReview(masterId){
+  const name = document.getElementById('rvName').value.trim();
+  const text = document.getElementById('rvText').value.trim();
+  const rating = state._pickedStar||0;
+  if(!name || !rating || !text){ showToast('Заполните имя, оценку и текст отзыва'); return; }
+  await sset('my-client-name', name, false);
+  state.clientName = name;
+  const reviews = await loadReviews(masterId);
+  reviews.push({id:uid(), masterId, name, rating, comment:text, createdAt:Date.now()});
+  await saveReviews(masterId, reviews);
+  const m = await loadMaster(masterId);
+  m.ratingSum = (m.ratingSum||0) + rating;
+  m.ratingCount = (m.ratingCount||0) + 1;
+  await saveMaster(m);
+  state._pickedStar=null;
+  showToast('Спасибо за отзыв!');
+  fillMasterDetail();
+}
+window.submitReview = submitReview;
+
+function renderBookingForm(m, bookings){
+  if(!m.services.length) return `<div class="card"><div class="empty" style="padding:20px 0">Мастер ещё не добавил услуги для записи</div></div>`;
+  const b = state.booking || {serviceId:m.services[0].id, date:null, time:null};
+  state.booking = b;
+
+  const serviceOpts = m.services.map(s=>`<option value="${s.id}" ${b.serviceId===s.id?'selected':''}>${escapeHtml(s.name)} — ${s.price}₽</option>`).join('');
+
+  const days = Array.from({length:10},(_,i)=>todayISO(i));
+  const dayChips = days.map(d=>{
+    const has = (m.slots && m.slots[d] && m.slots[d].length);
+    return `<button class="chip ${b.date===d?'active':''}" ${has?'':'style="opacity:.35;pointer-events:none;"'} onclick="pickDate('${d}')">${fmtDate(d)}</button>`;
+  }).join('');
+
+  let slotsHtml = '';
+  if(b.date){
+    const daySlots = (m.slots && m.slots[b.date]) || [];
+    const takenTimes = bookings.filter(bk=>bk.date===b.date && bk.status!=='cancelled').map(bk=>bk.time);
+    slotsHtml = `<div class="slotgrid">${daySlots.map(t=>{
+      const taken = takenTimes.includes(t);
+      return `<div class="slot ${b.time===t?'on':''} ${taken?'taken':''}" onclick="${taken?'':`pickTime('${t}')`}">${t}</div>`;
+    }).join('')}</div>`;
+    if(!daySlots.length) slotsHtml = `<div class="empty" style="padding:10px 0">На эту дату нет свободного времени</div>`;
+  }
+
+  return `<div class="card">
+    <div class="field"><label>Услуга</label><select id="bkService" onchange="setBookField('serviceId', this.value)">${serviceOpts}</select></div>
+    <div class="field"><label>Дата</label><div class="chiprow" style="padding:0;overflow-x:auto;">${dayChips}</div></div>
+    ${b.date?`<div class="field"><label>Время</label>${slotsHtml}</div>`:''}
+    <div class="field"><label>Ваше имя</label><input id="bkName" value="${escapeHtml(state.clientName)}" placeholder="Имя"></div>
+    <div class="field"><label>Телефон / Telegram</label><input id="bkContact" value="${escapeHtml(state.clientContact)}" placeholder="@username или телефон"></div>
+    <button class="btn primary" onclick="submitBooking('${m.id}')" ${(!b.date||!b.time)?'disabled':''}>Отправить заявку на запись</button>
+    <div class="pillnote" style="margin:10px 0 0;">После отправки заявка придёт мастеру. Как только он подтвердит запись, вы увидите статус во вкладке «Мои записи».</div>
+  </div>`;
+}
+function pickDate(d){ state.booking = {...state.booking, date:d, time:null}; fillMasterDetail(); }
+function pickTime(t){ state.booking = {...state.booking, time:t}; fillMasterDetail(); }
+function setBookField(k,v){ state.booking = {...state.booking, [k]:v}; }
+window.pickDate=pickDate; window.pickTime=pickTime; window.setBookField=setBookField;
+
+async function submitBooking(masterId){
+  const name = document.getElementById('bkName').value.trim();
+  const contact = document.getElementById('bkContact').value.trim();
+  if(!name || !contact){ showToast('Укажите имя и контакт для связи'); return; }
+  await sset('my-client-name', name, false);
+  await sset('my-client-contact', contact, false);
+  state.clientName=name; state.clientContact=contact;
+
+  const m = await loadMaster(masterId);
+  const service = m.services.find(s=>s.id===state.booking.serviceId);
+  const bookings = await loadBookings(masterId);
+  const booking = {
+    id:uid(), masterId, serviceId:service.id, serviceName:service.name, price:service.price,
+    date:state.booking.date, time:state.booking.time,
+    clientName:name, clientContact:contact, status:'pending', createdAt:Date.now()
+  };
+  bookings.push(booking);
+  await saveBookings(masterId, bookings);
+
+  const mine = await sget('my-client-bookings', false) || [];
+  mine.push({bookingId:booking.id, masterId});
+  await sset('my-client-bookings', mine, false);
+
+  state.booking=null;
+  showToast('Заявка отправлена мастеру! Ожидайте подтверждения.');
+  state.masterDetailTab='about';
+  fillMasterDetail();
+}
+window.submitBooking = submitBooking;
+
+/* ============================================================
+   MY BOOKINGS (CLIENT)
+   ============================================================ */
+async function fillMyBookings(){
+  const mine = await sget('my-client-bookings', false) || [];
+  const hero = `<div class="hero"><h1>Мои записи</h1><p>Статусы ваших заявок к мастерам.</p></div>`;
+  if(!mine.length){
+    document.getElementById('content').innerHTML = hero + `<div class="empty"><div class="big">🗓️</div>Пока нет записей.<br>Найдите мастера в каталоге и оставьте заявку.</div>`;
+    return;
+  }
+  const rows=[];
+  for(const entry of mine.slice().reverse()){
+    const bookings = await loadBookings(entry.masterId);
+    const bk = bookings.find(b=>b.id===entry.bookingId);
+    if(!bk) continue;
+    const m = await loadMaster(entry.masterId);
+    const spec = m?SPECS[m.specialization]:null;
+    rows.push(`<div class="card">
+      <div class="mcard-top">
+        <div>
+          <div class="mcard-name">${escapeHtml(bk.serviceName)}</div>
+          <div class="mcard-city">${spec?spec.icon+' ':''}${m?escapeHtml(m.name):'Мастер'} · 📍 ${m?escapeHtml(m.city):''}</div>
+        </div>
+        <span class="badge ${bk.status}">${bk.status==='pending'?'Ожидает':bk.status==='confirmed'?'Подтверждено':'Отменено'}</span>
+      </div>
+      <div class="divider"></div>
+      <div style="font-size:13.5px;color:var(--ink-soft)">📅 ${fmtDate(bk.date)} в ${bk.time} · ${bk.price}₽</div>
+    </div>`);
+  }
+  document.getElementById('content').innerHTML = hero + rows.join('');
+}
+
+/* ============================================================
+   MASTER AREA
+   ============================================================ */
+async function fillMasterArea(){
+  if(state.demoMode){ return renderMasterDashboard(demoMasterObject(), true); }
+  if(!state.myMasterId){
+    return document.getElementById('content').innerHTML = `
+    <div class="hero"><h1>Кабинет мастера</h1><p>Разместите свой профиль на BeautyHub: услуги, цены, работы и запись клиентов — всё в одном мини-приложении.</p></div>
+    <div class="card">
+      <div style="font-size:14px;line-height:1.7;">
+        ✅ Своя страница с ценами и портфолио<br>
+        ✅ Онлайн-запись с подтверждением<br>
+        ✅ Уведомления о новых заявках<br>
+        ✅ Отзывы клиентов и рейтинг<br>
+      </div>
+    </div>
+    <div class="section-pad">
+      <button class="btn primary" onclick="startRegistration()">Создать профиль мастера</button>
+      <div style="height:10px"></div>
+      <button class="btn ghost" onclick="enterDemo()">Посмотреть демо-режим</button>
+      <div class="pillnote" style="margin:12px 0 0;padding-left:12px;padding-right:12px;">Демо-режим показывает все функции кабинета мастера без сохранения данных и без оформления подписки.</div>
+    </div>`;
+  }
+  const m = await loadMaster(state.myMasterId);
+  state.myMaster = m;
+  renderMasterDashboard(m, false);
+}
+
+function demoMasterObject(){
+  return {
+    id:'demo', specialization:'manicure', name:'Ваше имя (демо)', city:'Ваш город', address:'Адрес приёма',
+    bio:'Здесь будет ваше описание и опыт работы.',
+    services:[{id:'d1',name:'Маникюр',price:1500,duration:60},{id:'d2',name:'Педикюр',price:2000,duration:90}],
+    portfolio:[{id:'p1',url:'https://picsum.photos/seed/demo1/400/300'},{id:'p2',url:'https://picsum.photos/seed/demo2/400/300'}],
+    slots:{[todayISO(0)]:['10:00','13:00','16:00']},
+    subscriptionActive:false, subscriptionUntil:null, ratingSum:0, ratingCount:0, isDemo:true
+  };
+}
+function enterDemo(){ state.demoMode=true; state.masterTab='profile'; render(); }
+function exitDemo(){ state.demoMode=false; render(); }
+window.enterDemo=enterDemo; window.exitDemo=exitDemo;
+
+function startRegistration(){
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="fillMasterArea()">←</button><div style="font-weight:700">Регистрация мастера</div></div>
+  <div class="card">
+    <div class="field"><label>Имя</label><input id="regName" placeholder="Как вас видят клиенты"></div>
+    <div class="field"><label>Специализация</label><select id="regSpec">${Object.entries(SPECS).map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join('')}</select></div>
+    <div class="row2">
+      <div class="field"><label>Город</label><input id="regCity" placeholder="Москва"></div>
+      <div class="field"><label>Адрес приёма</label><input id="regAddress" placeholder="ул. Пример, 1"></div>
+    </div>
+    <div class="field"><label>О себе</label><textarea id="regBio" placeholder="Опыт, специализация, материалы…"></textarea></div>
+    <button class="btn primary" onclick="finishRegistration()">Создать профиль</button>
+  </div>`;
+}
+window.startRegistration=startRegistration;
+
+async function finishRegistration(){
+  const name = document.getElementById('regName').value.trim();
+  const spec = document.getElementById('regSpec').value;
+  const city = document.getElementById('regCity').value.trim();
+  const address = document.getElementById('regAddress').value.trim();
+  const bio = document.getElementById('regBio').value.trim();
+  if(!name || !city){ showToast('Укажите как минимум имя и город'); return; }
+  const id = uid();
+  const master = {
+    id, specialization:spec, name, city, address, bio,
+    services:[], portfolio:[], slots:{},
+    subscriptionActive:false, subscriptionUntil:null,
+    ratingSum:0, ratingCount:0, createdAt:Date.now(), isDemo:false, disabledByAdmin:false
+  };
+  await saveMaster(master);
+  await addMasterToIndex(id);
+  await saveBookings(id, []);
+  await saveReviews(id, []);
+  await sset('my-master-id', id, false);
+  state.myMasterId = id; state.myMaster = master;
+  showToast('Профиль создан! Осталось оформить подписку.');
+  fillMasterArea();
+}
+window.finishRegistration = finishRegistration;
+
+async function renderMasterDashboard(m, isDemo){
+  if(!isDemo && !m.subscriptionActive){
+    return renderPaywall(m);
+  }
+  const bookings = isDemo? [] : await loadBookings(m.id);
+  const pending = bookings.filter(b=>b.status==='pending').length;
+  state._pendingCount = pending;
+
+  const demoBanner = isDemo? `<div class="pillnote" style="background:#E4DCF3;border-color:#D6C6EE;color:#4B3B7A;">Вы в демо-режиме. Изменения не сохраняются. <button class="link-btn" style="margin-left:4px" onclick="exitDemo()">Выйти из демо</button></div>` : '';
+
+  const subInfo = !isDemo ? `<div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+      <div><div style="font-weight:700;font-size:13.5px;">Подписка активна</div><div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">До ${fmtDate(m.subscriptionUntil)}</div></div>
+      <span class="badge active">Активна</span>
+    </div>` : '';
+
+  const tabs = `<div class="subnav">
+    <button class="${state.masterTab==='profile'?'active':''}" onclick="setMTab('profile')">Профиль</button>
+    <button class="${state.masterTab==='services'?'active':''}" onclick="setMTab('services')">Услуги</button>
+    <button class="${state.masterTab==='portfolio'?'active':''}" onclick="setMTab('portfolio')">Работы</button>
+    <button class="${state.masterTab==='schedule'?'active':''}" onclick="setMTab('schedule')">Расписание</button>
+    <button class="${state.masterTab==='bookings'?'active':''}" onclick="setMTab('bookings')">Записи${pending?` (${pending})`:''}</button>
+  </div>`;
+
+  let body='';
+  if(state.masterTab==='profile') body = renderMProfile(m, isDemo);
+  else if(state.masterTab==='services') body = renderMServices(m, isDemo);
+  else if(state.masterTab==='portfolio') body = renderMPortfolio(m, isDemo);
+  else if(state.masterTab==='schedule') body = renderMSchedule(m, isDemo);
+  else if(state.masterTab==='bookings') body = renderMBookings(m, bookings, isDemo);
+
+  document.getElementById('content').innerHTML = `<div class="hero" style="padding-top:20px;padding-bottom:0"><h1 style="font-size:22px;">${SPECS[m.specialization].icon} ${escapeHtml(m.name)}</h1></div>` + demoBanner + subInfo + tabs + body;
+}
+function setMTab(t){ state.masterTab=t; fillMasterArea(); }
+window.setMTab = setMTab;
+
+function renderPaywall(m){
+  document.getElementById('content').innerHTML = `
+  <div class="hero"><h1>Активируйте профиль</h1><p>Ваш профиль сохранён, но пока не виден клиентам. Оформите ежемесячную подписку, чтобы клиенты могли находить вас и записываться.</p></div>
+  <div class="card" style="text-align:center;">
+    <div style="font-family:'Fraunces',serif;font-size:30px;font-weight:600;">990₽<span style="font-size:14px;color:var(--ink-soft);font-weight:500;"> / месяц</span></div>
+    <div style="font-size:13px;color:var(--ink-soft);margin-top:6px;">Без ограничений по записям и услугам</div>
+  </div>
+  <div class="section-pad">
+    <button class="btn primary" onclick="paySubscription()">Оплатить подписку</button>
+    <div style="height:10px"></div>
+    <button class="btn ghost" onclick="editWhileInactive()">Настроить профиль без подписки</button>
+    <div class="pillnote" style="margin:12px 0 0;padding-left:12px;padding-right:12px;">Демо-оплата: в реальном приложении здесь будет подключён Telegram Payments или ЮKassa. После оплаты профиль сразу появится в каталоге для клиентов.</div>
+  </div>`;
+}
+window.renderPaywall = renderPaywall;
+
+async function paySubscription(){
+  const m = await loadMaster(state.myMasterId);
+  m.subscriptionActive = true;
+  m.subscriptionUntil = todayISO(30);
+  await saveMaster(m);
+  showToast('Подписка оформлена! Профиль виден клиентам.');
+  fillMasterArea();
+}
+window.paySubscription = paySubscription;
+
+function editWhileInactive(){ state.masterTab='profile'; state._forceEdit=true; fillMasterAreaEditMode(); }
+async function fillMasterAreaEditMode(){
+  const m = await loadMaster(state.myMasterId);
+  const tabs = `<div class="subnav">
+    <button class="${state.masterTab==='profile'?'active':''}" onclick="setMTabEdit('profile')">Профиль</button>
+    <button class="${state.masterTab==='services'?'active':''}" onclick="setMTabEdit('services')">Услуги</button>
+    <button class="${state.masterTab==='portfolio'?'active':''}" onclick="setMTabEdit('portfolio')">Работы</button>
+    <button class="${state.masterTab==='schedule'?'active':''}" onclick="setMTabEdit('schedule')">Расписание</button>
+  </div>`;
+  let body='';
+  if(state.masterTab==='profile') body = renderMProfile(m,false);
+  else if(state.masterTab==='services') body = renderMServices(m,false);
+  else if(state.masterTab==='portfolio') body = renderMPortfolio(m,false);
+  else if(state.masterTab==='schedule') body = renderMSchedule(m,false);
+  document.getElementById('content').innerHTML = `<div class="backbar"><button class="backbtn" onclick="fillMasterArea()">←</button><div style="font-weight:700">Настройка профиля</div></div>` + tabs + body + `<div class="section-pad"><button class="btn primary" onclick="fillMasterArea()">Готово</button></div>`;
+}
+function setMTabEdit(t){ state.masterTab=t; fillMasterAreaEditMode(); }
+window.editWhileInactive=editWhileInactive; window.setMTabEdit=setMTabEdit;
+
+function renderMProfile(m, isDemo){
+  return `<div class="card">
+    <div class="field"><label>Имя</label><input id="pfName" value="${escapeHtml(m.name)}" ${isDemo?'disabled':''}></div>
+    <div class="field"><label>Специализация</label><select id="pfSpec" ${isDemo?'disabled':''}>${Object.entries(SPECS).map(([k,v])=>`<option value="${k}" ${m.specialization===k?'selected':''}>${v.icon} ${v.label}</option>`).join('')}</select></div>
+    <div class="row2">
+      <div class="field"><label>Город</label><input id="pfCity" value="${escapeHtml(m.city)}" ${isDemo?'disabled':''}></div>
+      <div class="field"><label>Адрес приёма</label><input id="pfAddress" value="${escapeHtml(m.address||'')}" ${isDemo?'disabled':''}></div>
+    </div>
+    <div class="field"><label>О себе</label><textarea id="pfBio" ${isDemo?'disabled':''}>${escapeHtml(m.bio||'')}</textarea></div>
+    ${isDemo? '<div class="pillnote" style="margin:0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">В демо-режиме изменения не сохраняются.</div>' : `<button class="btn primary" onclick="saveProfileEdits()">Сохранить</button>`}
+  </div>`;
+}
+async function saveProfileEdits(){
+  const m = await loadMaster(state.myMasterId);
+  m.name = document.getElementById('pfName').value.trim() || m.name;
+  m.specialization = document.getElementById('pfSpec').value;
+  m.city = document.getElementById('pfCity').value.trim();
+  m.address = document.getElementById('pfAddress').value.trim();
+  m.bio = document.getElementById('pfBio').value.trim();
+  await saveMaster(m);
+  showToast('Профиль обновлён');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.saveProfileEdits = saveProfileEdits;
+
+function renderMServices(m, isDemo){
+  const rows = m.services.map(s=>`<div class="svc-row">
+    <div><div class="svc-name">${escapeHtml(s.name)}</div><div class="svc-meta">${s.duration} мин</div></div>
+    <div style="display:flex;align-items:center;gap:10px;"><div class="svc-price">${s.price}₽</div>${isDemo?'':`<button class="link-btn" onclick="deleteService('${s.id}')">✕</button>`}</div>
+  </div>`).join('');
+  return `<div class="card">
+    ${rows || '<div class="empty" style="padding:10px 0">Пока нет услуг</div>'}
+    ${isDemo? '<div class="pillnote" style="margin:12px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">В демо-режиме нельзя сохранить новые услуги.</div>' : `
+    <div class="divider"></div>
+    <div class="row2">
+      <div class="field"><label>Название</label><input id="svName" placeholder="Например, Маникюр"></div>
+      <div class="field"><label>Цена ₽</label><input id="svPrice" type="number" placeholder="1500"></div>
+    </div>
+    <div class="field"><label>Длительность (мин)</label><input id="svDuration" type="number" placeholder="60"></div>
+    <button class="btn primary" onclick="addService()">Добавить услугу</button>`}
+  </div>`;
+}
+async function addService(){
+  const name = document.getElementById('svName').value.trim();
+  const price = parseInt(document.getElementById('svPrice').value);
+  const duration = parseInt(document.getElementById('svDuration').value)||30;
+  if(!name || !price){ showToast('Укажите название и цену'); return; }
+  const m = await loadMaster(state.myMasterId);
+  m.services.push({id:uid(), name, price, duration});
+  await saveMaster(m);
+  showToast('Услуга добавлена');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+async function deleteService(sid){
+  const m = await loadMaster(state.myMasterId);
+  m.services = m.services.filter(s=>s.id!==sid);
+  await saveMaster(m);
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.addService=addService; window.deleteService=deleteService;
+
+function renderMPortfolio(m, isDemo){
+  return `<div class="card">
+    <div class="gallery">${m.portfolio.map(p=>`<div style="position:relative;"><img src="${p.url}">${isDemo?'':`<button onclick="deletePortfolio('${p.id}')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,.55);color:#fff;border-radius:50%;width:20px;height:20px;font-size:12px;">✕</button>`}</div>`).join('')}</div>
+    ${!m.portfolio.length? '<div class="empty" style="padding:10px 0">Пока нет фото работ</div>':''}
+    ${isDemo? '<div class="pillnote" style="margin:12px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">В демо-режиме нельзя сохранить фото.</div>' : `
+    <div class="divider"></div>
+    <div class="field"><label>Ссылка на фото</label><input id="pfUrl" placeholder="https://..."></div>
+    <button class="btn primary" onclick="addPortfolio()">Добавить фото</button>
+    <div class="pillnote" style="margin:10px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">Загрузка файлов появится в готовом приложении вместе с Telegram Bot API. Пока используйте прямую ссылку на изображение.</div>`}
+  </div>`;
+}
+async function addPortfolio(){
+  const url = document.getElementById('pfUrl').value.trim();
+  if(!url){ showToast('Вставьте ссылку на изображение'); return; }
+  const m = await loadMaster(state.myMasterId);
+  m.portfolio.push({id:uid(), url, caption:''});
+  await saveMaster(m);
+  showToast('Фото добавлено');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+async function deletePortfolio(pid){
+  const m = await loadMaster(state.myMasterId);
+  m.portfolio = m.portfolio.filter(p=>p.id!==pid);
+  await saveMaster(m);
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.addPortfolio=addPortfolio; window.deletePortfolio=deletePortfolio;
+
+function renderMSchedule(m, isDemo){
+  const days = Array.from({length:14},(_,i)=>todayISO(i));
+  const dayChips = days.map(d=>`<button class="chip ${state.masterScheduleDate===d?'active':''}" onclick="pickScheduleDate('${d}')">${fmtDate(d)}</button>`).join('');
+  const daySlots = (m.slots && m.slots[state.masterScheduleDate]) || [];
+  const slotGrid = TIMES.map(t=>`<div class="slot ${daySlots.includes(t)?'on':''}" onclick="${isDemo?'':`toggleSlot('${t}')`}">${t}</div>`).join('');
+  return `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:8px;">Выберите дату</div>
+    <div class="chiprow" style="padding:0;overflow-x:auto;">${dayChips}</div>
+    <div class="divider"></div>
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">Свободное время на ${fmtDate(state.masterScheduleDate)}</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:4px;">Нажмите на время, чтобы открыть/закрыть его для записи</div>
+    <div class="slotgrid">${slotGrid}</div>
+    ${isDemo?'<div class="pillnote" style="margin:12px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">В демо-режиме расписание не сохраняется.</div>':''}
+  </div>`;
+}
+function pickScheduleDate(d){ state.masterScheduleDate=d; (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)(); }
+window.pickScheduleDate=pickScheduleDate;
+async function toggleSlot(t){
+  const m = await loadMaster(state.myMasterId);
+  m.slots = m.slots || {};
+  const d = state.masterScheduleDate;
+  m.slots[d] = m.slots[d] || [];
+  if(m.slots[d].includes(t)) m.slots[d] = m.slots[d].filter(x=>x!==t);
+  else m.slots[d].push(t);
+  await saveMaster(m);
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.toggleSlot = toggleSlot;
+
+function renderMBookings(m, bookings, isDemo){
+  if(isDemo){
+    return `<div class="card"><div class="empty" style="padding:10px 0">В демо-режиме заявки клиентов будут отображаться здесь: с именем, услугой, датой и кнопками подтверждения.</div></div>`;
+  }
+  if(!bookings.length) return `<div class="card"><div class="empty" style="padding:10px 0">Пока нет заявок на запись</div></div>`;
+  const sorted = bookings.slice().sort((a,b)=>b.createdAt-a.createdAt);
+  return sorted.map(b=>`<div class="card">
+    <div class="mcard-top">
+      <div>
+        <div class="mcard-name" style="font-size:14.5px;">${escapeHtml(b.clientName)}</div>
+        <div class="mcard-city">${escapeHtml(b.serviceName)} · ${b.price}₽</div>
+      </div>
+      <span class="badge ${b.status}">${b.status==='pending'?'Ожидает':b.status==='confirmed'?'Подтверждена':'Отменена'}</span>
+    </div>
+    <div class="divider"></div>
+    <div style="font-size:13px;color:var(--ink-soft);">📅 ${fmtDate(b.date)} в ${b.time}</div>
+    <div style="font-size:13px;color:var(--ink-soft);margin-top:2px;">📞 ${escapeHtml(b.clientContact)}</div>
+    ${b.status==='pending'?`<div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="btn teal small" style="flex:1" onclick="setBookingStatus('${b.id}','confirmed')">Подтвердить</button>
+      <button class="btn danger small" style="flex:1" onclick="setBookingStatus('${b.id}','cancelled')">Отклонить</button>
+    </div>`:''}
+  </div>`).join('');
+}
+async function setBookingStatus(bookingId, status){
+  const bookings = await loadBookings(state.myMasterId);
+  const b = bookings.find(x=>x.id===bookingId);
+  if(!b) return;
+  b.status = status;
+  await saveBookings(state.myMasterId, bookings);
+  showToast(status==='confirmed' ? 'Запись подтверждена — клиент увидит статус в «Моих записях»' : 'Запись отклонена');
+  fillMasterArea();
+}
+window.setBookingStatus = setBookingStatus;
+
+/* ============================================================
+   ADMIN / OWNER PANEL
+   ============================================================ */
+async function fillAdmin(){
+  if(state.isTelegramContext){
+    // Real Telegram session: identity already verified by Telegram ID, no password needed.
+    if(!state.isOwner) return renderAdminDenied();
+    if(state.adminEditingId) return renderAdminEdit(state.adminEditingId);
+    return renderAdminDashboard();
+  }
+  // Opened outside Telegram (e.g. testing in a browser) — fall back to demo password.
+  if(!state.adminAuthed) return renderAdminLogin();
+  if(state.adminEditingId) return renderAdminEdit(state.adminEditingId);
+  return renderAdminDashboard();
+}
+
+function renderAdminDenied(){
+  document.getElementById('content').innerHTML = `
+  <div class="hero"><h1>Кабинет владельца</h1><p>Этот раздел доступен только владельцу платформы.</p></div>
+  <div class="card"><div class="empty" style="padding:10px 0">🔒 Ваш Telegram-аккаунт не входит в список владельцев. Если это ошибка, обратитесь к администратору платформы.</div></div>`;
+}
+
+function renderAdminLogin(){
+  document.getElementById('content').innerHTML = `
+  <div class="hero"><h1>Кабинет владельца</h1><p>Доступ только для администратора платформы: управление мастерами, подписками и общая статистика.</p></div>
+  <div class="card">
+    <div class="field"><label>Пароль администратора</label><input id="admPass" type="password" placeholder="Введите пароль" onkeydown="if(event.key==='Enter') tryAdminLogin()"></div>
+    <button class="btn primary" onclick="tryAdminLogin()">Войти</button>
+  </div>
+  <div class="pillnote">Вы открыли приложение вне Telegram, поэтому используется резервный пароль для тестирования: <b>${ADMIN_PASSWORD}</b>. Внутри настоящего Telegram-бота этот экран не появится — доступ будет автоматически определяться по вашему Telegram ID (${OWNER_TELEGRAM_IDS.join(', ')}), без пароля.</div>`;
+}
+function tryAdminLogin(){
+  const v = document.getElementById('admPass').value;
+  if(v === ADMIN_PASSWORD){ state.adminAuthed = true; showToast('Добро пожаловать!'); fillAdmin(); }
+  else { showToast('Неверный пароль'); }
+}
+window.tryAdminLogin = tryAdminLogin;
+function adminLogout(){ state.adminAuthed=false; state.adminEditingId=null; goto('catalog'); }
+window.adminLogout = adminLogout;
+
+async function renderAdminDashboard(){
+  const masters = await loadAllMasters();
+  const active = masters.filter(m=>m.subscriptionActive);
+  const inactive = masters.filter(m=>!m.subscriptionActive);
+  const disabled = masters.filter(m=>m.disabledByAdmin);
+
+  let totalBookings=0, totalReviews=0;
+  const bookingsByMaster = {};
+  for(const m of masters){
+    const bk = await loadBookings(m.id);
+    bookingsByMaster[m.id]=bk;
+    totalBookings += bk.length;
+    totalReviews += (m.ratingCount||0);
+  }
+  const mrr = active.length * 990;
+
+  const overview = `<div class="card">
+    <div style="font-weight:700;font-size:14px;margin-bottom:10px;">Общий дашборд</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;">${masters.length}</div><div style="font-size:11.5px;color:var(--ink-soft)">Всего мастеров</div></div>
+      <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;color:var(--teal)">${active.length}</div><div style="font-size:11.5px;color:var(--ink-soft)">Активная подписка</div></div>
+      <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;color:var(--danger)">${inactive.length}</div><div style="font-size:11.5px;color:var(--ink-soft)">Ожидают оплаты</div></div>
+      <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;">${mrr}₽</div><div style="font-size:11.5px;color:var(--ink-soft)">Выручка / мес (оценка)</div></div>
+      <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;">${totalBookings}</div><div style="font-size:11.5px;color:var(--ink-soft)">Всего записей</div></div>
+      <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;">${totalReviews}</div><div style="font-size:11.5px;color:var(--ink-soft)">Всего отзывов</div></div>
+    </div>
+  </div>`;
+
+  const list = masters.slice().sort((a,b)=>b.createdAt-a.createdAt).map(m=>{
+    const spec = SPECS[m.specialization];
+    const bk = bookingsByMaster[m.id]||[];
+    const subBadge = m.subscriptionActive ? `<span class="badge active">Оплачено до ${fmtDate(m.subscriptionUntil)}</span>` : `<span class="badge inactive">Не оплачено</span>`;
+    const visBadge = m.disabledByAdmin ? `<span class="badge cancelled">Скрыт админом</span>` : '';
+    return `<div class="card">
+      <div class="mcard-top">
+        <div>
+          <div class="mcard-name" style="font-size:15px;">${spec.icon} ${escapeHtml(m.name)}</div>
+          <div class="mcard-city">📍 ${escapeHtml(m.city)} · ${spec.label}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${subBadge}${visBadge}</div>
+      <div style="font-size:12.5px;color:var(--ink-soft);margin-top:8px;">⭐ ${ratingOf(m)?ratingOf(m).toFixed(1):'—'} (${m.ratingCount||0}) · 🗓️ ${bk.length} записей</div>
+      <div class="divider"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn ghost small" onclick="adminEditMaster('${m.id}')">Редактировать</button>
+        <button class="btn ${m.disabledByAdmin?'teal':'ghost'} small" onclick="adminToggleDisabled('${m.id}')">${m.disabledByAdmin?'Включить в каталог':'Отключить от каталога'}</button>
+        <button class="btn danger small" onclick="adminDeleteMaster('${m.id}')">Удалить</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const identityLine = state.isTelegramContext
+    ? `<div class="pillnote" style="margin:0 18px 14px;">Вход подтверждён по Telegram ID ${state.tgUser?state.tgUser.id:''}.</div>`
+    : `<div class="section-pad"><button class="btn ghost small" onclick="adminLogout()">Выйти из кабинета владельца</button></div>`;
+
+  document.getElementById('content').innerHTML = `
+    <div class="hero" style="padding-top:20px;display:flex;justify-content:space-between;align-items:flex-start;">
+      <div><h1 style="font-size:22px;">Владелец платформы</h1><p>Управление мастерами и подписками</p></div>
+    </div>
+    ${identityLine}
+    ${overview}
+    ${masters.length? list : `<div class="empty"><div class="big">🗂️</div>Пока нет ни одного мастера на платформе.</div>`}
+  `;
+}
+window.adminEditMaster = (id)=>{ state.adminEditingId=id; fillAdmin(); };
+
+async function adminToggleDisabled(id){
+  const m = await loadMaster(id);
+  m.disabledByAdmin = !m.disabledByAdmin;
+  await saveMaster(m);
+  showToast(m.disabledByAdmin ? 'Мастер скрыт из каталога' : 'Мастер снова виден в каталоге');
+  fillAdmin();
+}
+window.adminToggleDisabled = adminToggleDisabled;
+
+async function adminDeleteMaster(id){
+  const m = await loadMaster(id);
+  const sure = window.confirm(`Удалить мастера «${m?m.name:''}»? Это действие необратимо: удалятся профиль, записи и отзывы.`);
+  if(!sure) return;
+  await removeMasterFromIndex(id);
+  await sdelete('master:'+id, true);
+  await sdelete('bookings:'+id, true);
+  await sdelete('reviews:'+id, true);
+  showToast('Мастер удалён');
+  fillAdmin();
+}
+window.adminDeleteMaster = adminDeleteMaster;
+
+async function renderAdminEdit(id){
+  const m = await loadMaster(id);
+  if(!m){ state.adminEditingId=null; return fillAdmin(); }
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="adminCancelEdit()">←</button><div style="font-weight:700">Редактирование мастера</div></div>
+  <div class="card">
+    <div class="field"><label>Имя</label><input id="admName" value="${escapeHtml(m.name)}"></div>
+    <div class="field"><label>Специализация</label><select id="admSpec">${Object.entries(SPECS).map(([k,v])=>`<option value="${k}" ${m.specialization===k?'selected':''}>${v.icon} ${v.label}</option>`).join('')}</select></div>
+    <div class="row2">
+      <div class="field"><label>Город</label><input id="admCity" value="${escapeHtml(m.city)}"></div>
+      <div class="field"><label>Адрес</label><input id="admAddress" value="${escapeHtml(m.address||'')}"></div>
+    </div>
+    <div class="field"><label>О себе</label><textarea id="admBio">${escapeHtml(m.bio||'')}</textarea></div>
+    <div class="field"><label>Статус подписки</label>
+      <select id="admSub">
+        <option value="active" ${m.subscriptionActive?'selected':''}>Оплачено (видим в каталоге)</option>
+        <option value="inactive" ${!m.subscriptionActive?'selected':''}>Не оплачено</option>
+      </select>
+    </div>
+    <button class="btn primary" onclick="adminSaveEdit('${id}')">Сохранить</button>
+  </div>`;
+}
+function adminCancelEdit(){ state.adminEditingId=null; fillAdmin(); }
+window.adminCancelEdit = adminCancelEdit;
+
+async function adminSaveEdit(id){
+  const m = await loadMaster(id);
+  m.name = document.getElementById('admName').value.trim() || m.name;
+  m.specialization = document.getElementById('admSpec').value;
+  m.city = document.getElementById('admCity').value.trim() || m.city;
+  m.address = document.getElementById('admAddress').value.trim();
+  m.bio = document.getElementById('admBio').value.trim();
+  const subVal = document.getElementById('admSub').value;
+  m.subscriptionActive = subVal==='active';
+  if(m.subscriptionActive && !m.subscriptionUntil) m.subscriptionUntil = todayISO(30);
+  await saveMaster(m);
+  state.adminEditingId=null;
+  showToast('Изменения сохранены');
+  fillAdmin();
+}
+window.adminSaveEdit = adminSaveEdit;
+
+/* ============ GO ============ */
+init();
+</script>
+</body>
+</html>
