@@ -227,6 +227,7 @@ input,select,textarea{font-family:inherit;}
 </head>
 <body>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <div id="frame"><div id="app"></div></div>
 
 <script>
@@ -241,16 +242,48 @@ const SPECS = {
 };
 const TIMES = ['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'];
 
-/* ============ STORAGE HELPERS ============ */
+/* ============ SUPABASE CONFIG ============
+   Замените на данные вашего проекта (Supabase Dashboard → Project Settings → API).
+   SUPABASE_ANON_KEY — это публичный ключ, его можно спокойно хранить в клиентском коде:
+   реальная защита данных обеспечивается policies (RLS) в базе, а не секретностью ключа. */
+const SUPABASE_URL = 'https://ditjrowiacckqqxtqdbx.supabase.co/rest/v1/';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRpdGpyb3dpYWNja3FxeHRxZGJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5OTk1NTMsImV4cCI6MjEwMDU3NTU1M30.IkmBR9AeptjNrimoWFJjmEEhHvw-1oRTt9nlSImP_DU';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* Персональные данные (shared:false) привязываются к Telegram ID текущего пользователя.
+   Вне Telegram (тестирование в браузере) используется временный тестовый идентификатор. */
+function ownerId(){
+  return (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : 'anon-test-user';
+}
+
+/* ============ STORAGE HELPERS (Supabase-backed, повторяют сигнатуру window.storage) ============ */
 async function sget(key, shared=false){
-  try{ const r = await window.storage.get(key, shared); return r ? JSON.parse(r.value) : null; }
-  catch(e){ return null; }
+  try{
+    const scopeKey = shared ? key : (ownerId()+':'+key);
+    const { data, error } = await supabase
+      .from('app_storage').select('value')
+      .eq('scope_key', scopeKey).eq('shared', shared).maybeSingle();
+    if(error || !data) return null;
+    return data.value;
+  }catch(e){ console.error('sget failed', e); return null; }
 }
 async function sset(key, value, shared=false){
-  try{ await window.storage.set(key, JSON.stringify(value), shared); }catch(e){ console.error('storage set failed', e); }
+  try{
+    const scopeKey = shared ? key : (ownerId()+':'+key);
+    const { error } = await supabase.from('app_storage')
+      .upsert({ scope_key:scopeKey, shared, value, updated_at:new Date().toISOString() }, { onConflict:'scope_key,shared' });
+    if(error) console.error('sset failed', error);
+  }catch(e){ console.error('sset failed', e); }
 }
 async function slist(prefix, shared=false){
-  try{ const r = await window.storage.list(prefix, shared); return r ? r.keys : []; }catch(e){ return []; }
+  try{
+    const base = shared ? '' : (ownerId()+':');
+    const fullPrefix = base + (prefix||'');
+    const { data, error } = await supabase.from('app_storage')
+      .select('scope_key').eq('shared', shared).like('scope_key', fullPrefix+'%');
+    if(error || !data) return [];
+    return data.map(r => shared ? r.scope_key : r.scope_key.slice(base.length));
+  }catch(e){ return []; }
 }
 
 function uid(){ return Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4); }
@@ -311,7 +344,7 @@ async function seedIfEmpty(){
     const master = {
       id, specialization:sm.spec, name:sm.name, city:sm.city, address:sm.address, bio:sm.bio,
       services, portfolio, slots, subscriptionActive:true, subscriptionUntil: todayISO(30),
-      ratingSum, ratingCount:reviews.length, createdAt:Date.now(), isDemo:false, disabledByAdmin:false
+      ratingSum, ratingCount:reviews.length, createdAt:Date.now(), isDemo:false, disabledByAdmin:false, telegramId:null
     };
     await sset('master:'+id, master, true);
     await sset('reviews:'+id, reviews, true);
@@ -378,7 +411,10 @@ async function removeMasterFromIndex(id){
   await sset('masters-index', ids.filter(x=>x!==id), true);
 }
 async function sdelete(key, shared=false){
-  try{ await window.storage.delete(key, shared); }catch(e){ /* key may not exist */ }
+  try{
+    const scopeKey = shared ? key : (ownerId()+':'+key);
+    await supabase.from('app_storage').delete().eq('scope_key', scopeKey).eq('shared', shared);
+  }catch(e){ /* row may not exist */ }
 }
 
 /* ============ INIT ============ */
@@ -768,7 +804,8 @@ async function submitBooking(masterId){
   const booking = {
     id:uid(), masterId, serviceId:service.id, serviceName:service.name, price:service.price,
     date:state.booking.date, time:state.booking.time,
-    clientName:name, clientContact:contact, status:'pending', createdAt:Date.now()
+    clientName:name, clientContact:contact, status:'pending', createdAt:Date.now(),
+    clientTelegramId: (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : null
   };
   bookings.push(booking);
   await saveBookings(masterId, bookings);
@@ -886,7 +923,8 @@ async function finishRegistration(){
     id, specialization:spec, name, city, address, bio,
     services:[], portfolio:[], slots:{},
     subscriptionActive:false, subscriptionUntil:null,
-    ratingSum:0, ratingCount:0, createdAt:Date.now(), isDemo:false, disabledByAdmin:false
+    ratingSum:0, ratingCount:0, createdAt:Date.now(), isDemo:false, disabledByAdmin:false,
+    telegramId: (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : null
   };
   await saveMaster(master);
   await addMasterToIndex(id);
@@ -945,17 +983,47 @@ function renderPaywall(m){
     <button class="btn primary" onclick="paySubscription()">Оплатить подписку</button>
     <div style="height:10px"></div>
     <button class="btn ghost" onclick="editWhileInactive()">Настроить профиль без подписки</button>
-    <div class="pillnote" style="margin:12px 0 0;padding-left:12px;padding-right:12px;">Демо-оплата: в реальном приложении здесь будет подключён Telegram Payments или ЮKassa. После оплаты профиль сразу появится в каталоге для клиентов.</div>
+    <div class="pillnote" style="margin:12px 0 0;padding-left:12px;padding-right:12px;">Внутри Telegram оплата проходит через встроенный счёт Telegram Payments — с карты, без переходов на сторонние сайты. Профиль появится в каталоге сразу после подтверждения оплаты. Вне Telegram (например, при тестировании в браузере) подписка активируется в демо-режиме, без реальной оплаты.</div>
   </div>`;
 }
 window.renderPaywall = renderPaywall;
 
 async function paySubscription(){
+  // Внутри настоящего Telegram: запрашиваем счёт у Edge Function и открываем нативную оплату Telegram.
+  if(state.isTelegramContext && window.Telegram && window.Telegram.WebApp){
+    try{
+      showToast('Формируем счёт…');
+      const resp = await fetch(SUPABASE_URL + '/functions/v1/create-invoice', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},
+        body: JSON.stringify({ masterId: state.myMasterId })
+      });
+      const data = await resp.json();
+      if(!data.invoiceUrl){ showToast('Не удалось создать счёт. Попробуйте позже.'); return; }
+      Telegram.WebApp.openInvoice(data.invoiceUrl, async (status)=>{
+        if(status==='paid'){
+          showToast('Оплата прошла! Обновляем профиль…');
+          setTimeout(async ()=>{
+            const m = await loadMaster(state.myMasterId);
+            state.myMaster = m;
+            fillMasterArea();
+          }, 1500); // небольшая пауза, пока telegram-webhook обновит статус в базе
+        } else if(status==='failed'){
+          showToast('Оплата не прошла. Попробуйте ещё раз.');
+        }
+      });
+    }catch(e){
+      console.error(e);
+      showToast('Ошибка соединения с сервером оплаты.');
+    }
+    return;
+  }
+  // Вне Telegram (тестирование в браузере) — демо-активация, чтобы можно было проверить остальной интерфейс.
   const m = await loadMaster(state.myMasterId);
   m.subscriptionActive = true;
   m.subscriptionUntil = todayISO(30);
   await saveMaster(m);
-  showToast('Подписка оформлена! Профиль виден клиентам.');
+  showToast('Демо-оплата (вне Telegram): подписка активирована для теста.');
   fillMasterArea();
 }
 window.paySubscription = paySubscription;
