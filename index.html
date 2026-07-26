@@ -233,6 +233,7 @@ input,select,textarea{font-family:inherit;}
 <script>
 /* ============ CONFIG ============ */
 const OWNER_TELEGRAM_IDS = ['8078091086']; // владелец платформы — доступ к кабинету только с этого Telegram-аккаунта
+const OWNER_TELEGRAM_USERNAME = 'whitespirited'; // ваш @username в Telegram (без @) — сюда попадут мастера с кнопки «Отправить квитанцию»
 const SPECS = {
   manicure:{label:'Маникюр', icon:'💅'},
   brows:{label:'Брови', icon:'🪞'},
@@ -381,6 +382,7 @@ const state = {
   masterDetailTab:'about',
   booking:null, // {serviceId, date, time}
   masterTab:'profile',
+  paywallMethod:null,
   masterScheduleDate: todayISO(0),
   myMasterId:null,
   myMaster:null,
@@ -954,7 +956,8 @@ async function finishRegistration(){
     services:[], portfolio:[], slots:{},
     subscriptionActive:false, subscriptionUntil:null,
     ratingSum:0, ratingCount:0, createdAt:Date.now(), isDemo:false, disabledByAdmin:false,
-    telegramId: (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : null
+    telegramId: (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : null,
+    paymentClaimStatus: null, paymentClaimMethod: null, paymentClaimAt: null
   };
   await saveMaster(master);
   await addMasterToIndex(id);
@@ -1002,61 +1005,122 @@ async function renderMasterDashboard(m, isDemo){
 function setMTab(t){ state.masterTab=t; fillMasterArea(); }
 window.setMTab = setMTab;
 
+const PAYMENT_METHODS = {
+  sbp: {
+    label: 'СБП (перевод по номеру телефона)',
+    icon: '📱',
+    lines: [
+      { title:'Телефон', value:'+79536978667', display:'+7 953 697-86-67' },
+      { title:'Банк', value:'ОТП Банк', display:'ОТП Банк' },
+    ]
+  },
+  card: {
+    label: 'Перевод на карту',
+    icon: '💳',
+    lines: [
+      { title:'Номер карты', value:'2201960478990227', display:'2201 9604 7899 0227' },
+    ]
+  }
+};
+
 function renderPaywall(m){
+  const method = state.paywallMethod;
+  const claim = m.paymentClaimStatus; // null | 'pending' | 'confirmed'
+
+  const methodPicker = `<div class="section-pad" style="display:flex;flex-direction:column;gap:10px;">
+    <button class="btn ${method==='sbp'?'primary':'ghost'}" onclick="pickPaymentMethod('sbp')">📱 СБП (перевод по номеру телефона)</button>
+    <button class="btn ${method==='card'?'primary':'ghost'}" onclick="pickPaymentMethod('card')">💳 Перевод на карту</button>
+  </div>`;
+
+  let requisites = '';
+  if(method){
+    const pm = PAYMENT_METHODS[method];
+    requisites = `<div class="card">
+      <div style="font-weight:700;font-size:13.5px;margin-bottom:10px;">${pm.icon} ${pm.label}</div>
+      ${pm.lines.map(l=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);">
+          <div>
+            <div style="font-size:11.5px;color:var(--ink-soft);">${escapeHtml(l.title)}</div>
+            <div style="font-weight:700;font-size:15.5px;letter-spacing:.3px;">${escapeHtml(l.display)}</div>
+          </div>
+          <button class="btn ghost small" onclick="copyText('${l.value}')">Скопировать</button>
+        </div>`).join('')}
+      <div style="font-size:12.5px;color:var(--ink-soft);margin-top:10px;line-height:1.5;">Переведите <b>990₽</b> на указанные реквизиты. В комментарии к переводу укажите ваше имя — так платёж быстрее найдут.</div>
+    </div>`;
+  }
+
+  let claimBlock = '';
+  if(method){
+    if(claim==='pending'){
+      claimBlock = `<div class="pillnote" style="margin:0 18px 14px;">✅ Квитанция отправлена, ожидайте подтверждения оплаты от владельца платформы. Обычно это занимает немного времени.</div>
+      <div class="section-pad"><button class="btn ghost" onclick="submitPaymentClaim('${method}')">Отправить квитанцию ещё раз</button></div>`;
+    } else {
+      claimBlock = `<div class="section-pad"><button class="btn primary" onclick="submitPaymentClaim('${method}')">Оплатил(а), отправить квитанцию</button></div>
+      <div class="pillnote" style="margin:12px 18px 0;padding-left:12px;padding-right:12px;">Нажмите после перевода — откроется чат с владельцем платформы, приложите туда скриншот или квитанцию об оплате. После проверки оплаты подписка будет активирована.</div>`;
+    }
+  }
+
   document.getElementById('content').innerHTML = `
   <div class="hero"><h1>Активируйте профиль</h1><p>Ваш профиль сохранён, но пока не виден клиентам. Оформите ежемесячную подписку, чтобы клиенты могли находить вас и записываться.</p></div>
   <div class="card" style="text-align:center;">
     <div style="font-family:'Fraunces',serif;font-size:30px;font-weight:600;">990₽<span style="font-size:14px;color:var(--ink-soft);font-weight:500;"> / месяц</span></div>
     <div style="font-size:13px;color:var(--ink-soft);margin-top:6px;">Без ограничений по записям и услугам</div>
   </div>
-  <div class="section-pad">
-    <button class="btn primary" onclick="paySubscription()">Оплатить подписку</button>
-    <div style="height:10px"></div>
+  <div style="padding:0 18px 8px;font-weight:700;font-size:13.5px;">Выберите способ оплаты</div>
+  ${methodPicker}
+  <div style="height:14px"></div>
+  ${requisites}
+  ${claimBlock}
+  <div class="section-pad" style="margin-top:6px;">
     <button class="btn ghost" onclick="editWhileInactive()">Настроить профиль без подписки</button>
-    <div class="pillnote" style="margin:12px 0 0;padding-left:12px;padding-right:12px;">Внутри Telegram оплата проходит через встроенный счёт Telegram Payments — с карты, без переходов на сторонние сайты. Профиль появится в каталоге сразу после подтверждения оплаты. Вне Telegram (например, при тестировании в браузере) подписка активируется в демо-режиме, без реальной оплаты.</div>
   </div>`;
 }
 window.renderPaywall = renderPaywall;
 
-async function paySubscription(){
-  // Внутри настоящего Telegram: запрашиваем счёт у Edge Function и открываем нативную оплату Telegram.
-  if(state.isTelegramContext && window.Telegram && window.Telegram.WebApp){
-    try{
-      showToast('Формируем счёт…');
-      const resp = await fetch(SUPABASE_URL + '/functions/v1/create-invoice', {
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},
-        body: JSON.stringify({ masterId: state.myMasterId })
-      });
-      const data = await resp.json();
-      if(!data.invoiceUrl){ showToast('Не удалось создать счёт. Попробуйте позже.'); return; }
-      Telegram.WebApp.openInvoice(data.invoiceUrl, async (status)=>{
-        if(status==='paid'){
-          showToast('Оплата прошла! Обновляем профиль…');
-          setTimeout(async ()=>{
-            const m = await loadMaster(state.myMasterId);
-            state.myMaster = m;
-            fillMasterArea();
-          }, 1500); // небольшая пауза, пока telegram-webhook обновит статус в базе
-        } else if(status==='failed'){
-          showToast('Оплата не прошла. Попробуйте ещё раз.');
-        }
-      });
-    }catch(e){
-      console.error(e);
-      showToast('Ошибка соединения с сервером оплаты.');
-    }
-    return;
-  }
-  // Вне Telegram (тестирование в браузере) — демо-активация, чтобы можно было проверить остальной интерфейс.
-  const m = await loadMaster(state.myMasterId);
-  m.subscriptionActive = true;
-  m.subscriptionUntil = todayISO(30);
-  await saveMaster(m);
-  showToast('Демо-оплата (вне Telegram): подписка активирована для теста.');
+function pickPaymentMethod(method){
+  state.paywallMethod = method;
   fillMasterArea();
 }
-window.paySubscription = paySubscription;
+window.pickPaymentMethod = pickPaymentMethod;
+
+function copyText(text){
+  const done = ()=> showToast('Скопировано!');
+  const fail = ()=>{
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      done();
+    }catch(e){ showToast('Не удалось скопировать, скопируйте вручную'); }
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(fail);
+  } else { fail(); }
+}
+window.copyText = copyText;
+
+async function submitPaymentClaim(method){
+  const m = await loadMaster(state.myMasterId);
+  m.paymentClaimStatus = 'pending';
+  m.paymentClaimMethod = method;
+  m.paymentClaimAt = Date.now();
+  await saveMaster(m);
+
+  const pmLabel = PAYMENT_METHODS[method].label;
+  const text = `Здравствуйте! Оплатил(а) подписку BeautyHub.\nМастер: ${m.name}\nСпособ: ${pmLabel}\nПрикладываю квитанцию 👇`;
+  const link = 'https://t.me/' + OWNER_TELEGRAM_USERNAME + '?text=' + encodeURIComponent(text);
+
+  if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink){
+    window.Telegram.WebApp.openTelegramLink(link);
+  } else {
+    window.open(link, '_blank');
+  }
+  showToast('Открываем чат для отправки квитанции…');
+  fillMasterArea();
+}
+window.submitPaymentClaim = submitPaymentClaim;
 
 function editWhileInactive(){ state.masterTab='profile'; state._forceEdit=true; fillMasterAreaEditMode(); }
 async function fillMasterAreaEditMode(){
@@ -1297,11 +1361,21 @@ async function renderAdminDashboard(){
     </div>
   </div>`;
 
-  const list = masters.slice().sort((a,b)=>b.createdAt-a.createdAt).map(m=>{
+  const list = masters.slice().sort((a,b)=>{
+    // Мастера с ожидающей проверки квитанцией — в начало списка, чтобы их не пропустить
+    const aPending = a.paymentClaimStatus==='pending' ? 1 : 0;
+    const bPending = b.paymentClaimStatus==='pending' ? 1 : 0;
+    if(aPending!==bPending) return bPending-aPending;
+    return b.createdAt-a.createdAt;
+  }).map(m=>{
     const spec = SPECS[m.specialization];
     const bk = bookingsByMaster[m.id]||[];
     const subBadge = m.subscriptionActive ? `<span class="badge active">Оплачено до ${fmtDate(m.subscriptionUntil)}</span>` : `<span class="badge inactive">Не оплачено</span>`;
     const visBadge = m.disabledByAdmin ? `<span class="badge cancelled">Скрыт админом</span>` : '';
+    const claimBadge = (m.paymentClaimStatus==='pending' && !m.subscriptionActive)
+      ? `<span class="badge pending">💌 Прислал(а) квитанцию — ${m.paymentClaimMethod==='sbp'?'СБП':'карта'}</span>` : '';
+    const confirmBtn = (m.paymentClaimStatus==='pending' && !m.subscriptionActive)
+      ? `<button class="btn teal small" onclick="adminConfirmPayment('${m.id}')">Оплата поступила — активировать</button>` : '';
     return `<div class="card">
       <div class="mcard-top">
         <div>
@@ -1309,10 +1383,11 @@ async function renderAdminDashboard(){
           <div class="mcard-city">📍 ${escapeHtml(m.city)} · ${spec.label}</div>
         </div>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${subBadge}${visBadge}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${subBadge}${visBadge}${claimBadge}</div>
       <div style="font-size:12.5px;color:var(--ink-soft);margin-top:8px;">⭐ ${ratingOf(m)?ratingOf(m).toFixed(1):'—'} (${m.ratingCount||0}) · 🗓️ ${bk.length} записей</div>
       <div class="divider"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${confirmBtn}
         <button class="btn ghost small" onclick="adminEditMaster('${m.id}')">Редактировать</button>
         <button class="btn ${m.disabledByAdmin?'teal':'ghost'} small" onclick="adminToggleDisabled('${m.id}')">${m.disabledByAdmin?'Включить в каталог':'Отключить от каталога'}</button>
         <button class="btn danger small" onclick="adminDeleteMaster('${m.id}')">Удалить</button>
@@ -1343,6 +1418,17 @@ async function adminToggleDisabled(id){
   fillAdmin();
 }
 window.adminToggleDisabled = adminToggleDisabled;
+
+async function adminConfirmPayment(id){
+  const m = await loadMaster(id);
+  m.subscriptionActive = true;
+  m.subscriptionUntil = todayISO(30);
+  m.paymentClaimStatus = 'confirmed';
+  await saveMaster(m);
+  showToast('Оплата подтверждена — профиль активирован');
+  fillAdmin();
+}
+window.adminConfirmPayment = adminConfirmPayment;
 
 async function adminDeleteMaster(id){
   const m = await loadMaster(id);
