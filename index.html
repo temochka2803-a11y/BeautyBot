@@ -591,20 +591,27 @@ async function fillFavorites(){
     const spec = SPECS[m.specialization];
     const avg = ratingOf(m);
     const pf = priceFrom(m);
-    cards.push(`<div class="mcard">
-      <div class="avatar" style="cursor:pointer;" onclick="openMaster('${m.id}')">${spec.icon}</div>
-      <div class="mcard-body" style="cursor:pointer;" onclick="openMaster('${m.id}')">
-        <div class="mcard-top">
-          <div>
-            <div class="mcard-name">${escapeHtml(m.name)}</div>
-            <div class="mcard-city">📍 ${escapeHtml(m.city)}</div>
+    cards.push(`<div class="card">
+      <div style="display:flex;gap:12px;">
+        <div class="avatar" style="cursor:pointer;" onclick="openMaster('${m.id}')">${spec.icon}</div>
+        <div style="flex:1;cursor:pointer;" onclick="openMaster('${m.id}')">
+          <div class="mcard-top">
+            <div>
+              <div class="mcard-name">${escapeHtml(m.name)}</div>
+              <div class="mcard-city">📍 ${escapeHtml(m.city)}</div>
+            </div>
+            ${pf!=null?`<div class="price-from">от ${pf}₽</div>`:''}
           </div>
-          ${pf!=null?`<div class="price-from">от ${pf}₽</div>`:''}
+          <span class="tag" style="background:${specBg(m.specialization)};color:${specFg(m.specialization)}">${spec.icon} ${spec.label}</span>
+          <div class="rating-row"><span class="stars">${starsStr(avg)}</span> ${avg? avg.toFixed(1):'нет оценок'}</div>
         </div>
-        <span class="tag" style="background:${specBg(m.specialization)};color:${specFg(m.specialization)}">${spec.icon} ${spec.label}</span>
-        <div class="rating-row"><span class="stars">${starsStr(avg)}</span> ${avg? avg.toFixed(1):'нет оценок'}</div>
+        <button class="link-btn" style="font-size:20px;padding:0 4px;align-self:flex-start;" onclick="toggleFavorite('${m.id}')">♥</button>
       </div>
-      <button class="link-btn" style="font-size:20px;padding:0 4px;" onclick="event.stopPropagation(); toggleFavorite('${m.id}')">♥</button>
+      <div class="divider"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn ghost small" style="flex:1" onclick="openMaster('${m.id}')">Профиль</button>
+        <button class="btn primary small" style="flex:1" onclick="openMasterForBooking('${m.id}')">Записаться</button>
+      </div>
     </div>`);
   }
   document.getElementById('content').innerHTML = hero + cards.join('');
@@ -768,6 +775,14 @@ function openMaster(id){
   render();
 }
 window.openMaster = openMaster;
+
+function openMasterForBooking(id){
+  state.selectedMasterId = id;
+  state.masterDetailTab='book';
+  state.booking = null;
+  render();
+}
+window.openMasterForBooking = openMasterForBooking;
 
 /* ============================================================
    MASTER DETAIL (CLIENT VIEW)
