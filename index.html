@@ -278,17 +278,18 @@ async function sget(key, shared=false){
     const { data, error } = await sb
       .from('app_storage').select('value')
       .eq('scope_key', scopeKey).eq('shared', shared).maybeSingle();
-    if(error || !data) return null;
+    if(error){ console.error('sget failed:', error.message, '| code:', error.code, '| details:', error.details, '| hint:', error.hint); return null; }
+    if(!data) return null;
     return data.value;
-  }catch(e){ console.error('sget failed', e); return null; }
+  }catch(e){ console.error('sget threw:', e && e.message ? e.message : e); return null; }
 }
 async function sset(key, value, shared=false){
   try{
     const scopeKey = shared ? key : (ownerId()+':'+key);
     const { error } = await sb.from('app_storage')
       .upsert({ scope_key:scopeKey, shared, value, updated_at:new Date().toISOString() }, { onConflict:'scope_key,shared' });
-    if(error) console.error('sset failed', error);
-  }catch(e){ console.error('sset failed', e); }
+    if(error) console.error('sset failed:', error.message, '| code:', error.code, '| details:', error.details, '| hint:', error.hint);
+  }catch(e){ console.error('sset threw:', e && e.message ? e.message : e); }
 }
 async function slist(prefix, shared=false){
   try{
@@ -359,7 +360,8 @@ async function seedIfEmpty(){
     const master = {
       id, specialization:sm.spec, name:sm.name, city:sm.city, address:sm.address, bio:sm.bio,
       services, portfolio, slots, subscriptionActive:true, subscriptionUntil: todayISO(30),
-      ratingSum, ratingCount:reviews.length, createdAt:Date.now(), isDemo:false, disabledByAdmin:false, telegramId:null
+      ratingSum, ratingCount:reviews.length, createdAt:Date.now(), isDemo:false, disabledByAdmin:false, telegramId:null,
+      moderationStatus:'approved', moderationReason:null, paymentHistory:[]
     };
     await sset('master:'+id, master, true);
     await sset('reviews:'+id, reviews, true);
@@ -394,6 +396,9 @@ const state = {
   isTelegramContext:false, // true when actually opened inside Telegram
   tgUser:null,
   isOwner:false,
+  adminSection:'pending', // pending | active | all — вкладки в кабинете владельца
+  favorites:[], // избранные мастера клиента (masterId[])
+  showFavoritesOnly:false,
 };
 
 function showToast(msg){
@@ -464,6 +469,7 @@ async function init(){
   if(state.myMasterId){ state.myMaster = await loadMaster(state.myMasterId); }
   state.clientName = await sget('my-client-name', false) || '';
   state.clientContact = await sget('my-client-contact', false) || '';
+  state.favorites = await sget('my-favorites', false) || [];
   // Prefill client name from Telegram profile if available and not set yet
   if(state.isTelegramContext && state.tgUser && !state.clientName){
     const full = [state.tgUser.first_name, state.tgUser.last_name].filter(Boolean).join(' ');
@@ -493,6 +499,7 @@ function render(){
   else if(state.view==='mybookings') html += renderMyBookingsPlaceholder();
   else if(state.view==='master') html += renderMasterAreaPlaceholder();
   else if(state.view==='admin') html += `<div class="loading">Загрузка…</div>`;
+  else if(state.view==='favorites') html += `<div class="loading">Загрузка…</div>`;
   html += '</div>' + renderNav();
   if(state.toast) html += `<div class="toast">${escapeHtml(state.toast)}</div>`;
   app.innerHTML = html;
@@ -503,13 +510,15 @@ function render(){
   if(state.view==='mybookings') fillMyBookings();
   if(state.view==='master') fillMasterArea();
   if(state.view==='admin') fillAdmin();
+  if(state.view==='favorites') fillFavorites();
 }
 
 function renderTopbar(){
+  const hasFavs = state.favorites && state.favorites.length;
   return `
   <div class="topbar">
     <div class="brand"><div class="mark">💄</div><div class="word">Beauty<em>Hub</em></div></div>
-    <div class="hdr-icon">✨</div>
+    <button class="hdr-icon" style="position:relative;" onclick="goto('favorites')">♥${hasFavs?`<span class="navdot" style="top:2px;right:2px;"></span>`:''}</button>
   </div>`;
 }
 
@@ -534,6 +543,55 @@ function goto(view){
 }
 window.goto = goto;
 
+/* ============ FAVORITES ============ */
+function isFavorite(masterId){ return (state.favorites||[]).includes(masterId); }
+async function toggleFavorite(masterId){
+  const favs = state.favorites || [];
+  const idx = favs.indexOf(masterId);
+  if(idx>=0) favs.splice(idx,1); else favs.push(masterId);
+  state.favorites = favs;
+  await sset('my-favorites', favs, false);
+  // Перерисовываем то, что сейчас открыто
+  if(state.view==='favorites') fillFavorites();
+  else if(state.view==='catalog' && state.selectedMasterId) fillMasterDetail();
+  else if(state.view==='catalog') fillCatalog();
+}
+window.toggleFavorite = toggleFavorite;
+
+async function fillFavorites(){
+  const ids = state.favorites || [];
+  const hero = `<div class="hero"><h1>Избранные мастера</h1><p>Мастера, которых вы сохранили, чтобы быстро найти снова.</p></div>`;
+  if(!ids.length){
+    document.getElementById('content').innerHTML = hero + `<div class="empty"><div class="big">🤍</div>Пока нет избранных мастеров.<br>Нажмите на сердечко у мастера, чтобы сохранить его сюда.</div>`;
+    return;
+  }
+  const cards = [];
+  for(const id of ids){
+    const m = await loadMaster(id);
+    if(!m) continue;
+    const spec = SPECS[m.specialization];
+    const avg = ratingOf(m);
+    const pf = priceFrom(m);
+    cards.push(`<div class="mcard">
+      <div class="avatar" style="cursor:pointer;" onclick="openMaster('${m.id}')">${spec.icon}</div>
+      <div class="mcard-body" style="cursor:pointer;" onclick="openMaster('${m.id}')">
+        <div class="mcard-top">
+          <div>
+            <div class="mcard-name">${escapeHtml(m.name)}</div>
+            <div class="mcard-city">📍 ${escapeHtml(m.city)}</div>
+          </div>
+          ${pf!=null?`<div class="price-from">от ${pf}₽</div>`:''}
+        </div>
+        <span class="tag" style="background:${specBg(m.specialization)};color:${specFg(m.specialization)}">${spec.icon} ${spec.label}</span>
+        <div class="rating-row"><span class="stars">${starsStr(avg)}</span> ${avg? avg.toFixed(1):'нет оценок'}</div>
+      </div>
+      <button class="link-btn" style="font-size:20px;padding:0 4px;" onclick="event.stopPropagation(); toggleFavorite('${m.id}')">♥</button>
+    </div>`);
+  }
+  document.getElementById('content').innerHTML = hero + cards.join('');
+}
+window.fillFavorites = fillFavorites;
+
 /* placeholders shown instantly, replaced by fill* functions */
 function renderCatalogPlaceholder(){ return `<div class="loading">Загрузка мастеров…</div>`; }
 function renderMyBookingsPlaceholder(){ return `<div class="loading">Загрузка…</div>`; }
@@ -544,7 +602,7 @@ function renderMasterAreaPlaceholder(){ return `<div class="loading">Загру�
    ============================================================ */
 async function fillCatalog(){
   const allMasters = await loadAllMasters();
-  const liveMasters = allMasters.filter(m=>m.subscriptionActive && !m.isDemo && !m.disabledByAdmin);
+  const liveMasters = allMasters.filter(m=>m.subscriptionActive && !m.isDemo && !m.disabledByAdmin && m.moderationStatus==='approved');
 
   if(!state.filters.city){ return renderCityStep(liveMasters); }
   if(state.catalogStep==='specs'){ return renderSpecStep(liveMasters); }
@@ -654,9 +712,10 @@ function renderListStep(masters){
       const spec = SPECS[m.specialization];
       const avg = ratingOf(m);
       const pf = priceFrom(m);
-      return `<div class="mcard" onclick="openMaster('${m.id}')">
-        <div class="avatar">${spec.icon}</div>
-        <div class="mcard-body">
+      const favOn = isFavorite(m.id);
+      return `<div class="mcard">
+        <div class="avatar" style="cursor:pointer;" onclick="openMaster('${m.id}')">${spec.icon}</div>
+        <div class="mcard-body" style="cursor:pointer;" onclick="openMaster('${m.id}')">
           <div class="mcard-top">
             <div>
               <div class="mcard-name">${escapeHtml(m.name)}</div>
@@ -667,6 +726,7 @@ function renderListStep(masters){
           <span class="tag" style="background:${specBg(m.specialization)};color:${specFg(m.specialization)}">${spec.icon} ${spec.label}</span>
           <div class="rating-row"><span class="stars">${starsStr(avg)}</span> ${avg? avg.toFixed(1):'нет оценок'} ${m.ratingCount?`· ${m.ratingCount} отзыв.`:''}</div>
         </div>
+        <button class="link-btn" style="font-size:19px;padding:0 2px;align-self:flex-start;color:${favOn?'var(--rose-deep)':'var(--ink-soft)'}" onclick="toggleFavorite('${m.id}')">${favOn?'♥':'♡'}</button>
       </div>`;
     }).join('');
   }
@@ -701,15 +761,30 @@ async function fillMasterDetail(){
   const spec = SPECS[m.specialization];
   const avg = ratingOf(m);
 
+  // Право на отзыв: у клиента должна быть ЗАВЕРШЁННАЯ (подтверждённая и прошедшая по дате)
+  // запись именно к этому мастеру, за которую он ещё не оставлял отзыв.
+  const myBookingRefs = (await sget('my-client-bookings', false) || []).filter(r=>r.masterId===m.id);
+  const today = todayISO(0);
+  const reviewedBookingIds = new Set(reviews.filter(r=>r.bookingId).map(r=>r.bookingId));
+  const eligibleBookings = [];
+  for(const ref of myBookingRefs){
+    const bk = bookings.find(b=>b.id===ref.bookingId);
+    if(bk && bk.status==='confirmed' && bk.date<=today && !reviewedBookingIds.has(bk.id)){
+      eligibleBookings.push(bk);
+    }
+  }
+  state._eligibleReviewBookings = eligibleBookings;
+
   const back = `<div class="backbar"><button class="backbtn" onclick="backToCatalog()">←</button><div style="font-weight:700">${escapeHtml(m.name)}</div></div>`;
 
   const header = `<div class="card" style="display:flex;gap:12px;align-items:center;">
     <div class="avatar" style="width:64px;height:64px;font-size:30px;">${spec.icon}</div>
-    <div>
+    <div style="flex:1;">
       <div class="mcard-name" style="font-size:18px;">${escapeHtml(m.name)}</div>
       <div class="mcard-city">📍 ${escapeHtml(m.city)}${m.address?', '+escapeHtml(m.address):''}</div>
       <div class="rating-row" style="margin-top:6px;"><span class="stars">${starsStr(avg)}</span> ${avg?avg.toFixed(1):'нет оценок'} ${m.ratingCount?`· ${m.ratingCount} отзыв.`:''}</div>
     </div>
+    <button class="link-btn" style="font-size:24px;color:${isFavorite(m.id)?'var(--rose-deep)':'var(--ink-soft)'}" onclick="toggleFavorite('${m.id}')">${isFavorite(m.id)?'♥':'♡'}</button>
   </div>`;
 
   const tabs = `<div class="subnav">
@@ -733,17 +808,26 @@ async function fillMasterDetail(){
       m.portfolio.length? m.portfolio.map(p=>`<img src="${p.url}" loading="lazy">`).join('') : ''
     }</div>${!m.portfolio.length?'<div class="empty" style="padding:20px 0">Работ пока нет</div>':''}</div>`;
   } else if(state.masterDetailTab==='reviews'){
+    const eligible = state._eligibleReviewBookings || [];
+    const reviewForm = eligible.length ? `
+      <div class="divider"></div>
+      <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:8px;">✅ У вас есть завершённая запись к этому мастеру — можно оставить отзыв.</div>
+      ${eligible.length>1 ? `<div class="field"><label>Какая запись</label><select id="rvBookingId">${eligible.map(b=>`<option value="${b.id}">${fmtDate(b.date)} — ${escapeHtml(b.serviceName)}</option>`).join('')}</select></div>` : `<input type="hidden" id="rvBookingId" value="${eligible[0].id}">`}
+      <div class="field"><label>Ваше имя</label><input id="rvName" value="${escapeHtml(state.clientName)}" placeholder="Имя"></div>
+      <div class="field"><label>Оценка</label><div class="starpick" id="rvStars">${[1,2,3,4,5].map(i=>`<span data-i="${i}" onclick="pickStar(${i})">★</span>`).join('')}</div></div>
+      <div class="field"><label>Отзыв</label><textarea id="rvText" placeholder="Расскажите, как всё прошло"></textarea></div>
+      <button class="btn primary" onclick="submitReview('${m.id}')">Оставить отзыв</button>
+    ` : `
+      <div class="divider"></div>
+      <div class="pillnote" style="margin:0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">Оставить отзыв можно только после завершённой (подтверждённой мастером и уже прошедшей) записи. Это защищает мастеров от накрутки отзывов.</div>
+    `;
     body = `<div class="card">
       ${reviews.length? reviews.slice().sort((a,b)=>b.createdAt-a.createdAt).map(r=>`
         <div class="review">
           <div class="review-top"><span class="review-name">${escapeHtml(r.name)}</span><span class="stars">${starsStr(r.rating)}</span></div>
           <div class="review-text">${escapeHtml(r.comment)}</div>
         </div>`).join('') : '<div class="empty" style="padding:10px 0 20px">Пока нет отзывов — станьте первым!</div>'}
-      <div class="divider"></div>
-      <div class="field"><label>Ваше имя</label><input id="rvName" value="${escapeHtml(state.clientName)}" placeholder="Имя"></div>
-      <div class="field"><label>Оценка</label><div class="starpick" id="rvStars">${[1,2,3,4,5].map(i=>`<span data-i="${i}" onclick="pickStar(${i})">★</span>`).join('')}</div></div>
-      <div class="field"><label>Отзыв</label><textarea id="rvText" placeholder="Расскажите, как всё прошло"></textarea></div>
-      <button class="btn primary" onclick="submitReview('${m.id}')">Оставить отзыв</button>
+      ${reviewForm}
     </div>`;
   } else if(state.masterDetailTab==='book'){
     body = renderBookingForm(m, bookings);
@@ -767,11 +851,14 @@ async function submitReview(masterId){
   const name = document.getElementById('rvName').value.trim();
   const text = document.getElementById('rvText').value.trim();
   const rating = state._pickedStar||0;
+  const bookingIdEl = document.getElementById('rvBookingId');
+  const bookingId = bookingIdEl ? bookingIdEl.value : null;
   if(!name || !rating || !text){ showToast('Заполните имя, оценку и текст отзыва'); return; }
+  if(!bookingId){ showToast('Не найдена завершённая запись для отзыва'); return; }
   await sset('my-client-name', name, false);
   state.clientName = name;
   const reviews = await loadReviews(masterId);
-  reviews.push({id:uid(), masterId, name, rating, comment:text, createdAt:Date.now()});
+  reviews.push({id:uid(), masterId, name, rating, comment:text, createdAt:Date.now(), bookingId});
   await saveReviews(masterId, reviews);
   const m = await loadMaster(masterId);
   m.ratingSum = (m.ratingSum||0) + rating;
@@ -826,13 +913,32 @@ async function submitBooking(masterId){
   const name = document.getElementById('bkName').value.trim();
   const contact = document.getElementById('bkContact').value.trim();
   if(!name || !contact){ showToast('Укажите имя и контакт для связи'); return; }
+
+  // Простая защита от спама: не больше 5 заявок за 10 минут с этого устройства/аккаунта
+  const recentSubmits = (await sget('my-booking-attempts', false) || []).filter(ts => Date.now()-ts < 10*60*1000);
+  if(recentSubmits.length >= 5){
+    showToast('Слишком много заявок подряд. Попробуйте немного позже.');
+    return;
+  }
+
   await sset('my-client-name', name, false);
   await sset('my-client-contact', contact, false);
   state.clientName=name; state.clientContact=contact;
 
   const m = await loadMaster(masterId);
   const service = m.services.find(s=>s.id===state.booking.serviceId);
+
+  // Перечитываем самые свежие записи прямо перед сохранением, чтобы минимизировать
+  // окно гонки, если кто-то другой записался на этот же слот почти одновременно.
   const bookings = await loadBookings(masterId);
+  const alreadyTaken = bookings.some(b=>b.status!=='cancelled' && b.date===state.booking.date && b.time===state.booking.time);
+  if(alreadyTaken){
+    showToast('Увы, это время только что заняли. Выберите другое.');
+    state.booking.time = null;
+    fillMasterDetail();
+    return;
+  }
+
   const booking = {
     id:uid(), masterId, serviceId:service.id, serviceName:service.name, price:service.price,
     date:state.booking.date, time:state.booking.time,
@@ -841,6 +947,9 @@ async function submitBooking(masterId){
   };
   bookings.push(booking);
   await saveBookings(masterId, bookings);
+
+  recentSubmits.push(Date.now());
+  await sset('my-booking-attempts', recentSubmits, false);
 
   const mine = await sget('my-client-bookings', false) || [];
   mine.push({bookingId:booking.id, masterId});
@@ -870,6 +979,7 @@ async function fillMyBookings(){
     if(!bk) continue;
     const m = await loadMaster(entry.masterId);
     const spec = m?SPECS[m.specialization]:null;
+    const canCancel = bk.status==='pending' || bk.status==='confirmed';
     rows.push(`<div class="card">
       <div class="mcard-top">
         <div>
@@ -880,10 +990,25 @@ async function fillMyBookings(){
       </div>
       <div class="divider"></div>
       <div style="font-size:13.5px;color:var(--ink-soft)">📅 ${fmtDate(bk.date)} в ${bk.time} · ${bk.price}₽</div>
+      ${canCancel ? `<div style="margin-top:10px;"><button class="btn danger small" onclick="clientCancelBooking('${entry.masterId}','${bk.id}')">Отменить запись</button></div>` : ''}
     </div>`);
   }
   document.getElementById('content').innerHTML = hero + rows.join('');
 }
+
+async function clientCancelBooking(masterId, bookingId){
+  const sure = window.confirm('Отменить эту запись? Мастер получит уведомление.');
+  if(!sure) return;
+  const bookings = await loadBookings(masterId);
+  const bk = bookings.find(b=>b.id===bookingId);
+  if(!bk) return;
+  bk.status = 'cancelled';
+  bk.cancelledBy = 'client';
+  await saveBookings(masterId, bookings);
+  showToast('Запись отменена');
+  fillMyBookings();
+}
+window.clientCancelBooking = clientCancelBooking;
 
 /* ============================================================
    MASTER AREA
@@ -957,7 +1082,10 @@ async function finishRegistration(){
     subscriptionActive:false, subscriptionUntil:null,
     ratingSum:0, ratingCount:0, createdAt:Date.now(), isDemo:false, disabledByAdmin:false,
     telegramId: (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : null,
-    paymentClaimStatus: null, paymentClaimMethod: null, paymentClaimAt: null
+    paymentClaimStatus: null, paymentClaimMethod: null, paymentClaimAt: null,
+    moderationStatus: 'pending', // pending | approved | rejected
+    moderationReason: null,
+    paymentHistory: [] // [{ method, confirmedAt, subscriptionUntil }]
   };
   await saveMaster(master);
   await addMasterToIndex(id);
@@ -965,12 +1093,18 @@ async function finishRegistration(){
   await saveReviews(id, []);
   await sset('my-master-id', id, false);
   state.myMasterId = id; state.myMaster = master;
-  showToast('Профиль создан! Осталось оформить подписку.');
+  showToast('Профиль создан! Он отправлен на проверку модератору.');
   fillMasterArea();
 }
 window.finishRegistration = finishRegistration;
 
 async function renderMasterDashboard(m, isDemo){
+  if(!isDemo && m.moderationStatus==='pending'){
+    return renderModerationPending(m);
+  }
+  if(!isDemo && m.moderationStatus==='rejected'){
+    return renderModerationRejected(m);
+  }
   if(!isDemo && !m.subscriptionActive){
     return renderPaywall(m);
   }
@@ -1022,6 +1156,45 @@ const PAYMENT_METHODS = {
     ]
   }
 };
+
+function renderModerationPending(m){
+  document.getElementById('content').innerHTML = `
+  <div class="hero"><h1>Профиль на проверке</h1><p>Мы проверяем анкеты новых мастеров вручную — обычно это занимает немного времени. Как только профиль одобрят, вы сможете оформить подписку и появиться в каталоге.</p></div>
+  <div class="card" style="text-align:center;">
+    <div style="font-size:34px;">🕓</div>
+    <div style="font-weight:700;margin-top:8px;">Ожидает проверки модератором</div>
+  </div>
+  <div class="section-pad">
+    <button class="btn ghost" onclick="editWhileInactive()">Заполнить профиль, услуги, работы и расписание</button>
+    <div class="pillnote" style="margin:12px 0 0;padding-left:12px;padding-right:12px;">Пока идёт проверка — самое время добавить услуги, цены, фото работ и расписание, чтобы сразу после одобрения оформить подписку и начать принимать клиентов.</div>
+  </div>`;
+}
+window.renderModerationPending = renderModerationPending;
+
+function renderModerationRejected(m){
+  document.getElementById('content').innerHTML = `
+  <div class="hero"><h1>Профиль отклонён</h1><p>К сожалению, ваш профиль не прошёл проверку.</p></div>
+  <div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:6px;">Причина:</div>
+    <div style="font-size:13.5px;color:var(--ink-soft);">${escapeHtml(m.moderationReason || 'Причина не указана.')}</div>
+  </div>
+  <div class="section-pad">
+    <button class="btn ghost" onclick="editWhileInactive()">Отредактировать профиль</button>
+    <div style="height:10px"></div>
+    <button class="btn primary" onclick="resubmitForModeration()">Отправить на повторную проверку</button>
+  </div>`;
+}
+window.renderModerationRejected = renderModerationRejected;
+
+async function resubmitForModeration(){
+  const m = await loadMaster(state.myMasterId);
+  m.moderationStatus = 'pending';
+  m.moderationReason = null;
+  await saveMaster(m);
+  showToast('Отправлено на повторную проверку');
+  fillMasterArea();
+}
+window.resubmitForModeration = resubmitForModeration;
 
 function renderPaywall(m){
   const method = state.paywallMethod;
@@ -1208,11 +1381,42 @@ function renderMPortfolio(m, isDemo){
     ${!m.portfolio.length? '<div class="empty" style="padding:10px 0">Пока нет фото работ</div>':''}
     ${isDemo? '<div class="pillnote" style="margin:12px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">В демо-режиме нельзя сохранить фото.</div>' : `
     <div class="divider"></div>
-    <div class="field"><label>Ссылка на фото</label><input id="pfUrl" placeholder="https://..."></div>
-    <button class="btn primary" onclick="addPortfolio()">Добавить фото</button>
-    <div class="pillnote" style="margin:10px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">Загрузка файлов появится в готовом приложении вместе с Telegram Bot API. Пока используйте прямую ссылку на изображение.</div>`}
+    <div class="field">
+      <label>Загрузить фото с телефона</label>
+      <input id="pfFile" type="file" accept="image/*" onchange="uploadPortfolioPhoto(this)">
+      <div id="pfUploadStatus" style="font-size:12px;color:var(--ink-soft);margin-top:6px;"></div>
+    </div>
+    <div class="divider"></div>
+    <div class="field"><label>Или вставьте ссылку на фото</label><input id="pfUrl" placeholder="https://..."></div>
+    <button class="btn ghost" onclick="addPortfolio()">Добавить по ссылке</button>`}
   </div>`;
 }
+async function uploadPortfolioPhoto(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('pfUploadStatus');
+  if(statusEl) statusEl.textContent = 'Загружаем…';
+  try{
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `${state.myMasterId}/${uid()}.${ext}`;
+    const { error: upErr } = await sb.storage.from('portfolios').upload(path, file, { upsert:false, contentType: file.type || 'image/jpeg' });
+    if(upErr) throw upErr;
+    const { data } = sb.storage.from('portfolios').getPublicUrl(path);
+    const url = data && data.publicUrl;
+    if(!url) throw new Error('Не удалось получить ссылку на фото');
+    const m = await loadMaster(state.myMasterId);
+    m.portfolio.push({id:uid(), url, caption:''});
+    await saveMaster(m);
+    showToast('Фото загружено');
+    (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+  }catch(e){
+    console.error('Portfolio upload failed', e);
+    if(statusEl) statusEl.textContent = 'Не получилось загрузить файл напрямую (возможно, не настроено хранилище Supabase Storage) — воспользуйтесь полем со ссылкой ниже.';
+    else showToast('Не удалось загрузить фото, используйте ссылку');
+  }
+}
+window.uploadPortfolioPhoto = uploadPortfolioPhoto;
+
 async function addPortfolio(){
   const url = document.getElementById('pfUrl').value.trim();
   if(!url){ showToast('Вставьте ссылку на изображение'); return; }
@@ -1235,7 +1439,16 @@ function renderMSchedule(m, isDemo){
   const dayChips = days.map(d=>`<button class="chip ${state.masterScheduleDate===d?'active':''}" onclick="pickScheduleDate('${d}')">${fmtDate(d)}</button>`).join('');
   const daySlots = (m.slots && m.slots[state.masterScheduleDate]) || [];
   const slotGrid = TIMES.map(t=>`<div class="slot ${daySlots.includes(t)?'on':''}" onclick="${isDemo?'':`toggleSlot('${t}')`}">${t}</div>`).join('');
-  return `<div class="card">
+  const templates = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:8px;">Быстрые шаблоны</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="btn ghost small" onclick="applyScheduleTemplate('weekdays')">Пн–Пт, 10:00–19:00, на месяц вперёд</button>
+      <button class="btn ghost small" onclick="applyScheduleTemplate('everyday')">Каждый день, 10:00–19:00, на месяц вперёд</button>
+      <button class="btn danger small" onclick="clearScheduleDay()">Сделать выбранный день выходным</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--ink-soft);margin-top:8px;">Шаблон не трогает дни, которые вы уже настроили вручную под другим расписанием — при необходимости поправьте отдельные дни ниже.</div>
+  </div>`;
+  return templates + `<div class="card">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:8px;">Выберите дату</div>
     <div class="chiprow" style="padding:0;overflow-x:auto;">${dayChips}</div>
     <div class="divider"></div>
@@ -1259,6 +1472,38 @@ async function toggleSlot(t){
 }
 window.toggleSlot = toggleSlot;
 
+function timesInRange(start, end){
+  return TIMES.filter(t => t>=start && t<=end);
+}
+async function applyScheduleTemplate(kind){
+  const m = await loadMaster(state.myMasterId);
+  m.slots = m.slots || {};
+  const days = Array.from({length:30},(_,i)=>todayISO(i));
+  for(const d of days){
+    const dow = new Date(d+'T00:00:00').getDay(); // 0=вс, 6=сб
+    const isWeekend = (dow===0 || dow===6);
+    if(kind==='weekdays'){
+      if(!isWeekend) m.slots[d] = timesInRange('10:00','19:00');
+    } else if(kind==='everyday'){
+      m.slots[d] = timesInRange('10:00','19:00');
+    }
+  }
+  await saveMaster(m);
+  showToast('Расписание применено на месяц вперёд');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.applyScheduleTemplate = applyScheduleTemplate;
+
+async function clearScheduleDay(){
+  const m = await loadMaster(state.myMasterId);
+  m.slots = m.slots || {};
+  m.slots[state.masterScheduleDate] = [];
+  await saveMaster(m);
+  showToast('День сделан выходным');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.clearScheduleDay = clearScheduleDay;
+
 function renderMBookings(m, bookings, isDemo){
   if(isDemo){
     return `<div class="card"><div class="empty" style="padding:10px 0">В демо-режиме заявки клиентов будут отображаться здесь: с именем, услугой, датой и кнопками подтверждения.</div></div>`;
@@ -1280,6 +1525,9 @@ function renderMBookings(m, bookings, isDemo){
       <button class="btn teal small" style="flex:1" onclick="setBookingStatus('${b.id}','confirmed')">Подтвердить</button>
       <button class="btn danger small" style="flex:1" onclick="setBookingStatus('${b.id}','cancelled')">Отклонить</button>
     </div>`:''}
+    ${b.status==='confirmed'?`<div style="margin-top:10px;">
+      <button class="btn danger small" onclick="setBookingStatus('${b.id}','cancelled')">Отменить запись</button>
+    </div>`:''}
   </div>`).join('');
 }
 async function setBookingStatus(bookingId, status){
@@ -1287,8 +1535,9 @@ async function setBookingStatus(bookingId, status){
   const b = bookings.find(x=>x.id===bookingId);
   if(!b) return;
   b.status = status;
+  if(status==='cancelled') b.cancelledBy = 'master';
   await saveBookings(state.myMasterId, bookings);
-  showToast(status==='confirmed' ? 'Запись подтверждена — клиент увидит статус в «Моих записях»' : 'Запись отклонена');
+  showToast(status==='confirmed' ? 'Запись подтверждена — клиент увидит статус в «Моих записях»' : 'Запись отменена, клиент будет уведомлён');
   fillMasterArea();
 }
 window.setBookingStatus = setBookingStatus;
@@ -1338,6 +1587,7 @@ async function renderAdminDashboard(){
   const active = masters.filter(m=>m.subscriptionActive);
   const inactive = masters.filter(m=>!m.subscriptionActive);
   const disabled = masters.filter(m=>m.disabledByAdmin);
+  const pendingModeration = masters.filter(m=>m.moderationStatus==='pending');
 
   let totalBookings=0, totalReviews=0;
   const bookingsByMaster = {};
@@ -1355,13 +1605,32 @@ async function renderAdminDashboard(){
       <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;">${masters.length}</div><div style="font-size:11.5px;color:var(--ink-soft)">Всего мастеров</div></div>
       <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;color:var(--teal)">${active.length}</div><div style="font-size:11.5px;color:var(--ink-soft)">Активная подписка</div></div>
       <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;color:var(--danger)">${inactive.length}</div><div style="font-size:11.5px;color:var(--ink-soft)">Ожидают оплаты</div></div>
+      <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;color:var(--gold)">${pendingModeration.length}</div><div style="font-size:11.5px;color:var(--ink-soft)">На модерации</div></div>
       <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;">${mrr}₽</div><div style="font-size:11.5px;color:var(--ink-soft)">Выручка / мес (оценка)</div></div>
       <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;">${totalBookings}</div><div style="font-size:11.5px;color:var(--ink-soft)">Всего записей</div></div>
-      <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;">${totalReviews}</div><div style="font-size:11.5px;color:var(--ink-soft)">Всего отзывов</div></div>
     </div>
   </div>`;
 
-  const list = masters.slice().sort((a,b)=>{
+  const moderationQueue = pendingModeration.length ? `
+    <div style="padding:0 18px 8px;font-weight:700;font-size:13.5px;">🕓 Ждут проверки (${pendingModeration.length})</div>
+    ${pendingModeration.map(m=>{
+      const spec = SPECS[m.specialization];
+      return `<div class="card">
+        <div class="mcard-name" style="font-size:15px;">${spec.icon} ${escapeHtml(m.name)}</div>
+        <div class="mcard-city">📍 ${escapeHtml(m.city)} · ${spec.label}</div>
+        <div style="font-size:13px;color:var(--ink-soft);margin-top:8px;line-height:1.5;">${escapeHtml(m.bio||'Без описания')}</div>
+        <div class="divider"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn teal small" onclick="adminApproveMaster('${m.id}')">Одобрить</button>
+          <button class="btn danger small" onclick="adminRejectMaster('${m.id}')">Отклонить</button>
+          <button class="btn ghost small" onclick="adminEditMaster('${m.id}')">Посмотреть/редактировать</button>
+        </div>
+      </div>`;
+    }).join('')}
+    <div class="divider" style="margin:4px 18px 14px;"></div>
+  ` : '';
+
+  const list = masters.filter(m=>m.moderationStatus!=='pending').slice().sort((a,b)=>{
     // Мастера с ожидающей проверки квитанцией — в начало списка, чтобы их не пропустить
     const aPending = a.paymentClaimStatus==='pending' ? 1 : 0;
     const bPending = b.paymentClaimStatus==='pending' ? 1 : 0;
@@ -1405,6 +1674,7 @@ async function renderAdminDashboard(){
     </div>
     ${identityLine}
     ${overview}
+    ${moderationQueue}
     ${masters.length? list : `<div class="empty"><div class="big">🗂️</div>Пока нет ни одного мастера на платформе.</div>`}
   `;
 }
@@ -1424,11 +1694,35 @@ async function adminConfirmPayment(id){
   m.subscriptionActive = true;
   m.subscriptionUntil = todayISO(30);
   m.paymentClaimStatus = 'confirmed';
+  m.paymentHistory = m.paymentHistory || [];
+  m.paymentHistory.push({ method: m.paymentClaimMethod, confirmedAt: Date.now(), subscriptionUntil: m.subscriptionUntil });
   await saveMaster(m);
   showToast('Оплата подтверждена — профиль активирован');
   fillAdmin();
 }
 window.adminConfirmPayment = adminConfirmPayment;
+
+async function adminApproveMaster(id){
+  const m = await loadMaster(id);
+  m.moderationStatus = 'approved';
+  m.moderationReason = null;
+  await saveMaster(m);
+  showToast('Мастер одобрен');
+  fillAdmin();
+}
+window.adminApproveMaster = adminApproveMaster;
+
+async function adminRejectMaster(id){
+  const reason = window.prompt('Укажите причину отклонения (мастер её увидит):', '');
+  if(reason===null) return; // отменено
+  const m = await loadMaster(id);
+  m.moderationStatus = 'rejected';
+  m.moderationReason = reason || 'Причина не указана';
+  await saveMaster(m);
+  showToast('Мастер отклонён');
+  fillAdmin();
+}
+window.adminRejectMaster = adminRejectMaster;
 
 async function adminDeleteMaster(id){
   const m = await loadMaster(id);
@@ -1446,6 +1740,15 @@ window.adminDeleteMaster = adminDeleteMaster;
 async function renderAdminEdit(id){
   const m = await loadMaster(id);
   if(!m){ state.adminEditingId=null; return fillAdmin(); }
+  const history = (m.paymentHistory||[]).slice().reverse();
+  const historyBlock = `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:8px;">История платежей</div>
+    ${history.length ? history.map(h=>`
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px;">
+        <span>${h.method==='sbp'?'📱 СБП':'💳 Карта'} · ${new Date(h.confirmedAt).toLocaleDateString('ru-RU')}</span>
+        <span style="color:var(--ink-soft)">до ${fmtDate(h.subscriptionUntil)}</span>
+      </div>`).join('') : `<div style="font-size:12.5px;color:var(--ink-soft)">Платежей ещё не было</div>`}
+  </div>`;
   document.getElementById('content').innerHTML = `
   <div class="backbar"><button class="backbtn" onclick="adminCancelEdit()">←</button><div style="font-weight:700">Редактирование мастера</div></div>
   <div class="card">
@@ -1462,8 +1765,16 @@ async function renderAdminEdit(id){
         <option value="inactive" ${!m.subscriptionActive?'selected':''}>Не оплачено</option>
       </select>
     </div>
+    <div class="field"><label>Статус модерации</label>
+      <select id="admModeration">
+        <option value="pending" ${m.moderationStatus==='pending'?'selected':''}>На проверке</option>
+        <option value="approved" ${m.moderationStatus==='approved'?'selected':''}>Одобрен</option>
+        <option value="rejected" ${m.moderationStatus==='rejected'?'selected':''}>Отклонён</option>
+      </select>
+    </div>
     <button class="btn primary" onclick="adminSaveEdit('${id}')">Сохранить</button>
-  </div>`;
+  </div>
+  ${historyBlock}`;
 }
 function adminCancelEdit(){ state.adminEditingId=null; fillAdmin(); }
 window.adminCancelEdit = adminCancelEdit;
@@ -1478,6 +1789,7 @@ async function adminSaveEdit(id){
   const subVal = document.getElementById('admSub').value;
   m.subscriptionActive = subVal==='active';
   if(m.subscriptionActive && !m.subscriptionUntil) m.subscriptionUntil = todayISO(30);
+  m.moderationStatus = document.getElementById('admModeration').value;
   await saveMaster(m);
   state.adminEditingId=null;
   showToast('Изменения сохранены');
