@@ -361,7 +361,7 @@ async function seedIfEmpty(){
       id, specialization:sm.spec, name:sm.name, city:sm.city, address:sm.address, bio:sm.bio,
       services, portfolio, slots, subscriptionActive:true, subscriptionUntil: todayISO(30),
       ratingSum, ratingCount:reviews.length, createdAt:Date.now(), isDemo:false, disabledByAdmin:false, telegramId:null,
-      moderationStatus:'approved', moderationReason:null, paymentHistory:[]
+      moderationStatus:'approved', moderationReason:null, paymentHistory:[], isTrial:false, trialEndsAt:null
     };
     await sset('master:'+id, master, true);
     await sset('reviews:'+id, reviews, true);
@@ -385,6 +385,7 @@ const state = {
   booking:null, // {serviceId, date, time}
   masterTab:'profile',
   paywallMethod:null,
+  forcePaywall:false,
   masterScheduleDate: todayISO(0),
   myMasterId:null,
   myMaster:null,
@@ -558,6 +559,7 @@ function goto(view){
   if(view==='admin' && state.isTelegramContext && !state.isOwner) return; // safety net, tab hidden anyway
   state.view = view;
   if(view==='catalog') state.selectedMasterId=null;
+  if(view==='master') state.forcePaywall=false;
   render();
 }
 window.goto = goto;
@@ -1143,7 +1145,8 @@ async function finishRegistration(){
     paymentClaimStatus: null, paymentClaimMethod: null, paymentClaimAt: null,
     moderationStatus: 'pending', // pending | approved | rejected
     moderationReason: null,
-    paymentHistory: [] // [{ method, confirmedAt, subscriptionUntil }]
+    paymentHistory: [], // [{ method, confirmedAt, subscriptionUntil }]
+    isTrial: false, trialEndsAt: null
   };
   await saveMaster(master);
   await addMasterToIndex(id);
@@ -1163,7 +1166,7 @@ async function renderMasterDashboard(m, isDemo){
   if(!isDemo && m.moderationStatus==='rejected'){
     return renderModerationRejected(m);
   }
-  if(!isDemo && !m.subscriptionActive){
+  if(!isDemo && (!m.subscriptionActive || state.forcePaywall)){
     return renderPaywall(m);
   }
   const bookings = isDemo? [] : await loadBookings(m.id);
@@ -1172,10 +1175,27 @@ async function renderMasterDashboard(m, isDemo){
 
   const demoBanner = isDemo? `<div class="pillnote" style="background:#E4DCF3;border-color:#D6C6EE;color:#4B3B7A;">Вы в демо-режиме. Изменения не сохраняются. <button class="link-btn" style="margin-left:4px" onclick="exitDemo()">Выйти из демо</button></div>` : '';
 
-  const subInfo = !isDemo ? `<div class="card" style="display:flex;justify-content:space-between;align-items:center;">
-      <div><div style="font-weight:700;font-size:13.5px;">Подписка активна</div><div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">До ${fmtDate(m.subscriptionUntil)}</div></div>
-      <span class="badge active">Активна</span>
-    </div>` : '';
+  let subInfo = '';
+  if(!isDemo){
+    if(m.isTrial && m.trialEndsAt){
+      const msLeft = m.trialEndsAt - Date.now();
+      const hoursLeft = Math.max(0, Math.ceil(msLeft/3600000));
+      subInfo = `<div class="card" style="background:#FBEFD6;border:1px solid #F3DFA8;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-weight:700;font-size:13.5px;color:#8A5A1F;">🎁 Пробный доступ активен</div>
+            <div style="font-size:12px;color:#8A5A1F;margin-top:2px;">Осталось примерно ${hoursLeft} ч — профиль виден клиентам бесплатно</div>
+          </div>
+        </div>
+        <button class="btn primary small" style="margin-top:10px;width:100%;" onclick="state.forcePaywall=true; fillMasterArea();">Оплатить сейчас, чтобы не пропасть из каталога</button>
+      </div>`;
+    } else {
+      subInfo = `<div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+        <div><div style="font-weight:700;font-size:13.5px;">Подписка активна</div><div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">До ${fmtDate(m.subscriptionUntil)}</div></div>
+        <span class="badge active">Активна</span>
+      </div>`;
+    }
+  }
 
   const tabs = `<div class="subnav">
     <button class="${state.masterTab==='profile'?'active':''}" onclick="setMTab('profile')">Профиль</button>
@@ -1257,6 +1277,9 @@ window.resubmitForModeration = resubmitForModeration;
 function renderPaywall(m){
   const method = state.paywallMethod;
   const claim = m.paymentClaimStatus; // null | 'pending' | 'confirmed'
+  const duringTrial = !!(m.isTrial && m.subscriptionActive);
+
+  const backDuringTrial = duringTrial ? `<div class="backbar"><button class="backbtn" onclick="state.forcePaywall=false; fillMasterArea();">←</button><div style="font-weight:700">Оплата подписки</div></div>` : '';
 
   const methodPicker = `<div class="section-pad" style="display:flex;flex-direction:column;gap:10px;">
     <button class="btn ${method==='sbp'?'primary':'ghost'}" onclick="pickPaymentMethod('sbp')">📱 СБП (перевод по номеру телефона)</button>
@@ -1292,7 +1315,8 @@ function renderPaywall(m){
   }
 
   document.getElementById('content').innerHTML = `
-  <div class="hero"><h1>Активируйте профиль</h1><p>Ваш профиль сохранён, но пока не виден клиентам. Оформите ежемесячную подписку, чтобы клиенты могли находить вас и записываться.</p></div>
+  ${backDuringTrial}
+  <div class="hero" style="${duringTrial?'padding-top:6px;':''}"><h1>${duringTrial?'Оплатить подписку заранее':'Активируйте профиль'}</h1><p>${duringTrial?'Профиль уже виден клиентам благодаря пробному доступу. Оплатите сейчас, чтобы размещение продлилось на месяц без перерыва.':'Ваш профиль сохранён, но пока не виден клиентам. Оформите ежемесячную подписку, чтобы клиенты могли находить вас и записываться.'}</p></div>
   <div class="card" style="text-align:center;">
     <div style="font-family:'Fraunces',serif;font-size:30px;font-weight:600;">490₽<span style="font-size:14px;color:var(--ink-soft);font-weight:500;"> / месяц</span></div>
     <div style="font-size:13px;color:var(--ink-soft);margin-top:6px;">Без ограничений по записям и услугам</div>
@@ -1303,7 +1327,7 @@ function renderPaywall(m){
   ${requisites}
   ${claimBlock}
   <div class="section-pad" style="margin-top:6px;">
-    <button class="btn ghost" onclick="editWhileInactive()">Настроить профиль без подписки</button>
+    ${duringTrial ? `<button class="btn ghost" onclick="state.forcePaywall=false; fillMasterArea();">Вернуться в кабинет</button>` : `<button class="btn ghost" onclick="editWhileInactive()">Настроить профиль без подписки</button>`}
   </div>`;
 }
 window.renderPaywall = renderPaywall;
@@ -1642,7 +1666,8 @@ window.adminLogout = adminLogout;
 
 async function renderAdminDashboard(){
   const masters = await loadAllMasters();
-  const active = masters.filter(m=>m.subscriptionActive);
+  const paidActive = masters.filter(m=>m.subscriptionActive && !m.isTrial);
+  const onTrial = masters.filter(m=>m.subscriptionActive && m.isTrial);
   const inactive = masters.filter(m=>!m.subscriptionActive);
   const disabled = masters.filter(m=>m.disabledByAdmin);
   const pendingModeration = masters.filter(m=>m.moderationStatus==='pending');
@@ -1655,13 +1680,14 @@ async function renderAdminDashboard(){
     totalBookings += bk.length;
     totalReviews += (m.ratingCount||0);
   }
-  const mrr = active.length * 490;
+  const mrr = paidActive.length * 490;
 
   const overview = `<div class="card">
     <div style="font-weight:700;font-size:14px;margin-bottom:10px;">Общий дашборд</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;">${masters.length}</div><div style="font-size:11.5px;color:var(--ink-soft)">Всего мастеров</div></div>
-      <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;color:var(--teal)">${active.length}</div><div style="font-size:11.5px;color:var(--ink-soft)">Активная подписка</div></div>
+      <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;color:var(--teal)">${paidActive.length}</div><div style="font-size:11.5px;color:var(--ink-soft)">Оплаченная подписка</div></div>
+      <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;color:var(--gold)">${onTrial.length}</div><div style="font-size:11.5px;color:var(--ink-soft)">На пробном периоде</div></div>
       <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;color:var(--danger)">${inactive.length}</div><div style="font-size:11.5px;color:var(--ink-soft)">Ожидают оплаты</div></div>
       <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;color:var(--gold)">${pendingModeration.length}</div><div style="font-size:11.5px;color:var(--ink-soft)">На модерации</div></div>
       <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;">${mrr}₽</div><div style="font-size:11.5px;color:var(--ink-soft)">Выручка / мес (оценка)</div></div>
@@ -1697,7 +1723,10 @@ async function renderAdminDashboard(){
   }).map(m=>{
     const spec = SPECS[m.specialization];
     const bk = bookingsByMaster[m.id]||[];
-    const subBadge = m.subscriptionActive ? `<span class="badge active">Оплачено до ${fmtDate(m.subscriptionUntil)}</span>` : `<span class="badge inactive">Не оплачено</span>`;
+    const trialHoursLeft = (m.isTrial && m.trialEndsAt) ? Math.max(0, Math.ceil((m.trialEndsAt - Date.now())/3600000)) : 0;
+    const subBadge = (m.isTrial && m.subscriptionActive)
+      ? `<span class="badge pending">🎁 Пробный период, ~${trialHoursLeft}ч</span>`
+      : (m.subscriptionActive ? `<span class="badge active">Оплачено до ${fmtDate(m.subscriptionUntil)}</span>` : `<span class="badge inactive">Не оплачено</span>`);
     const visBadge = m.disabledByAdmin ? `<span class="badge cancelled">Скрыт админом</span>` : '';
     const claimBadge = (m.paymentClaimStatus==='pending' && !m.subscriptionActive)
       ? `<span class="badge pending">💌 Прислал(а) квитанцию — ${m.paymentClaimMethod==='sbp'?'СБП':'карта'}</span>` : '';
@@ -1752,6 +1781,8 @@ async function adminConfirmPayment(id){
   m.subscriptionActive = true;
   m.subscriptionUntil = todayISO(30);
   m.paymentClaimStatus = 'confirmed';
+  m.isTrial = false;
+  m.trialEndsAt = null;
   m.paymentHistory = m.paymentHistory || [];
   m.paymentHistory.push({ method: m.paymentClaimMethod, confirmedAt: Date.now(), subscriptionUntil: m.subscriptionUntil });
   await saveMaster(m);
@@ -1764,8 +1795,13 @@ async function adminApproveMaster(id){
   const m = await loadMaster(id);
   m.moderationStatus = 'approved';
   m.moderationReason = null;
+  // Пробный доступ на 24 часа: сразу появляется в каталоге, оплата потребуется по истечении
+  m.subscriptionActive = true;
+  m.isTrial = true;
+  m.trialEndsAt = Date.now() + 24*60*60*1000;
+  m.subscriptionUntil = null;
   await saveMaster(m);
-  showToast('Мастер одобрен');
+  showToast('Мастер одобрен — включён пробный доступ на 24 часа');
   fillAdmin();
 }
 window.adminApproveMaster = adminApproveMaster;
@@ -1846,7 +1882,11 @@ async function adminSaveEdit(id){
   m.bio = document.getElementById('admBio').value.trim();
   const subVal = document.getElementById('admSub').value;
   m.subscriptionActive = subVal==='active';
-  if(m.subscriptionActive && !m.subscriptionUntil) m.subscriptionUntil = todayISO(30);
+  if(m.subscriptionActive){
+    if(!m.subscriptionUntil || m.isTrial) m.subscriptionUntil = todayISO(30);
+    m.isTrial = false;
+    m.trialEndsAt = null;
+  }
   m.moderationStatus = document.getElementById('admModeration').value;
   await saveMaster(m);
   state.adminEditingId=null;
