@@ -505,12 +505,31 @@ function render(){
   app.innerHTML = html;
   app.dataset.rendered = 'true';
   // async fill-ins after paint
-  if(state.view==='catalog' && !state.selectedMasterId) fillCatalog();
-  if(state.view==='catalog' && state.selectedMasterId) fillMasterDetail();
-  if(state.view==='mybookings') fillMyBookings();
-  if(state.view==='master') fillMasterArea();
-  if(state.view==='admin') fillAdmin();
-  if(state.view==='favorites') fillFavorites();
+  if(state.view==='catalog' && !state.selectedMasterId) safeFill(fillCatalog);
+  if(state.view==='catalog' && state.selectedMasterId) safeFill(fillMasterDetail);
+  if(state.view==='mybookings') safeFill(fillMyBookings);
+  if(state.view==='master') safeFill(fillMasterArea);
+  if(state.view==='admin') safeFill(fillAdmin);
+  if(state.view==='favorites') safeFill(fillFavorites);
+}
+
+/* Ловит любую ошибку внутри асинхронных экранов и показывает её текстом
+   вместо того, чтобы экран молча завис на "Загрузка…" навсегда. */
+async function safeFill(fn){
+  try{
+    await fn();
+  }catch(e){
+    console.error('Ошибка при отрисовке экрана:', e);
+    const content = document.getElementById('content');
+    if(content){
+      content.innerHTML = `<div style="padding:50px 24px;text-align:center;">
+        <div style="font-size:34px;margin-bottom:10px;">⚠️</div>
+        <div style="font-weight:700;font-size:15px;color:var(--ink);margin-bottom:8px;">Не получилось загрузить этот экран</div>
+        <div style="font-size:12.5px;color:var(--ink-soft);word-break:break-word;">${escapeHtml((e && e.message) ? e.message : String(e))}</div>
+        <div style="margin-top:16px;"><button class="btn ghost small" onclick="render()">Попробовать снова</button></div>
+      </div>`;
+    }
+  }
 }
 
 function renderTopbar(){
@@ -1034,6 +1053,15 @@ async function fillMasterArea(){
     </div>`;
   }
   const m = await loadMaster(state.myMasterId);
+  if(!m){
+    document.getElementById('content').innerHTML = `
+    <div class="hero"><h1>Не удалось загрузить профиль</h1><p>Профиль сохранён на этом устройстве, но не получилось прочитать его из базы данных. Обычно это временная проблема связи с Supabase.</p></div>
+    <div class="section-pad">
+      <button class="btn primary" onclick="fillMasterArea()">Попробовать снова</button>
+    </div>
+    <div class="pillnote">Если это повторяется — откройте F12 → Console в браузере и посмотрите на текст ошибки, начинающийся с «sget failed».</div>`;
+    return;
+  }
   state.myMaster = m;
   renderMasterDashboard(m, false);
 }
@@ -1808,6 +1836,24 @@ window.addEventListener('error', function(e){
       <div style="font-size:40px;margin-bottom:14px;">⚠️</div>
       <div style="font-weight:700;font-size:16px;color:#34202C;margin-bottom:8px;">Ошибка при загрузке приложения</div>
       <div style="font-size:12.5px;color:#7C6670;word-break:break-word;">${(e.message||'').toString().replace(/</g,'&lt;')}</div>
+    </div>`;
+  }
+});
+
+/* То же самое, но для ошибок внутри async-функций (Promise), которые никто не
+   поймал — например, если экран завис на "Загрузка..." из-за необработанного
+   исключения. Показываем сообщение в контенте, не давая экрану виснуть молча. */
+window.addEventListener('unhandledrejection', function(e){
+  console.error('Необработанная ошибка:', e.reason);
+  const content = document.getElementById('content');
+  const target = content || document.getElementById('app');
+  if(target){
+    const msg = (e.reason && e.reason.message) ? e.reason.message : String(e.reason);
+    target.innerHTML = `<div style="padding:50px 24px;text-align:center;">
+      <div style="font-size:34px;margin-bottom:10px;">⚠️</div>
+      <div style="font-weight:700;font-size:15px;color:var(--ink,#34202C);margin-bottom:8px;">Что-то пошло не так</div>
+      <div style="font-size:12.5px;color:var(--ink-soft,#7C6670);word-break:break-word;">${msg.toString().replace(/</g,'&lt;')}</div>
+      <div style="margin-top:16px;"><button class="btn ghost small" onclick="render()">Попробовать снова</button></div>
     </div>`;
   }
 });
