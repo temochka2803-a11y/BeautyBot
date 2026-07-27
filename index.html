@@ -769,6 +769,7 @@ function setSort(s){ state.filters.sort=s; fillCatalog(); }
 window.setSort=setSort;
 
 function openMaster(id){
+  state.view = 'catalog';
   state.selectedMasterId = id;
   state.masterDetailTab='about';
   state.booking = null;
@@ -777,6 +778,7 @@ function openMaster(id){
 window.openMaster = openMaster;
 
 function openMasterForBooking(id){
+  state.view = 'catalog';
   state.selectedMasterId = id;
   state.masterDetailTab='book';
   state.booking = null;
