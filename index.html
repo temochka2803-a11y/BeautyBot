@@ -1055,16 +1055,29 @@ async function fillMasterArea(){
   const m = await loadMaster(state.myMasterId);
   if(!m){
     document.getElementById('content').innerHTML = `
-    <div class="hero"><h1>Не удалось загрузить профиль</h1><p>Профиль сохранён на этом устройстве, но не получилось прочитать его из базы данных. Обычно это временная проблема связи с Supabase.</p></div>
+    <div class="hero"><h1>Не удалось загрузить профиль</h1><p>Скорее всего, ваше устройство «помнит» ссылку на профиль, которого больше нет в базе (например, остался от неудачной первой попытки создания).</p></div>
     <div class="section-pad">
       <button class="btn primary" onclick="fillMasterArea()">Попробовать снова</button>
+      <div style="height:10px"></div>
+      <button class="btn danger" onclick="resetMasterPointer()">Профиля не существует — начать заново</button>
     </div>
-    <div class="pillnote">Если это повторяется — откройте F12 → Console в браузере и посмотрите на текст ошибки, начинающийся с «sget failed».</div>`;
+    <div class="pillnote">Вторая кнопка не удаляет данные из базы — она просто "забывает" на этом устройстве старую ссылку и даёт создать профиль мастера заново.</div>`;
     return;
   }
   state.myMaster = m;
   renderMasterDashboard(m, false);
 }
+
+async function resetMasterPointer(){
+  const sure = window.confirm('Забыть локальную ссылку на профиль мастера на этом устройстве? Это не удалит ваши данные из базы, если профиль всё же существует под другим именем — просто позволит создать/привязать профиль заново.');
+  if(!sure) return;
+  await sdelete('my-master-id', false);
+  state.myMasterId = null;
+  state.myMaster = null;
+  showToast('Локальная ссылка сброшена');
+  fillMasterArea();
+}
+window.resetMasterPointer = resetMasterPointer;
 
 function demoMasterObject(){
   return {
