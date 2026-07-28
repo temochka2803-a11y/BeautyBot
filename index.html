@@ -172,6 +172,7 @@ input,select,textarea{font-family:inherit;}
 .badge.active{background:#DDEDE6;color:#2E6B52;}
 .badge.inactive{background:#F3D8DE;color:#8C3B52;}
 .badge.demo{background:#E4DCF3;color:#4B3B7A;}
+.badge.completed{background:#E7E2DC;color:#6B5C52;}
 
 .gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;}
 .gallery img{width:100%;height:78px;object-fit:cover;border-radius:10px;background:var(--line);}
@@ -321,6 +322,14 @@ function fmtDate(iso){
   return d.toLocaleDateString('ru-RU',{day:'numeric',month:'short',weekday:'short'});
 }
 function ratingOf(m){ return m.ratingCount ? (m.ratingSum/m.ratingCount) : 0; }
+/* Прошло ли время записи. Используется, чтобы прятать кнопки «Отменить» у записей,
+   которые уже состоялись (или на которые клиент просто не пришёл) — отменять уже нечего. */
+function isBookingPast(b){
+  if(!b || !b.date || !b.time) return false;
+  const dt = new Date(`${b.date}T${b.time}`);
+  if(isNaN(dt.getTime())) return false;
+  return dt.getTime() < Date.now();
+}
 function starsStr(avg){
   const r = Math.round(avg);
   return '★'.repeat(r) + '☆'.repeat(5-r);
@@ -496,6 +505,62 @@ async function saveChat(masterId, arr){ await sset('chat:'+masterId, arr, true);
 async function addChatToIndex(masterId){
   const ids = await sget('chat-index', true) || [];
   if(!ids.includes(masterId)){ ids.push(masterId); await sset('chat-index', ids, true); }
+}
+
+/* Лист ожидания «нет свободного времени у мастера». Хранится общим ключом на мастера:
+   [{ id, clientKey, clientName, clientContact, clientTelegramId, createdAt }]
+   clientKey — тот же идентификатор, что используется для личных данных клиента (ownerId()),
+   так что «я в списке или нет» всегда проверяется по актуальным данным, без рассинхронизации. */
+async function loadWaitlist(masterId){ return await sget('waitlist:'+masterId, true) || []; }
+async function saveWaitlist(masterId, arr){ await sset('waitlist:'+masterId, arr, true); }
+
+async function joinWaitlist(masterId){
+  const nameEl = document.getElementById('bkName');
+  const contactEl = document.getElementById('bkContact');
+  const name = (nameEl && nameEl.value || state.clientName || '').trim();
+  const contact = (contactEl && contactEl.value || state.clientContact || '').trim();
+  if(!name || !contact){ showToast('Укажите имя и контакт для связи, чтобы встать в лист ожидания'); return; }
+  await sset('my-client-name', name, false);
+  await sset('my-client-contact', contact, false);
+  state.clientName = name; state.clientContact = contact;
+
+  const list = await loadWaitlist(masterId);
+  const key = ownerId();
+  if(!list.some(w=>w.clientKey===key)){
+    list.push({
+      id: uid(), clientKey:key, clientName:name, clientContact:contact,
+      clientTelegramId: (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : null,
+      createdAt: Date.now()
+    });
+    await saveWaitlist(masterId, list);
+  }
+  showToast('Вы в листе ожидания! Сообщим, как только появится время.');
+  fillMasterDetail();
+}
+window.joinWaitlist = joinWaitlist;
+
+async function leaveWaitlist(masterId){
+  const list = await loadWaitlist(masterId);
+  await saveWaitlist(masterId, list.filter(w=>w.clientKey!==ownerId()));
+  showToast('Вы вышли из листа ожидания');
+  fillMasterDetail();
+}
+window.leaveWaitlist = leaveWaitlist;
+
+/* Уведомляет всех, кто стоит в листе ожидания мастера, что появилось новое свободное время
+   (мастер открыл слоты или у кого-то отменилась запись), и очищает список — кто не успеет
+   записаться, всегда может встать в лист ожидания заново. */
+async function notifyWaitlist(masterId){
+  try{
+    const list = await loadWaitlist(masterId);
+    if(!list.length) return;
+    const m = await loadMaster(masterId);
+    const text = `🔔 У мастера «${m?m.name:''}» появилось новое свободное время!\nОткройте приложение и запишитесь — обычно разбирают быстро.`;
+    for(const w of list){
+      if(w.clientTelegramId) await notifyTelegram(w.clientTelegramId, text);
+    }
+    await saveWaitlist(masterId, []);
+  }catch(e){ console.warn('notifyWaitlist failed:', e); }
 }
 
 /* Автоматическая отправка уведомления через Telegram-бота.
@@ -969,6 +1034,7 @@ async function fillMasterDetail(){
   if(!m){ document.getElementById('content').innerHTML = `<div class="empty">Мастер не найден</div>`; return; }
   const reviews = await loadReviews(m.id);
   const bookings = await loadBookings(m.id);
+  const waitlist = await loadWaitlist(m.id);
   const spec = SPECS[m.specialization];
   const avg = ratingOf(m);
 
@@ -1041,7 +1107,7 @@ async function fillMasterDetail(){
       ${reviewForm}
     </div>`;
   } else if(state.masterDetailTab==='book'){
-    body = renderBookingForm(m, bookings);
+    body = renderBookingForm(m, bookings, waitlist);
   }
 
   document.getElementById('content').innerHTML = back + header + tabs + body;
@@ -1081,7 +1147,7 @@ async function submitReview(masterId){
 }
 window.submitReview = submitReview;
 
-function renderBookingForm(m, bookings){
+function renderBookingForm(m, bookings, waitlist){
   if(!m.services.length) return `<div class="card"><div class="empty" style="padding:20px 0">Мастер ещё не добавил услуги для записи</div></div>`;
   const b = state.booking || {serviceId:m.services[0].id, date:null, time:null};
   state.booking = b;
@@ -1105,6 +1171,15 @@ function renderBookingForm(m, bookings){
     if(!daySlots.length) slotsHtml = `<div class="empty" style="padding:10px 0">На эту дату нет свободного времени</div>`;
   }
 
+  const onWaitlist = (waitlist||[]).some(w=>w.clientKey===ownerId());
+  const waitlistCard = `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🔔 Нет подходящего времени?</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Встаньте в лист ожидания — как только у мастера появится новое свободное время (откроет слоты или у кого-то отменится запись), мы вам сразу напишем.</div>
+    ${onWaitlist
+      ? `<div class="pillnote" style="margin:0 0 10px;padding-left:0;padding-right:0;background:none;border:none;">✅ Вы в листе ожидания.</div><button class="btn ghost small" onclick="leaveWaitlist('${m.id}')">Выйти из списка</button>`
+      : `<button class="btn ghost" onclick="joinWaitlist('${m.id}')">Встать в лист ожидания</button>`}
+  </div>`;
+
   return `<div class="card">
     <div class="field"><label>Услуга</label><select id="bkService" onchange="setBookField('serviceId', this.value)">${serviceOpts}</select></div>
     <div class="field"><label>Дата</label><div class="chiprow" style="padding:0;overflow-x:auto;">${dayChips}</div></div>
@@ -1113,7 +1188,8 @@ function renderBookingForm(m, bookings){
     <div class="field"><label>Телефон / Telegram</label><input id="bkContact" value="${escapeHtml(state.clientContact)}" placeholder="@username или телефон"></div>
     <button class="btn primary" onclick="submitBooking('${m.id}')" ${(!b.date||!b.time)?'disabled':''}>Отправить заявку на запись</button>
     <div class="pillnote" style="margin:10px 0 0;">После отправки заявка придёт мастеру. Как только он подтвердит запись, вы увидите статус во вкладке «Мои записи».</div>
-  </div>`;
+  </div>
+  ${waitlistCard}`;
 }
 function pickDate(d){ state.booking = {...state.booking, date:d, time:null}; fillMasterDetail(); }
 function pickTime(t){ state.booking = {...state.booking, time:t}; fillMasterDetail(); }
@@ -1170,6 +1246,22 @@ async function submitBooking(masterId){
   showToast('Заявка отправлена мастеру! Ожидайте подтверждения.');
   state.masterDetailTab='about';
   fillMasterDetail();
+
+  // Мгновенное уведомление мастеру о новой заявке (в чат приложения + от бота в Telegram).
+  try{
+    const chat = await loadChat(masterId);
+    chat.push({
+      id: uid(), from:'owner',
+      text: `🗓️ Новая заявка на запись!\n${service.name} · ${fmtDate(booking.date)} в ${booking.time}\nКлиент: ${name} (${contact})`,
+      createdAt: Date.now(), readByOwner:true, readByMaster:false
+    });
+    await saveChat(masterId, chat);
+    await addChatToIndex(masterId);
+    if(m.telegramId){
+      await notifyTelegram(m.telegramId,
+        `🗓️ Новая заявка на запись!\n\nУслуга: ${service.name}\nКогда: ${fmtDate(booking.date)} в ${booking.time}\nКлиент: ${name}\nКонтакт: ${contact}\n\nПодтвердите или отклоните её во вкладке «Мастеру → Записи».`);
+    }
+  }catch(e){ console.warn('booking notify failed:', e); }
 }
 window.submitBooking = submitBooking;
 
@@ -1190,14 +1282,18 @@ async function fillMyBookings(){
     if(!bk) continue;
     const m = await loadMaster(entry.masterId);
     const spec = m?SPECS[m.specialization]:null;
-    const canCancel = bk.status==='pending' || bk.status==='confirmed';
+    const past = isBookingPast(bk);
+    const canCancel = (bk.status==='pending' || bk.status==='confirmed') && !past;
+    const isCompleted = bk.status==='confirmed' && past;
+    const statusLabel = isCompleted ? 'Состоялась' : (bk.status==='pending'?'Ожидает':bk.status==='confirmed'?'Подтверждено':'Отменено');
+    const statusClass = isCompleted ? 'completed' : bk.status;
     rows.push(`<div class="card">
       <div class="mcard-top">
         <div>
           <div class="mcard-name">${escapeHtml(bk.serviceName)}</div>
           <div class="mcard-city">${spec?spec.icon+' ':''}${m?escapeHtml(m.name):'Мастер'} · 📍 ${m?escapeHtml(m.city):''}</div>
         </div>
-        <span class="badge ${bk.status}">${bk.status==='pending'?'Ожидает':bk.status==='confirmed'?'Подтверждено':'Отменено'}</span>
+        <span class="badge ${statusClass}">${statusLabel}</span>
       </div>
       <div class="divider"></div>
       <div style="font-size:13.5px;color:var(--ink-soft)">📅 ${fmtDate(bk.date)} в ${bk.time} · ${bk.price}₽</div>
@@ -1218,6 +1314,24 @@ async function clientCancelBooking(masterId, bookingId){
   await saveBookings(masterId, bookings);
   showToast('Запись отменена');
   fillMyBookings();
+
+  // Мгновенное уведомление мастеру (в чат приложения + от бота в Telegram).
+  try{
+    const m = await loadMaster(masterId);
+    const chat = await loadChat(masterId);
+    chat.push({
+      id: uid(), from:'owner',
+      text: `❌ Клиент отменил запись.\n${bk.serviceName} · ${fmtDate(bk.date)} в ${bk.time}\nКлиент: ${bk.clientName}`,
+      createdAt: Date.now(), readByOwner:true, readByMaster:false
+    });
+    await saveChat(masterId, chat);
+    await addChatToIndex(masterId);
+    if(m && m.telegramId){
+      await notifyTelegram(m.telegramId,
+        `❌ Клиент отменил запись.\n\nУслуга: ${bk.serviceName}\nКогда была: ${fmtDate(bk.date)} в ${bk.time}\nКлиент: ${bk.clientName}\n\nЭтот слот теперь снова свободен.`);
+    }
+  }catch(e){ console.warn('cancel notify failed:', e); }
+  notifyWaitlist(masterId); // слот освободился — сообщим тем, кто в листе ожидания
 }
 window.clientCancelBooking = clientCancelBooking;
 
@@ -1810,10 +1924,12 @@ async function toggleSlot(t){
   m.slots = m.slots || {};
   const d = state.masterScheduleDate;
   m.slots[d] = m.slots[d] || [];
-  if(m.slots[d].includes(t)) m.slots[d] = m.slots[d].filter(x=>x!==t);
+  const wasOpen = m.slots[d].includes(t);
+  if(wasOpen) m.slots[d] = m.slots[d].filter(x=>x!==t);
   else m.slots[d].push(t);
   await saveMaster(m);
   (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+  if(!wasOpen) notifyWaitlist(m.id); // открыли новое время — сообщим листу ожидания
 }
 window.toggleSlot = toggleSlot;
 
@@ -1836,6 +1952,7 @@ async function applyScheduleTemplate(kind){
   await saveMaster(m);
   showToast('Расписание применено на месяц вперёд');
   (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+  notifyWaitlist(m.id); // открылось много нового времени — сообщим листу ожидания
 }
 window.applyScheduleTemplate = applyScheduleTemplate;
 
@@ -1855,25 +1972,31 @@ function renderMBookings(m, bookings, isDemo){
   }
   if(!bookings.length) return `<div class="card"><div class="empty" style="padding:10px 0">Пока нет заявок на запись</div></div>`;
   const sorted = bookings.slice().sort((a,b)=>b.createdAt-a.createdAt);
-  return sorted.map(b=>`<div class="card">
+  return sorted.map(b=>{
+    const past = isBookingPast(b);
+    const isCompleted = b.status==='confirmed' && past;
+    const statusLabel = isCompleted ? 'Состоялась' : (b.status==='pending'?'Ожидает':b.status==='confirmed'?'Подтверждена':'Отменена');
+    const statusClass = isCompleted ? 'completed' : b.status;
+    return `<div class="card">
     <div class="mcard-top">
       <div>
         <div class="mcard-name" style="font-size:14.5px;">${escapeHtml(b.clientName)}</div>
         <div class="mcard-city">${escapeHtml(b.serviceName)} · ${b.price}₽</div>
       </div>
-      <span class="badge ${b.status}">${b.status==='pending'?'Ожидает':b.status==='confirmed'?'Подтверждена':'Отменена'}</span>
+      <span class="badge ${statusClass}">${statusLabel}</span>
     </div>
     <div class="divider"></div>
     <div style="font-size:13px;color:var(--ink-soft);">📅 ${fmtDate(b.date)} в ${b.time}</div>
     <div style="font-size:13px;color:var(--ink-soft);margin-top:2px;">📞 ${escapeHtml(b.clientContact)}</div>
-    ${b.status==='pending'?`<div style="display:flex;gap:8px;margin-top:10px;">
+    ${(b.status==='pending' && !past)?`<div style="display:flex;gap:8px;margin-top:10px;">
       <button class="btn teal small" style="flex:1" onclick="setBookingStatus('${b.id}','confirmed')">Подтвердить</button>
       <button class="btn danger small" style="flex:1" onclick="setBookingStatus('${b.id}','cancelled')">Отклонить</button>
     </div>`:''}
-    ${b.status==='confirmed'?`<div style="margin-top:10px;">
+    ${(b.status==='confirmed' && !past)?`<div style="margin-top:10px;">
       <button class="btn danger small" onclick="setBookingStatus('${b.id}','cancelled')">Отменить запись</button>
     </div>`:''}
-  </div>`).join('');
+  </div>`;
+  }).join('');
 }
 async function setBookingStatus(bookingId, status){
   const bookings = await loadBookings(state.myMasterId);
@@ -1884,6 +2007,17 @@ async function setBookingStatus(bookingId, status){
   await saveBookings(state.myMasterId, bookings);
   showToast(status==='confirmed' ? 'Запись подтверждена — клиент увидит статус в «Моих записях»' : 'Запись отменена, клиент будет уведомлён');
   fillMasterArea();
+
+  // Мгновенное уведомление клиенту в Telegram (если у него сохранён telegramId).
+  if(b.clientTelegramId){
+    const m = await loadMaster(state.myMasterId);
+    const masterName = m ? m.name : 'мастер';
+    const text = status==='confirmed'
+      ? `✅ Ваша запись подтверждена!\n${b.serviceName} · ${fmtDate(b.date)} в ${b.time}\nМастер: ${masterName}`
+      : `❌ Мастер отменил вашу запись.\n${b.serviceName} · ${fmtDate(b.date)} в ${b.time}\nМастер: ${masterName}\n\nВы можете выбрать другое время в приложении.`;
+    notifyTelegram(b.clientTelegramId, text);
+  }
+  if(status==='cancelled') notifyWaitlist(state.myMasterId); // слот освободился — сообщим листу ожидания
 }
 window.setBookingStatus = setBookingStatus;
 
