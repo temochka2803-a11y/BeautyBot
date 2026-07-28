@@ -456,6 +456,23 @@ async function addChatToIndex(masterId){
   const ids = await sget('chat-index', true) || [];
   if(!ids.includes(masterId)){ ids.push(masterId); await sset('chat-index', ids, true); }
 }
+
+/* Автоматическая отправка уведомления через Telegram-бота.
+   Вызывает Supabase Edge Function 'notify-telegram', которая на сервере
+   (там, где безопасно хранить секретный токен бота) шлёт сообщение через Bot API.
+   Если функция ещё не задеплоена — просто возвращает false, вызывающий код
+   сам решает, что делать дальше (например, показать резервный способ отправки). */
+async function notifyTelegram(chatId, text){
+  if(!sb || !chatId) return false;
+  try{
+    const { data, error } = await sb.functions.invoke('notify-telegram', { body: { chatId: String(chatId), text } });
+    if(error){ console.warn('notifyTelegram: функция недоступна или вернула ошибку —', error.message||error); return false; }
+    return !!(data && data.ok);
+  }catch(e){
+    console.warn('notifyTelegram threw:', e && e.message ? e.message : e);
+    return false;
+  }
+}
 async function loadReviews(masterId){ return await sget('reviews:'+masterId, true) || []; }
 async function saveReviews(masterId, arr){ await sset('reviews:'+masterId, arr, true); }
 async function addMasterToIndex(id){
@@ -1350,13 +1367,25 @@ async function sendChatFromMaster(){
   await addChatToIndex(m.id);
 
   const tgText = `💬 Сообщение от мастера «${m.name}» (BeautyHub):\n${text}`;
-  const link = 'https://t.me/' + OWNER_TELEGRAM_USERNAME + '?text=' + encodeURIComponent(tgText);
-  if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink){
-    window.Telegram.WebApp.openTelegramLink(link);
-  } else {
-    window.open(link, '_blank');
+
+  // 1) Пробуем автоматическое уведомление через бота (если настроена Edge Function notify-telegram).
+  let sentAuto = false;
+  for(const ownerId of OWNER_TELEGRAM_IDS){
+    const ok = await notifyTelegram(ownerId, tgText);
+    sentAuto = sentAuto || ok;
   }
-  showToast('Сообщение отправлено, чат с владельцем открыт в Telegram');
+
+  // 2) Если автоматическая отправка не сработала (функция ещё не задеплоена) — резервный способ:
+  //    открыть чат с владельцем в Telegram с готовым текстом.
+  if(!sentAuto){
+    const link = 'https://t.me/' + OWNER_TELEGRAM_USERNAME + '?text=' + encodeURIComponent(tgText);
+    if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink){
+      window.Telegram.WebApp.openTelegramLink(link);
+    } else {
+      window.open(link, '_blank');
+    }
+  }
+  showToast(sentAuto ? 'Сообщение отправлено владельцу в Telegram' : 'Сообщение сохранено, чат с владельцем открыт в Telegram');
   fillMasterArea();
 }
 window.sendChatFromMaster = sendChatFromMaster;
@@ -2007,7 +2036,17 @@ async function sendChatFromOwner(masterId){
   chat.push({ id:uid(), from:'owner', text, createdAt:Date.now(), readByOwner:true, readByMaster:false });
   await saveChat(masterId, chat);
   await addChatToIndex(masterId);
-  showToast('Ответ отправлен мастеру');
+
+  // Автоматическое уведомление мастеру в Telegram (нужна задеплоенная Edge Function notify-telegram).
+  // У владельца нет прямой t.me-ссылки на мастера, поэтому без бота ответ мастер увидит только при следующем входе в приложение.
+  const m = await loadMaster(masterId);
+  let sentAuto = false;
+  if(m && m.telegramId){
+    sentAuto = await notifyTelegram(m.telegramId, `💬 Ответ от владельца платформы BeautyHub:\n${text}`);
+  }
+  showToast(sentAuto
+    ? 'Ответ отправлен мастеру в Telegram'
+    : 'Ответ сохранён. Мастер увидит его в приложении (для мгновенной отправки в Telegram настройте бот-уведомления — см. TELEGRAM_BOT_SETUP.md)');
   renderAdminChatThread(masterId);
 }
 window.sendChatFromOwner = sendChatFromOwner;
