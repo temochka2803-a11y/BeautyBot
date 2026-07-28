@@ -244,6 +244,8 @@ input,select,textarea{font-family:inherit;}
 /* ============ CONFIG ============ */
 const OWNER_TELEGRAM_IDS = ['8078091086']; // владелец платформы — доступ к кабинету только с этого Telegram-аккаунта
 const OWNER_TELEGRAM_USERNAME = 'whitespirited'; // ваш @username в Telegram (без @) — сюда попадут мастера с кнопки «Отправить квитанцию»
+const BOT_USERNAME = 'BeautyHubs_bot'; // ⚠️ ЗАПОЛНИТЕ: username вашего Telegram-бота (без @), через который открывается это приложение.
+                                            // Нужен, чтобы генерировать персональные ссылки-приглашения мастеров для клиентов.
 const SPECS = {
   manicure:{label:'Маникюр', icon:'💅'},
   brows:{label:'Брови', icon:'🪞'},
@@ -440,12 +442,51 @@ async function loadAllMasters(){
   const list = [];
   for(const id of ids){
     const m = await sget('master:'+id, true);
-    if(m) list.push(m);
+    if(m){ await checkTrialExpiry(m); list.push(m); }
   }
   return list;
 }
-async function loadMaster(id){ return await sget('master:'+id, true); }
+async function loadMaster(id){
+  const m = await sget('master:'+id, true);
+  return await checkTrialExpiry(m);
+}
 async function saveMaster(m){ await sset('master:'+m.id, m, true); }
+
+/* Проверяет, не истёк ли пробный период мастера. Если да — один раз деактивирует профиль
+   (он пропадает из каталога, как при обычной неоплаченной подписке) и отправляет мастеру
+   уведомление с просьбой оплатить подписку: сообщением в чат приложения и — если настроена
+   Edge Function notify-telegram — сообщением от бота в Telegram.
+   Вызывается автоматически из loadMaster/loadAllMasters, поэтому отдельно её дёргать не нужно. */
+async function checkTrialExpiry(m){
+  if(!m || !m.isTrial || !m.trialEndsAt) return m;
+  if(Date.now() < m.trialEndsAt) return m;
+
+  const alreadyHandled = !!m.trialExpiredNotifiedAt;
+  m.subscriptionActive = false;
+  m.isTrial = false;
+  m.trialExpiredNotifiedAt = m.trialExpiredNotifiedAt || Date.now();
+  await saveMaster(m);
+
+  if(!alreadyHandled){
+    try{
+      const chat = await loadChat(m.id);
+      chat.push({
+        id: uid(), from:'owner',
+        text: '⏳ Пробный период закончился, профиль временно скрыт из каталога. Оплатите подписку во вкладке «Мастеру → Профиль» — как только оплата подтвердится, клиенты снова смогут вас найти.',
+        createdAt: Date.now(), readByOwner:true, readByMaster:false
+      });
+      await saveChat(m.id, chat);
+      await addChatToIndex(m.id);
+      if(m.telegramId){
+        await notifyTelegram(m.telegramId,
+          `⏳ Пробный период BeautyHub закончился.\nВаш профиль «${m.name}» временно скрыт из каталога.\nОплатите подписку в приложении (вкладка «Мастеру»), чтобы клиенты снова могли вас найти и записаться.`);
+      }
+    }catch(e){
+      console.warn('checkTrialExpiry notify failed:', e);
+    }
+  }
+  return m;
+}
 async function loadBookings(masterId){ return await sget('bookings:'+masterId, true) || []; }
 async function saveBookings(masterId, arr){ await sset('bookings:'+masterId, arr, true); }
 /* Чат «мастер ↔ владелец платформы». Хранится общим ключом на пару, шаблон сообщения:
@@ -500,13 +541,19 @@ function detectTelegramIdentity(){
       state.tgUser = (tg.initDataUnsafe && tg.initDataUnsafe.user) || null;
       const idStr = state.tgUser ? String(state.tgUser.id) : null;
       state.isOwner = !!idStr && OWNER_TELEGRAM_IDS.includes(idStr);
+      // Ссылка-приглашение мастера: t.me/<bot>?startapp=book_<masterId> -> Telegram кладёт это в start_param
+      state._startParam = (tg.initDataUnsafe && tg.initDataUnsafe.start_param) || null;
     } else {
       state.isTelegramContext = false;
       state.isOwner = false;
+      // Для тестирования в обычном браузере: ?startapp=book_<id> в адресной строке
+      const urlParam = new URLSearchParams(window.location.search).get('startapp');
+      state._startParam = urlParam || null;
     }
   }catch(e){
     state.isTelegramContext = false;
     state.isOwner = false;
+    state._startParam = null;
   }
 }
 
@@ -532,6 +579,17 @@ async function init(){
   if(state.isTelegramContext && state.tgUser && !state.clientName){
     const full = [state.tgUser.first_name, state.tgUser.last_name].filter(Boolean).join(' ');
     if(full) state.clientName = full;
+  }
+  // Пришли по персональной ссылке мастера (t.me/бот?startapp=book_<id>) — сразу открываем его страницу записи.
+  if(state._startParam && state._startParam.startsWith('book_')){
+    const linkedMasterId = state._startParam.slice('book_'.length);
+    const linkedMaster = await loadMaster(linkedMasterId);
+    if(linkedMaster){
+      if(!state.userRole){ state.userRole = 'client'; await sset('my-role', 'client', false); }
+      state.view = 'catalog';
+      state.selectedMasterId = linkedMasterId;
+      state.masterDetailTab = 'book';
+    }
   }
   state.loading = false;
   render();
@@ -860,6 +918,12 @@ window.backToSpecs = backToSpecs;
 
 function specBg(k){ return {manicure:'#F3D8DE',brows:'#E4DCF3',tattoo:'#D8E3F3',piercing:'#DDEDE6',lashes:'#F6E6D2'}[k]; }
 function specFg(k){ return {manicure:'#8C3B52',brows:'#4B3B7A',tattoo:'#2C4E7A',piercing:'#2E6B52',lashes:'#8A5A1F'}[k]; }
+
+/* Персональная ссылка мастера для клиентов: открывает Mini App сразу на его странице записи,
+   минуя выбор города и поиск (Telegram передаёт startapp как start_param). */
+function masterBookingLink(masterId){
+  return `https://t.me/${BOT_USERNAME}?startapp=book_${masterId}`;
+}
 
 function setSort(s){ state.filters.sort=s; fillCatalog(); }
 window.setSort=setSort;
@@ -1451,6 +1515,7 @@ function renderPaywall(m){
   const method = state.paywallMethod;
   const claim = m.paymentClaimStatus; // null | 'pending' | 'confirmed'
   const duringTrial = !!(m.isTrial && m.subscriptionActive);
+  const trialJustExpired = !duringTrial && !!m.trialExpiredNotifiedAt && !m.subscriptionActive;
 
   const backDuringTrial = duringTrial ? `<div class="backbar"><button class="backbtn" onclick="state.forcePaywall=false; fillMasterArea();">←</button><div style="font-weight:700">Оплата подписки</div></div>` : '';
 
@@ -1489,7 +1554,7 @@ function renderPaywall(m){
 
   document.getElementById('content').innerHTML = `
   ${backDuringTrial}
-  <div class="hero" style="${duringTrial?'padding-top:6px;':''}"><h1>${duringTrial?'Оплатить подписку заранее':'Активируйте профиль'}</h1><p>${duringTrial?'Профиль уже виден клиентам благодаря пробному доступу. Оплатите сейчас, чтобы размещение продлилось на месяц без перерыва.':'Ваш профиль сохранён, но пока не виден клиентам. Оформите ежемесячную подписку, чтобы клиенты могли находить вас и записываться.'}</p></div>
+  <div class="hero" style="${duringTrial?'padding-top:6px;':''}"><h1>${duringTrial?'Оплатить подписку заранее':(trialJustExpired?'Пробный период закончился':'Активируйте профиль')}</h1><p>${duringTrial?'Профиль уже виден клиентам благодаря пробному доступу. Оплатите сейчас, чтобы размещение продлилось на месяц без перерыва.':(trialJustExpired?'Бесплатный доступ закончился, и профиль временно скрыт из каталога. Оплатите подписку — и клиенты снова смогут вас найти.':'Ваш профиль сохранён, но пока не виден клиентам. Оформите ежемесячную подписку, чтобы клиенты могли находить вас и записываться.')}</p></div>
   <div class="card" style="text-align:center;">
     <div style="font-family:'Fraunces',serif;font-size:30px;font-weight:600;">490₽<span style="font-size:14px;color:var(--ink-soft);font-weight:500;"> / месяц</span></div>
     <div style="font-size:13px;color:var(--ink-soft);margin-top:6px;">Без ограничений по записям и услугам</div>
@@ -1570,6 +1635,15 @@ function setMTabEdit(t){ state.masterTab=t; fillMasterAreaEditMode(); }
 window.editWhileInactive=editWhileInactive; window.setMTabEdit=setMTabEdit;
 
 function renderMProfile(m, isDemo){
+  const linkCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🔗 Ваша ссылка для клиентов</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Отправьте эту ссылку клиентам в директ, сторис или на сайт — она откроет ваш профиль в приложении сразу на странице записи.</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input id="myBookingLink" readonly value="${masterBookingLink(m.id)}" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:12.5px;color:var(--ink-soft);" onclick="this.select()">
+      <button class="btn primary small" style="width:auto;padding:0 16px;white-space:nowrap;" onclick="copyText(masterBookingLink('${m.id}'))">Скопировать</button>
+    </div>
+    ${BOT_USERNAME==='YOUR_BOT_USERNAME' ? `<div class="pillnote" style="margin:10px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:#B23A48;">⚠️ Ссылка ещё не работает — владельцу платформы нужно указать username Telegram-бота в настройках приложения (константа BOT_USERNAME).</div>` : ''}
+  </div>`;
   return `<div class="card">
     <div class="field"><label>Имя</label><input id="pfName" value="${escapeHtml(m.name)}" ${isDemo?'disabled':''}></div>
     <div class="field"><label>Специализация</label><select id="pfSpec" ${isDemo?'disabled':''}>${Object.entries(SPECS).map(([k,v])=>`<option value="${k}" ${m.specialization===k?'selected':''}>${v.icon} ${v.label}</option>`).join('')}</select></div>
@@ -1579,7 +1653,8 @@ function renderMProfile(m, isDemo){
     </div>
     <div class="field"><label>О себе</label><textarea id="pfBio" ${isDemo?'disabled':''}>${escapeHtml(m.bio||'')}</textarea></div>
     ${isDemo? '<div class="pillnote" style="margin:0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">В демо-режиме изменения не сохраняются.</div>' : `<button class="btn primary" onclick="saveProfileEdits()">Сохранить</button>`}
-  </div>`;
+  </div>
+  ${linkCard}`;
 }
 async function saveProfileEdits(){
   const m = await loadMaster(state.myMasterId);
@@ -1804,6 +1879,7 @@ async function fillAdmin(){
   if(state.isTelegramContext){
     // Real Telegram session: identity already verified by Telegram ID, no password needed.
     if(!state.isOwner) return renderAdminDenied();
+    if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
     if(state.adminScreen==='chatlist') return renderAdminChatList();
     if(state.adminScreen==='chat' && state.adminChatMasterId) return renderAdminChatThread(state.adminChatMasterId);
     if(state.adminEditingId) return renderAdminEdit(state.adminEditingId);
@@ -1811,6 +1887,7 @@ async function fillAdmin(){
   }
   // Opened outside Telegram (e.g. testing in a browser) — fall back to demo password.
   if(!state.adminAuthed) return renderAdminLogin();
+  if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
   if(state.adminScreen==='chatlist') return renderAdminChatList();
   if(state.adminScreen==='chat' && state.adminChatMasterId) return renderAdminChatThread(state.adminChatMasterId);
   if(state.adminEditingId) return renderAdminEdit(state.adminEditingId);
@@ -1906,7 +1983,9 @@ async function renderAdminDashboard(){
     const trialHoursLeft = (m.isTrial && m.trialEndsAt) ? Math.max(0, Math.ceil((m.trialEndsAt - Date.now())/3600000)) : 0;
     const subBadge = (m.isTrial && m.subscriptionActive)
       ? `<span class="badge pending">🎁 Пробный период, ~${trialHoursLeft}ч</span>`
-      : (m.subscriptionActive ? `<span class="badge active">Оплачено до ${fmtDate(m.subscriptionUntil)}</span>` : `<span class="badge inactive">Не оплачено</span>`);
+      : (m.subscriptionActive
+          ? `<span class="badge active">Оплачено до ${fmtDate(m.subscriptionUntil)}</span>`
+          : (m.trialExpiredNotifiedAt ? `<span class="badge inactive">⏳ Пробный истёк, не оплачено</span>` : `<span class="badge inactive">Не оплачено</span>`));
     const visBadge = m.disabledByAdmin ? `<span class="badge cancelled">Скрыт админом</span>` : '';
     const claimBadge = (m.paymentClaimStatus==='pending' && !m.subscriptionActive)
       ? `<span class="badge pending">💌 Прислал(а) квитанцию — ${m.paymentClaimMethod==='sbp'?'СБП':'карта'}</span>` : '';
@@ -1989,13 +2068,75 @@ async function renderAdminChatList(){
         <div style="font-size:12.5px;color:var(--ink-soft);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fromLabel}${preview}</div>
       </div>
     </div>`;
-  }).join('') : `<div class="empty"><div class="big">💬</div>Пока никто из мастеров не писал.<br>Здесь появятся диалоги, как только мастер отправит сообщение из своего кабинета.</div>`;
+  }).join('') : `<div class="empty"><div class="big">💬</div>Пока нет ни одной переписки.<br>Нажмите «Написать первым», чтобы начать диалог с любым мастером.</div>`;
 
   document.getElementById('content').innerHTML = `
   <div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Чаты с мастерами</div></div>
+  <div class="section-pad"><button class="btn primary" onclick="state.adminScreen='chatpicker'; fillAdmin();">✍️ Написать первым</button></div>
   ${listHtml}`;
 }
 window.renderAdminChatList = renderAdminChatList;
+
+async function renderAdminChatPicker(){
+  const masters = (await loadAllMasters()).slice().sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+  const q = (state._chatPickerQuery || '').trim().toLowerCase();
+  const filtered = q ? masters.filter(m=>
+    m.name.toLowerCase().includes(q) || (m.city||'').toLowerCase().includes(q)
+  ) : masters;
+
+  const rows = filtered.length ? filtered.map(m=>{
+    const sp = SPECS[m.specialization];
+    const statusBadge = m.moderationStatus==='pending'
+      ? `<span class="badge pending">на модерации</span>`
+      : (!m.subscriptionActive ? `<span class="badge inactive">не оплачено</span>` : '');
+    return `<div class="card" style="cursor:pointer;display:flex;gap:12px;align-items:center;" onclick="openAdminChat('${m.id}')">
+      <div class="avatar" style="width:44px;height:44px;font-size:19px;${avatarStyle(m)}">${avatarInner(m,sp)}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="mcard-name" style="font-size:14px;">${sp.icon} ${escapeHtml(m.name)}</div>
+        <div class="mcard-city">📍 ${escapeHtml(m.city)} ${statusBadge}</div>
+      </div>
+    </div>`;
+  }).join('') : `<div class="empty"><div class="big">🔍</div>Никого не нашлось.</div>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="state.adminScreen='chatlist'; fillAdmin();">←</button><div style="font-weight:700">Написать мастеру</div></div>
+  <div class="section-pad">
+    <input id="chatPickerSearch" placeholder="Поиск по имени или городу…" value="${escapeHtml(state._chatPickerQuery||'')}"
+      oninput="state._chatPickerQuery=this.value; filterAdminChatPicker();"
+      style="width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;">
+  </div>
+  <div id="chatPickerResults">${rows}</div>`;
+}
+window.renderAdminChatPicker = renderAdminChatPicker;
+
+let _chatPickerDebounce = null;
+function filterAdminChatPicker(){
+  clearTimeout(_chatPickerDebounce);
+  _chatPickerDebounce = setTimeout(async ()=>{
+    // Перерисовываем только список результатов, чтобы не терять фокус в поле поиска
+    const masters = (await loadAllMasters()).slice().sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+    const q = (state._chatPickerQuery || '').trim().toLowerCase();
+    const filtered = q ? masters.filter(m=>
+      m.name.toLowerCase().includes(q) || (m.city||'').toLowerCase().includes(q)
+    ) : masters;
+    const rows = filtered.length ? filtered.map(m=>{
+      const sp = SPECS[m.specialization];
+      const statusBadge = m.moderationStatus==='pending'
+        ? `<span class="badge pending">на модерации</span>`
+        : (!m.subscriptionActive ? `<span class="badge inactive">не оплачено</span>` : '');
+      return `<div class="card" style="cursor:pointer;display:flex;gap:12px;align-items:center;" onclick="openAdminChat('${m.id}')">
+        <div class="avatar" style="width:44px;height:44px;font-size:19px;${avatarStyle(m)}">${avatarInner(m,sp)}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="mcard-name" style="font-size:14px;">${sp.icon} ${escapeHtml(m.name)}</div>
+          <div class="mcard-city">📍 ${escapeHtml(m.city)} ${statusBadge}</div>
+        </div>
+      </div>`;
+    }).join('') : `<div class="empty"><div class="big">🔍</div>Никого не нашлось.</div>`;
+    const el = document.getElementById('chatPickerResults');
+    if(el) el.innerHTML = rows;
+  }, 200);
+}
+window.filterAdminChatPicker = filterAdminChatPicker;
 
 async function renderAdminChatThread(masterId){
   const m = await loadMaster(masterId);
@@ -2067,6 +2208,7 @@ async function adminConfirmPayment(id){
   m.paymentClaimStatus = 'confirmed';
   m.isTrial = false;
   m.trialEndsAt = null;
+  m.trialExpiredNotifiedAt = null;
   m.paymentHistory = m.paymentHistory || [];
   m.paymentHistory.push({ method: m.paymentClaimMethod, confirmedAt: Date.now(), subscriptionUntil: m.subscriptionUntil });
   await saveMaster(m);
@@ -2084,6 +2226,7 @@ async function adminApproveMaster(id){
   m.isTrial = true;
   m.trialEndsAt = Date.now() + 24*60*60*1000;
   m.subscriptionUntil = null;
+  m.trialExpiredNotifiedAt = null;
   await saveMaster(m);
   showToast('Мастер одобрен — включён пробный доступ на 24 часа');
   fillAdmin();
