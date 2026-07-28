@@ -223,6 +223,16 @@ input,select,textarea{font-family:inherit;}
 .starpick span{cursor:pointer;color:var(--line);}
 .starpick span.on{color:var(--gold);}
 .link-btn{color:var(--rose-deep);font-weight:700;font-size:13px;}
+
+/* chat */
+.chat-wrap{display:flex;flex-direction:column;gap:10px;max-height:52vh;overflow-y:auto;padding:2px;}
+.chat-msg{display:flex;flex-direction:column;max-width:78%;}
+.chat-msg.in{align-items:flex-start;align-self:flex-start;}
+.chat-msg.out{align-items:flex-end;align-self:flex-end;}
+.chat-bubble{padding:10px 13px;border-radius:14px;font-size:13.5px;line-height:1.45;white-space:pre-wrap;word-break:break-word;}
+.chat-msg.in .chat-bubble{background:var(--bg);color:var(--ink);border-bottom-left-radius:4px;}
+.chat-msg.out .chat-bubble{background:linear-gradient(135deg,var(--rose),var(--rose-deep));color:#fff;border-bottom-right-radius:4px;}
+.chat-time{font-size:10.5px;color:var(--ink-soft);margin-top:3px;padding:0 2px;}
 </style>
 </head>
 <body>
@@ -321,6 +331,18 @@ function escapeHtml(s){
   return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+/* Если у мастера есть аватарка (обычно подтянутая из Telegram-профиля при регистрации),
+   показываем её как фоновую картинку; иначе — иконку специализации, как раньше. */
+function avatarStyle(m){
+  if(m && m.avatarUrl){
+    return `background-image:url('${String(m.avatarUrl).replace(/'/g,'%27')}');background-size:cover;background-position:center;`;
+  }
+  return '';
+}
+function avatarInner(m, spec){
+  return (m && m.avatarUrl) ? '' : (spec ? spec.icon : '');
+}
+
 /* ============ SEED DEMO DATA (first run only, shared) ============ */
 async function seedIfEmpty(){
   const seeded = await sget('seeded-v1', true);
@@ -361,7 +383,8 @@ async function seedIfEmpty(){
       id, specialization:sm.spec, name:sm.name, city:sm.city, address:sm.address, bio:sm.bio,
       services, portfolio, slots, subscriptionActive:true, subscriptionUntil: todayISO(30),
       ratingSum, ratingCount:reviews.length, createdAt:Date.now(), isDemo:false, disabledByAdmin:false, telegramId:null,
-      moderationStatus:'approved', moderationReason:null, paymentHistory:[], isTrial:false, trialEndsAt:null
+      moderationStatus:'approved', moderationReason:null, paymentHistory:[], isTrial:false, trialEndsAt:null,
+      avatarUrl:null
     };
     await sset('master:'+id, master, true);
     await sset('reviews:'+id, reviews, true);
@@ -400,6 +423,9 @@ const state = {
   adminSection:'pending', // pending | active | all — вкладки в кабинете владельца
   favorites:[], // избранные мастера клиента (masterId[])
   showFavoritesOnly:false,
+  userRole:null, // 'client' | 'master' — выбирается при первом запуске, скрывает вкладку «Мастеру» для клиентов
+  adminScreen:'dashboard', // dashboard | chatlist | chat — экраны внутри кабинета владельца
+  adminChatMasterId:null, // id мастера, чат с которым сейчас открыт у владельца
 };
 
 function showToast(msg){
@@ -422,6 +448,14 @@ async function loadMaster(id){ return await sget('master:'+id, true); }
 async function saveMaster(m){ await sset('master:'+m.id, m, true); }
 async function loadBookings(masterId){ return await sget('bookings:'+masterId, true) || []; }
 async function saveBookings(masterId, arr){ await sset('bookings:'+masterId, arr, true); }
+/* Чат «мастер ↔ владелец платформы». Хранится общим ключом на пару, шаблон сообщения:
+   { id, from:'master'|'owner', text, createdAt, readByMaster, readByOwner } */
+async function loadChat(masterId){ return await sget('chat:'+masterId, true) || []; }
+async function saveChat(masterId, arr){ await sset('chat:'+masterId, arr, true); }
+async function addChatToIndex(masterId){
+  const ids = await sget('chat-index', true) || [];
+  if(!ids.includes(masterId)){ ids.push(masterId); await sset('chat-index', ids, true); }
+}
 async function loadReviews(masterId){ return await sget('reviews:'+masterId, true) || []; }
 async function saveReviews(masterId, arr){ await sset('reviews:'+masterId, arr, true); }
 async function addMasterToIndex(id){
@@ -468,6 +502,12 @@ async function init(){
   await seedIfEmpty();
   state.myMasterId = await sget('my-master-id', false);
   if(state.myMasterId){ state.myMaster = await loadMaster(state.myMasterId); }
+  state.userRole = await sget('my-role', false) || null;
+  if(state.myMasterId && state.userRole !== 'master'){
+    // Если у устройства уже есть профиль мастера, роль всегда «мастер», даже если раньше выбрали иначе.
+    state.userRole = 'master';
+    await sset('my-role', 'master', false);
+  }
   state.clientName = await sget('my-client-name', false) || '';
   state.clientContact = await sget('my-client-contact', false) || '';
   state.favorites = await sget('my-favorites', false) || [];
@@ -491,10 +531,40 @@ function renderSetupError(message){
     </div>`;
 }
 
+/* ============ ROLE ONBOARDING ============ */
+function renderRolePicker(){
+  return `
+  <div style="padding:64px 22px 24px;text-align:center;">
+    <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--rose),var(--rose-deep));display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;margin:0 auto 16px;">💄</div>
+    <div style="font-family:'Fraunces',serif;font-weight:600;font-size:22px;margin-bottom:8px;">Добро пожаловать в Beauty<em style="color:var(--rose);font-style:italic;">Hub</em></div>
+    <div style="color:var(--ink-soft);font-size:14px;line-height:1.5;">Расскажите, зачем вы здесь — так мы покажем только нужные вам разделы.</div>
+  </div>
+  <div class="section-pad">
+    <button class="btn primary" onclick="chooseRole('client')" style="margin-bottom:12px;">🔎 Я ищу мастера</button>
+    <button class="btn ghost" onclick="chooseRole('master')">💼 Я мастер, хочу разместить профиль</button>
+  </div>
+  <div class="pillnote" style="margin-top:16px;">Это можно изменить позже: если вы клиент, но захотите разместить свой профиль мастера — такая возможность будет доступна в каталоге.</div>`;
+}
+async function chooseRole(role){
+  state.userRole = role;
+  await sset('my-role', role, false);
+  state.view = role==='master' ? 'master' : 'catalog';
+  render();
+}
+window.chooseRole = chooseRole;
+
+async function becomeMaster(){
+  state.userRole = 'master';
+  await sset('my-role', 'master', false);
+  goto('master');
+}
+window.becomeMaster = becomeMaster;
+
 /* ============ RENDER ROOT ============ */
 function render(){
   const app = document.getElementById('app');
   if(state.loading){ app.innerHTML = '<div class="loading">Загрузка…</div>'; return; }
+  if(!state.userRole){ app.innerHTML = renderRolePicker(); return; }
   let html = renderTopbar() + '<div id="content">';
   if(state.view==='catalog') html += renderCatalogPlaceholder();
   else if(state.view==='mybookings') html += renderMyBookingsPlaceholder();
@@ -544,22 +614,27 @@ function renderTopbar(){
 
 function renderNav(){
   const pendingBadge = state._pendingCount ? `<span class="navdot"></span>` : '';
+  const ownerBadge = state._ownerAlertCount ? `<span class="navdot"></span>` : '';
   const showAdminTab = state.isOwner || !state.isTelegramContext; // hidden entirely for non-owners inside real Telegram
-  const adminTab = showAdminTab ? `<button class="navbtn ${state.view==='admin'?'active':''}" onclick="goto('admin')"><span class="ic">🛠️</span>Владельцу</button>` : '';
+  const showMasterTab = state.userRole !== 'client'; // клиенты, искавшие мастеров при регистрации, эту вкладку не видят
+  const adminTab = showAdminTab ? `<button class="navbtn ${state.view==='admin'?'active':''}" onclick="goto('admin')">${ownerBadge}<span class="ic">🛠️</span>Владельцу</button>` : '';
+  const masterTab = showMasterTab ? `<button class="navbtn ${state.view==='master'?'active':''}" onclick="goto('master')">${pendingBadge}<span class="ic">💼</span>Мастеру</button>` : '';
   return `
   <div class="navbar"><div class="navbar-inner">
     <button class="navbtn ${state.view==='catalog'?'active':''}" onclick="goto('catalog')"><span class="ic">🔎</span>Каталог</button>
     <button class="navbtn ${state.view==='mybookings'?'active':''}" onclick="goto('mybookings')"><span class="ic">🗓️</span>Мои записи</button>
-    <button class="navbtn ${state.view==='master'?'active':''}" onclick="goto('master')">${pendingBadge}<span class="ic">💼</span>Мастеру</button>
+    ${masterTab}
     ${adminTab}
   </div></div>`;
 }
 
 function goto(view){
   if(view==='admin' && state.isTelegramContext && !state.isOwner) return; // safety net, tab hidden anyway
+  if(view==='master' && state.userRole==='client') return; // safety net, tab hidden anyway
   state.view = view;
   if(view==='catalog') state.selectedMasterId=null;
   if(view==='master') state.forcePaywall=false;
+  if(view==='admin'){ state.adminScreen='dashboard'; state.adminChatMasterId=null; state.adminEditingId=null; }
   render();
 }
 window.goto = goto;
@@ -595,7 +670,7 @@ async function fillFavorites(){
     const pf = priceFrom(m);
     cards.push(`<div class="card">
       <div style="display:flex;gap:12px;">
-        <div class="avatar" style="cursor:pointer;" onclick="openMaster('${m.id}')">${spec.icon}</div>
+        <div class="avatar" style="cursor:pointer;${avatarStyle(m)}" onclick="openMaster('${m.id}')">${avatarInner(m,spec)}</div>
         <div style="flex:1;cursor:pointer;" onclick="openMaster('${m.id}')">
           <div class="mcard-top">
             <div>
@@ -657,7 +732,9 @@ function renderCityStep(masters){
     <button class="btn ghost" onclick="chooseCityManual()">Найти мастеров в этом городе</button>
   </div>`;
 
-  document.getElementById('content').innerHTML = hero + cityList + manual;
+  const becomeMasterLink = state.userRole==='client' ? `<div class="section-pad" style="text-align:center;"><button class="link-btn" onclick="becomeMaster()">Вы мастер? Разместите свой профиль →</button></div>` : '';
+
+  document.getElementById('content').innerHTML = hero + cityList + manual + becomeMasterLink;
 }
 function chooseCity(c){
   state.filters.city = c;
@@ -742,7 +819,7 @@ function renderListStep(masters){
       const pf = priceFrom(m);
       const favOn = isFavorite(m.id);
       return `<div class="mcard">
-        <div class="avatar" style="cursor:pointer;" onclick="openMaster('${m.id}')">${spec.icon}</div>
+        <div class="avatar" style="cursor:pointer;${avatarStyle(m)}" onclick="openMaster('${m.id}')">${avatarInner(m,spec)}</div>
         <div class="mcard-body" style="cursor:pointer;" onclick="openMaster('${m.id}')">
           <div class="mcard-top">
             <div>
@@ -816,7 +893,7 @@ async function fillMasterDetail(){
   const back = `<div class="backbar"><button class="backbtn" onclick="backToCatalog()">←</button><div style="font-weight:700">${escapeHtml(m.name)}</div></div>`;
 
   const header = `<div class="card" style="display:flex;gap:12px;align-items:center;">
-    <div class="avatar" style="width:64px;height:64px;font-size:30px;">${spec.icon}</div>
+    <div class="avatar" style="width:64px;height:64px;font-size:30px;${avatarStyle(m)}">${avatarInner(m,spec)}</div>
     <div style="flex:1;">
       <div class="mcard-name" style="font-size:18px;">${escapeHtml(m.name)}</div>
       <div class="mcard-city">📍 ${escapeHtml(m.city)}${m.address?', '+escapeHtml(m.address):''}</div>
@@ -1105,7 +1182,8 @@ function demoMasterObject(){
     services:[{id:'d1',name:'Маникюр',price:1500,duration:60},{id:'d2',name:'Педикюр',price:2000,duration:90}],
     portfolio:[{id:'p1',url:'https://picsum.photos/seed/demo1/400/300'},{id:'p2',url:'https://picsum.photos/seed/demo2/400/300'}],
     slots:{[todayISO(0)]:['10:00','13:00','16:00']},
-    subscriptionActive:false, subscriptionUntil:null, ratingSum:0, ratingCount:0, isDemo:true
+    subscriptionActive:false, subscriptionUntil:null, ratingSum:0, ratingCount:0, isDemo:true,
+    avatarUrl:null
   };
 }
 function enterDemo(){ state.demoMode=true; state.masterTab='profile'; render(); }
@@ -1136,12 +1214,15 @@ async function finishRegistration(){
   const bio = document.getElementById('regBio').value.trim();
   if(!name || !city){ showToast('Укажите как минимум имя и город'); return; }
   const id = uid();
+  // Автоматически подтягиваем аватарку из Telegram-профиля мастера (если разрешено его настройками приватности).
+  const avatarUrl = (state.tgUser && state.tgUser.photo_url) ? state.tgUser.photo_url : null;
   const master = {
     id, specialization:spec, name, city, address, bio,
     services:[], portfolio:[], slots:{},
     subscriptionActive:false, subscriptionUntil:null,
     ratingSum:0, ratingCount:0, createdAt:Date.now(), isDemo:false, disabledByAdmin:false,
     telegramId: (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : null,
+    avatarUrl,
     paymentClaimStatus: null, paymentClaimMethod: null, paymentClaimAt: null,
     moderationStatus: 'pending', // pending | approved | rejected
     moderationReason: null,
@@ -1154,6 +1235,8 @@ async function finishRegistration(){
   await saveReviews(id, []);
   await sset('my-master-id', id, false);
   state.myMasterId = id; state.myMaster = master;
+  state.userRole = 'master';
+  await sset('my-role', 'master', false);
   showToast('Профиль создан! Он отправлен на проверку модератору.');
   fillMasterArea();
 }
@@ -1171,7 +1254,19 @@ async function renderMasterDashboard(m, isDemo){
   }
   const bookings = isDemo? [] : await loadBookings(m.id);
   const pending = bookings.filter(b=>b.status==='pending').length;
-  state._pendingCount = pending;
+
+  let chat = [];
+  if(!isDemo){
+    chat = await loadChat(m.id);
+    if(state.masterTab==='chat'){
+      // Открыл вкладку «Чат» — помечаем сообщения владельца прочитанными
+      let changed = false;
+      chat.forEach(msg=>{ if(msg.from==='owner' && !msg.readByMaster){ msg.readByMaster = true; changed = true; } });
+      if(changed) await saveChat(m.id, chat);
+    }
+  }
+  const chatUnread = chat.filter(msg=>msg.from==='owner' && !msg.readByMaster).length;
+  state._pendingCount = pending + chatUnread;
 
   const demoBanner = isDemo? `<div class="pillnote" style="background:#E4DCF3;border-color:#D6C6EE;color:#4B3B7A;">Вы в демо-режиме. Изменения не сохраняются. <button class="link-btn" style="margin-left:4px" onclick="exitDemo()">Выйти из демо</button></div>` : '';
 
@@ -1203,6 +1298,7 @@ async function renderMasterDashboard(m, isDemo){
     <button class="${state.masterTab==='portfolio'?'active':''}" onclick="setMTab('portfolio')">Работы</button>
     <button class="${state.masterTab==='schedule'?'active':''}" onclick="setMTab('schedule')">Расписание</button>
     <button class="${state.masterTab==='bookings'?'active':''}" onclick="setMTab('bookings')">Записи${pending?` (${pending})`:''}</button>
+    <button class="${state.masterTab==='chat'?'active':''}" onclick="setMTab('chat')">💬 Чат${chatUnread?` (${chatUnread})`:''}</button>
   </div>`;
 
   let body='';
@@ -1211,11 +1307,59 @@ async function renderMasterDashboard(m, isDemo){
   else if(state.masterTab==='portfolio') body = renderMPortfolio(m, isDemo);
   else if(state.masterTab==='schedule') body = renderMSchedule(m, isDemo);
   else if(state.masterTab==='bookings') body = renderMBookings(m, bookings, isDemo);
+  else if(state.masterTab==='chat') body = renderMChat(m, isDemo, chat);
 
-  document.getElementById('content').innerHTML = `<div class="hero" style="padding-top:20px;padding-bottom:0"><h1 style="font-size:22px;">${SPECS[m.specialization].icon} ${escapeHtml(m.name)}</h1></div>` + demoBanner + subInfo + tabs + body;
+  const dashHeader = `<div class="hero" style="padding-top:20px;padding-bottom:0;display:flex;align-items:center;gap:12px;">
+    <div class="avatar" style="width:44px;height:44px;font-size:20px;border-radius:14px;${avatarStyle(m)}">${avatarInner(m,SPECS[m.specialization])}</div>
+    <h1 style="font-size:22px;margin:0;">${escapeHtml(m.name)}</h1>
+  </div>`;
+  document.getElementById('content').innerHTML = dashHeader + demoBanner + subInfo + tabs + body;
 }
 function setMTab(t){ state.masterTab=t; fillMasterArea(); }
 window.setMTab = setMTab;
+
+/* ============ MASTER ↔ OWNER CHAT (master side) ============ */
+function renderMChat(m, isDemo, chat){
+  if(isDemo){
+    return `<div class="card"><div class="empty" style="padding:20px 0">💬 Чат с владельцем платформы доступен после создания настоящего профиля — в демо-режиме он отключён.</div></div>`;
+  }
+  const bubbles = (chat && chat.length) ? chat.map(msg=>`
+    <div class="chat-msg ${msg.from==='master'?'out':'in'}">
+      <div class="chat-bubble">${escapeHtml(msg.text)}</div>
+      <div class="chat-time">${new Date(msg.createdAt).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+    </div>`).join('') : `<div class="empty" style="padding:30px 10px;">💬 Напишите владельцу платформы — например, попросите помочь доработать профиль, задайте вопрос по подписке или предложите идею.</div>`;
+  return `
+  <div class="card" style="padding:12px;">
+    <div class="chat-wrap" id="chatScroll">${bubbles}</div>
+  </div>
+  <div class="section-pad" style="display:flex;gap:8px;align-items:flex-end;">
+    <textarea id="chatInput" placeholder="Напишите сообщение владельцу…" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;min-height:44px;max-height:120px;"></textarea>
+    <button class="btn primary" style="width:auto;padding:0 18px;height:44px;" onclick="sendChatFromMaster()">➤</button>
+  </div>
+  <div class="pillnote">Сообщение сохранится в приложении и сразу откроет чат с владельцем платформы в Telegram с готовым текстом — нажмите там «отправить», чтобы он получил уведомление мгновенно.</div>`;
+}
+async function sendChatFromMaster(){
+  const input = document.getElementById('chatInput');
+  const text = (input && input.value || '').trim();
+  if(!text){ showToast('Введите текст сообщения'); return; }
+  const m = await loadMaster(state.myMasterId);
+  if(!m) return;
+  const chat = await loadChat(m.id);
+  chat.push({ id:uid(), from:'master', text, createdAt:Date.now(), readByMaster:true, readByOwner:false });
+  await saveChat(m.id, chat);
+  await addChatToIndex(m.id);
+
+  const tgText = `💬 Сообщение от мастера «${m.name}» (BeautyHub):\n${text}`;
+  const link = 'https://t.me/' + OWNER_TELEGRAM_USERNAME + '?text=' + encodeURIComponent(tgText);
+  if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink){
+    window.Telegram.WebApp.openTelegramLink(link);
+  } else {
+    window.open(link, '_blank');
+  }
+  showToast('Сообщение отправлено, чат с владельцем открыт в Telegram');
+  fillMasterArea();
+}
+window.sendChatFromMaster = sendChatFromMaster;
 
 const PAYMENT_METHODS = {
   sbp: {
@@ -1631,11 +1775,15 @@ async function fillAdmin(){
   if(state.isTelegramContext){
     // Real Telegram session: identity already verified by Telegram ID, no password needed.
     if(!state.isOwner) return renderAdminDenied();
+    if(state.adminScreen==='chatlist') return renderAdminChatList();
+    if(state.adminScreen==='chat' && state.adminChatMasterId) return renderAdminChatThread(state.adminChatMasterId);
     if(state.adminEditingId) return renderAdminEdit(state.adminEditingId);
     return renderAdminDashboard();
   }
   // Opened outside Telegram (e.g. testing in a browser) — fall back to demo password.
   if(!state.adminAuthed) return renderAdminLogin();
+  if(state.adminScreen==='chatlist') return renderAdminChatList();
+  if(state.adminScreen==='chat' && state.adminChatMasterId) return renderAdminChatThread(state.adminChatMasterId);
   if(state.adminEditingId) return renderAdminEdit(state.adminEditingId);
   return renderAdminDashboard();
 }
@@ -1661,7 +1809,7 @@ function tryAdminLogin(){
   else { showToast('Неверный пароль'); }
 }
 window.tryAdminLogin = tryAdminLogin;
-function adminLogout(){ state.adminAuthed=false; state.adminEditingId=null; goto('catalog'); }
+function adminLogout(){ state.adminAuthed=false; state.adminEditingId=null; state.adminScreen='dashboard'; state.adminChatMasterId=null; goto('catalog'); }
 window.adminLogout = adminLogout;
 
 async function renderAdminDashboard(){
@@ -1672,14 +1820,17 @@ async function renderAdminDashboard(){
   const disabled = masters.filter(m=>m.disabledByAdmin);
   const pendingModeration = masters.filter(m=>m.moderationStatus==='pending');
 
-  let totalBookings=0, totalReviews=0;
+  let totalBookings=0, totalReviews=0, totalChatUnread=0;
   const bookingsByMaster = {};
   for(const m of masters){
     const bk = await loadBookings(m.id);
     bookingsByMaster[m.id]=bk;
     totalBookings += bk.length;
     totalReviews += (m.ratingCount||0);
+    const chat = await loadChat(m.id);
+    totalChatUnread += chat.filter(msg=>msg.from==='master' && !msg.readByOwner).length;
   }
+  state._ownerAlertCount = pendingModeration.length + totalChatUnread;
   const mrr = paidActive.length * 490;
 
   const overview = `<div class="card">
@@ -1755,17 +1906,111 @@ async function renderAdminDashboard(){
     ? `<div class="pillnote" style="margin:0 18px 14px;">Вход подтверждён по Telegram ID ${state.tgUser?state.tgUser.id:''}.</div>`
     : `<div class="section-pad"><button class="btn ghost small" onclick="adminLogout()">Выйти из кабинета владельца</button></div>`;
 
+  const chatEntry = `<div class="section-pad">
+    <button class="btn ghost" onclick="state.adminScreen='chatlist'; fillAdmin();" style="display:flex;align-items:center;justify-content:center;gap:8px;">
+      💬 Чаты с мастерами${totalChatUnread?` · ${totalChatUnread} нов.`:''}
+    </button>
+  </div>`;
+
   document.getElementById('content').innerHTML = `
     <div class="hero" style="padding-top:20px;display:flex;justify-content:space-between;align-items:flex-start;">
       <div><h1 style="font-size:22px;">Владелец платформы</h1><p>Управление мастерами и подписками</p></div>
     </div>
     ${identityLine}
     ${overview}
+    ${chatEntry}
     ${moderationQueue}
     ${masters.length? list : `<div class="empty"><div class="big">🗂️</div>Пока нет ни одного мастера на платформе.</div>`}
   `;
 }
 window.adminEditMaster = (id)=>{ state.adminEditingId=id; fillAdmin(); };
+
+/* ============ MASTER ↔ OWNER CHAT (owner side) ============ */
+function openAdminChat(masterId){
+  state.adminScreen = 'chat';
+  state.adminChatMasterId = masterId;
+  fillAdmin();
+}
+window.openAdminChat = openAdminChat;
+
+async function renderAdminChatList(){
+  const ids = await sget('chat-index', true) || [];
+  const rows = [];
+  for(const id of ids){
+    const m = await loadMaster(id);
+    if(!m) continue;
+    const chat = await loadChat(id);
+    if(!chat.length) continue;
+    const unread = chat.filter(msg=>msg.from==='master' && !msg.readByOwner).length;
+    rows.push({ m, unread, last: chat[chat.length-1] });
+  }
+  rows.sort((a,b)=>(b.last?b.last.createdAt:0)-(a.last?a.last.createdAt:0));
+
+  const listHtml = rows.length ? rows.map(r=>{
+    const sp = SPECS[r.m.specialization];
+    const preview = r.last ? escapeHtml(r.last.text.length>70 ? r.last.text.slice(0,70)+'…' : r.last.text) : '';
+    const fromLabel = r.last && r.last.from==='owner' ? 'Вы: ' : '';
+    return `<div class="card" style="cursor:pointer;display:flex;gap:12px;align-items:center;" onclick="openAdminChat('${r.m.id}')">
+      <div class="avatar" style="width:46px;height:46px;font-size:20px;${avatarStyle(r.m)}">${avatarInner(r.m,sp)}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <div class="mcard-name" style="font-size:14.5px;">${escapeHtml(r.m.name)}</div>
+          ${r.unread?`<span class="badge cancelled">${r.unread}</span>`:''}
+        </div>
+        <div style="font-size:12.5px;color:var(--ink-soft);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fromLabel}${preview}</div>
+      </div>
+    </div>`;
+  }).join('') : `<div class="empty"><div class="big">💬</div>Пока никто из мастеров не писал.<br>Здесь появятся диалоги, как только мастер отправит сообщение из своего кабинета.</div>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Чаты с мастерами</div></div>
+  ${listHtml}`;
+}
+window.renderAdminChatList = renderAdminChatList;
+
+async function renderAdminChatThread(masterId){
+  const m = await loadMaster(masterId);
+  if(!m){
+    document.getElementById('content').innerHTML = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='chatlist'; fillAdmin();">←</button></div><div class="empty">Мастер не найден</div>`;
+    return;
+  }
+  const chat = await loadChat(masterId);
+  let changed = false;
+  chat.forEach(msg=>{ if(msg.from==='master' && !msg.readByOwner){ msg.readByOwner = true; changed = true; } });
+  if(changed) await saveChat(masterId, chat);
+
+  const spec = SPECS[m.specialization];
+  const bubbles = chat.length ? chat.map(msg=>`
+    <div class="chat-msg ${msg.from==='owner'?'out':'in'}">
+      <div class="chat-bubble">${escapeHtml(msg.text)}</div>
+      <div class="chat-time">${new Date(msg.createdAt).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+    </div>`).join('') : `<div class="empty" style="padding:30px 10px;">Переписки пока нет.</div>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="state.adminScreen='chatlist'; fillAdmin();">←</button><div style="font-weight:700">${spec.icon} ${escapeHtml(m.name)}</div></div>
+  <div class="card" style="padding:12px;">
+    <div class="chat-wrap">${bubbles}</div>
+  </div>
+  <div class="section-pad" style="display:flex;gap:8px;align-items:flex-end;">
+    <textarea id="ownerChatInput" placeholder="Ответить мастеру…" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;min-height:44px;max-height:120px;"></textarea>
+    <button class="btn primary" style="width:auto;padding:0 18px;height:44px;" onclick="sendChatFromOwner('${masterId}')">➤</button>
+  </div>
+  <div class="pillnote">Ответ сохранится в приложении — мастер увидит его во вкладке «Мастеру → Чат» и заметит бейдж с количеством новых сообщений при следующем открытии.</div>`;
+}
+window.renderAdminChatThread = renderAdminChatThread;
+
+async function sendChatFromOwner(masterId){
+  const input = document.getElementById('ownerChatInput');
+  const text = (input && input.value || '').trim();
+  if(!text){ showToast('Введите текст ответа'); return; }
+  const chat = await loadChat(masterId);
+  chat.push({ id:uid(), from:'owner', text, createdAt:Date.now(), readByOwner:true, readByMaster:false });
+  await saveChat(masterId, chat);
+  await addChatToIndex(masterId);
+  showToast('Ответ отправлен мастеру');
+  renderAdminChatThread(masterId);
+}
+window.sendChatFromOwner = sendChatFromOwner;
 
 async function adminToggleDisabled(id){
   const m = await loadMaster(id);
