@@ -532,6 +532,19 @@ async function sdelete(key, shared=false){
 }
 
 /* ============ INIT ============ */
+/* Резервный способ достать start_param: некоторые версии Telegram (особенно Desktop/Web)
+   в момент самого первого рендера ещё не успевают заполнить initDataUnsafe.start_param,
+   зато параметр уже есть в адресной строке как #tgWebAppStartParam=... или ?startapp=... —
+   на всякий случай проверяем оба места. */
+function readStartParamFromLocation(){
+  try{
+    const hash = (window.location.hash || '').replace(/^#/, '');
+    const search = (window.location.search || '').replace(/^\?/, '');
+    const params = new URLSearchParams(hash + '&' + search);
+    return params.get('tgWebAppStartParam') || params.get('startapp') || null;
+  }catch(e){ return null; }
+}
+
 function detectTelegramIdentity(){
   try{
     const tg = window.Telegram && window.Telegram.WebApp;
@@ -541,14 +554,14 @@ function detectTelegramIdentity(){
       state.tgUser = (tg.initDataUnsafe && tg.initDataUnsafe.user) || null;
       const idStr = state.tgUser ? String(state.tgUser.id) : null;
       state.isOwner = !!idStr && OWNER_TELEGRAM_IDS.includes(idStr);
-      // Ссылка-приглашение мастера: t.me/<bot>?startapp=book_<masterId> -> Telegram кладёт это в start_param
-      state._startParam = (tg.initDataUnsafe && tg.initDataUnsafe.start_param) || null;
+      // Ссылка-приглашение мастера: t.me/<bot>?startapp=book_<masterId> -> Telegram кладёт это в start_param.
+      state._startParam = (tg.initDataUnsafe && tg.initDataUnsafe.start_param) || readStartParamFromLocation() || null;
     } else {
       state.isTelegramContext = false;
       state.isOwner = false;
       // Для тестирования в обычном браузере: ?startapp=book_<id> в адресной строке
       const urlParam = new URLSearchParams(window.location.search).get('startapp');
-      state._startParam = urlParam || null;
+      state._startParam = urlParam || readStartParamFromLocation() || null;
     }
   }catch(e){
     state.isTelegramContext = false;
@@ -589,6 +602,8 @@ async function init(){
       state.view = 'catalog';
       state.selectedMasterId = linkedMasterId;
       state.masterDetailTab = 'book';
+    } else {
+      setTimeout(()=>showToast('Не удалось найти мастера по ссылке — возможно, профиль удалён'), 300);
     }
   }
   state.loading = false;
