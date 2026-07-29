@@ -183,6 +183,37 @@ input,select,textarea{font-family:inherit;}
 .svc-meta{color:var(--ink-soft);font-size:12px;margin-top:2px;}
 .svc-price{font-weight:700;color:var(--rose-deep);}
 
+/* city picker (главный экран выбора города) */
+.city-hero-badge{
+  width:44px;height:44px;border-radius:14px;
+  background:linear-gradient(135deg,var(--rose),var(--rose-deep));
+  display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;
+  margin-bottom:12px;box-shadow:var(--shadow);
+}
+.search-input{
+  display:flex;align-items:center;gap:9px;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  padding:12px 14px;box-shadow:var(--shadow);
+}
+.search-input .search-ic{font-size:15px;opacity:.55;flex:0 0 auto;}
+.search-input input{border:none;background:none;flex:1;font-size:14.5px;color:var(--ink);outline:none;padding:0;min-width:0;}
+.search-input input::placeholder{color:var(--ink-soft);}
+.city-list-card{padding:6px;max-height:50vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.city-row{
+  display:flex;align-items:center;gap:12px;padding:11px 10px;border-radius:14px;
+  cursor:pointer;transition:background .15s;border-bottom:1px solid var(--line);
+}
+.city-row:last-child{border-bottom:none;}
+.city-row:active{background:var(--bg);}
+.city-row-pin{
+  width:38px;height:38px;border-radius:11px;flex:0 0 38px;
+  background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:16px;
+}
+.city-row-body{flex:1;min-width:0;}
+.city-row-name{font-weight:600;font-size:14.5px;}
+.city-row-count{color:var(--ink-soft);font-size:12px;margin-top:1px;}
+.city-row-arrow{color:var(--ink-soft);font-size:15px;flex:0 0 auto;}
+
 .slot{
   padding:8px 4px;border-radius:10px;background:var(--bg);border:1px solid var(--line);
   text-align:center;font-size:12.5px;font-weight:700;
@@ -322,6 +353,14 @@ function fmtDate(iso){
   return d.toLocaleDateString('ru-RU',{day:'numeric',month:'short',weekday:'short'});
 }
 function ratingOf(m){ return m.ratingCount ? (m.ratingSum/m.ratingCount) : 0; }
+/* Сколько последовательных часовых ячеек сетки (TIMES) занимает запись, исходя из длительности
+   услуги — грубое, но полезное приближение поверх фиксированной часовой сетки времени. */
+function occupiedTimesForBooking(bk){
+  const need = Math.max(1, Math.ceil((bk.duration||60)/60));
+  const idx = TIMES.indexOf(bk.time);
+  if(idx===-1) return [bk.time];
+  return TIMES.slice(idx, idx+need);
+}
 /* Прошло ли время записи. Используется, чтобы прятать кнопки «Отменить» у записей,
    которые уже состоялись (или на которые клиент просто не пришёл) — отменять уже нечего. */
 function isBookingPast(b){
@@ -411,7 +450,7 @@ const ADMIN_PASSWORD = 'admin2026';
 const state = {
   view:'catalog', // catalog | mybookings | master | admin
   catalogStep:'city', // city | specs | list
-  filters:{spec:'all', city:null, sort:'rating'},
+  filters:{spec:'all', city:null, sort:'rating', minRating:0, maxPrice:null, availableSoon:false},
   selectedMasterId:null,
   adminAuthed:false,
   adminEditingId:null,
@@ -671,6 +710,28 @@ async function init(){
       setTimeout(()=>showToast('Не удалось найти мастера по ссылке — возможно, профиль удалён'), 300);
     }
   }
+  // Пришли по реферальной ссылке клиента (t.me/бот?startapp=ref_<clientKey>) — засчитываем приглашение.
+  if(state._startParam && state._startParam.startsWith('ref_')){
+    try{
+      const refKey = state._startParam.slice('ref_'.length);
+      const myKey = ownerId();
+      if(refKey && refKey !== myKey){
+        const alreadyReferred = await sget('my-referred-by', false);
+        if(!alreadyReferred){
+          await sset('my-referred-by', refKey, false);
+          const refs = await sget('referrals:'+refKey, true) || [];
+          if(!refs.includes(myKey)){ refs.push(myKey); await sset('referrals:'+refKey, refs, true); }
+          const priority = await sget('priority-clients', true) || [];
+          let changed = false;
+          if(!priority.includes(myKey)){ priority.push(myKey); changed = true; }
+          if(!priority.includes(refKey)){ priority.push(refKey); changed = true; }
+          if(changed) await sset('priority-clients', priority, true);
+          if(!state.userRole){ state.userRole = 'client'; await sset('my-role', 'client', false); }
+          setTimeout(()=>showToast('Вы пришли по приглашению — вы и ваша подруга теперь приоритетные клиенты ⭐'), 300);
+        }
+      }
+    }catch(e){ console.warn('referral handling failed:', e); }
+  }
   state.loading = false;
   render();
 }
@@ -786,6 +847,7 @@ function renderNav(){
 function goto(view){
   if(view==='admin' && state.isTelegramContext && !state.isOwner) return; // safety net, tab hidden anyway
   if(view==='master' && state.userRole==='client') return; // safety net, tab hidden anyway
+  state._adminPreviewReturn = false; // обычная навигация по низу экрана — выходим из режима «просмотр как клиент»
   state.view = view;
   if(view==='catalog') state.selectedMasterId=null;
   if(view==='master') state.forcePaywall=false;
@@ -860,7 +922,7 @@ function renderMasterAreaPlaceholder(){ return `<div class="loading">Загру�
    ============================================================ */
 async function fillCatalog(){
   const allMasters = await loadAllMasters();
-  const liveMasters = allMasters.filter(m=>m.subscriptionActive && !m.isDemo && !m.disabledByAdmin && m.moderationStatus==='approved');
+  const liveMasters = allMasters.filter(m=>m.subscriptionActive && !m.isDemo && !m.disabledByAdmin && m.moderationStatus==='approved' && !(m.vacationUntil && m.vacationUntil>=todayISO(0)));
 
   if(!state.filters.city){ return renderCityStep(liveMasters); }
   if(state.catalogStep==='specs'){ return renderSpecStep(liveMasters); }
@@ -871,26 +933,69 @@ async function fillCatalog(){
 function renderCityStep(masters){
   const counts = {};
   masters.forEach(m=>{ counts[m.city] = (counts[m.city]||0)+1; });
-  const cities = Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+  const allCities = Object.keys(counts);
+  const isLong = allCities.length > 8;
 
-  const hero = `<div class="hero"><h1>В каком вы городе?</h1><p>Покажем мастеров маникюра, бровей, ресниц, тату и пирсинга рядом с вами.</p></div>`;
+  // Короткий список — оставляем по популярности (как раньше), длинный — сортируем по алфавиту,
+  // чтобы город было легче найти взглядом, и добавляем поиск + быстрые чипы самых частых городов.
+  const popular = allCities.slice().sort((a,b)=>counts[b]-counts[a]).slice(0,6);
+  const displayCities = isLong
+    ? allCities.slice().sort((a,b)=>a.localeCompare(b,'ru'))
+    : allCities.slice().sort((a,b)=>counts[b]-counts[a]);
 
-  const cityList = cities.length ? `<div class="card" style="padding:8px 6px;">
-    ${cities.map(c=>`<div class="svc-row" style="padding:12px 10px;cursor:pointer;" onclick="chooseCity('${escapeHtml(c).replace(/'/g,"\\'")}')">
-      <div class="svc-name">📍 ${escapeHtml(c)}</div>
-      <div class="svc-meta" style="margin:0;color:var(--ink-soft)">${counts[c]} мастер${counts[c]===1?'':counts[c]<5?'а':'ов'} →</div>
-    </div>`).join('')}
-  </div>` : `<div class="empty" style="padding:20px 30px"><div class="big">🏙️</div>Мастеров пока нет ни в одном городе.</div>`;
+  const hero = `<div class="hero">
+    <div class="city-hero-badge">📍</div>
+    <h1>В каком вы городе?</h1>
+    <p>Покажем мастеров маникюра, бровей, ресниц, тату и пирсинга рядом с вами${masters.length?` — сейчас на платформе ${masters.length} мастер${masters.length===1?'':masters.length<5?'а':'ов'}`:''}.</p>
+  </div>`;
+
+  const searchBox = isLong ? `<div class="section-pad">
+    <div class="search-input">
+      <span class="search-ic">🔍</span>
+      <input id="citySearch" placeholder="Начните вводить город…" autocomplete="off" oninput="filterCityList(this.value)">
+    </div>
+  </div>` : '';
+
+  const popularChips = isLong && popular.length>1 ? `<div class="chiprow" style="padding-top:10px;">
+    ${popular.map(c=>`<button class="chip" onclick="chooseCity('${escapeHtml(c).replace(/'/g,"\\'")}')">📍 ${escapeHtml(c)}</button>`).join('')}
+  </div>` : '';
+
+  const cityRows = displayCities.map(c=>`<div class="city-row" data-city="${escapeHtml(c.toLowerCase())}" onclick="chooseCity('${escapeHtml(c).replace(/'/g,"\\'")}')">
+      <div class="city-row-pin">📍</div>
+      <div class="city-row-body">
+        <div class="city-row-name">${escapeHtml(c)}</div>
+        <div class="city-row-count">${counts[c]} мастер${counts[c]===1?'':counts[c]<5?'а':'ов'}</div>
+      </div>
+      <div class="city-row-arrow">→</div>
+    </div>`).join('');
+
+  const cityList = displayCities.length ? `<div class="card city-list-card">
+      <div id="cityListInner">${cityRows}</div>
+      <div id="cityListEmpty" class="empty" style="display:none;padding:24px 10px;">Ничего не нашлось — попробуйте ввести город вручную ниже.</div>
+    </div>` : `<div class="empty" style="padding:20px 30px"><div class="big">🏙️</div>Мастеров пока нет ни в одном городе.</div>`;
 
   const manual = `<div class="section-pad">
-    <div class="field"><label>Или введите город вручную</label><input id="cityManual" placeholder="Например, Екатеринбург"></div>
+    <div class="field"><label>${isLong?'Не нашли свой город?':'Или введите город вручную'}</label><input id="cityManual" placeholder="Например, Екатеринбург"></div>
     <button class="btn ghost" onclick="chooseCityManual()">Найти мастеров в этом городе</button>
   </div>`;
 
   const becomeMasterLink = state.userRole==='client' ? `<div class="section-pad" style="text-align:center;"><button class="link-btn" onclick="becomeMaster()">Вы мастер? Разместите свой профиль →</button></div>` : '';
 
-  document.getElementById('content').innerHTML = hero + cityList + manual + becomeMasterLink;
+  document.getElementById('content').innerHTML = hero + searchBox + popularChips + cityList + manual + becomeMasterLink;
 }
+function filterCityList(q){
+  const query = q.trim().toLowerCase();
+  const rows = document.querySelectorAll('#cityListInner .city-row');
+  let visible = 0;
+  rows.forEach(el=>{
+    const match = !query || el.dataset.city.includes(query);
+    el.style.display = match ? '' : 'none';
+    if(match) visible++;
+  });
+  const emptyEl = document.getElementById('cityListEmpty');
+  if(emptyEl) emptyEl.style.display = (query && visible===0) ? 'block' : 'none';
+}
+window.filterCityList = filterCityList;
 function chooseCity(c){
   state.filters.city = c;
   state.filters.spec = 'all';
@@ -943,6 +1048,9 @@ window.chooseSpec = chooseSpec;
 function renderListStep(masters){
   const inCity = masters.filter(m=>m.city===state.filters.city);
   let list = inCity.filter(m=> state.filters.spec==='all' || m.specialization===state.filters.spec);
+  if(state.filters.minRating) list = list.filter(m=>ratingOf(m) >= state.filters.minRating);
+  if(state.filters.maxPrice) list = list.filter(m=>{ const pf=priceFrom(m); return pf==null || pf<=state.filters.maxPrice; });
+  if(state.filters.availableSoon) list = list.filter(hasSlotsSoon);
 
   if(state.filters.sort==='rating') list.sort((a,b)=>ratingOf(b)-ratingOf(a));
   else if(state.filters.sort==='name') list.sort((a,b)=>a.name.localeCompare(b.name,'ru'));
@@ -962,6 +1070,12 @@ function renderListStep(masters){
       <option value="name" ${state.filters.sort==='name'?'selected':''}>По имени</option>
     </select>
     <button class="selectbox" style="flex:0 0 auto;font-weight:700;" onclick="changeCity()">Сменить город</button>
+  </div>`;
+
+  const filterbar2 = `<div class="chiprow" style="padding-top:0;">
+    <button class="chip ${state.filters.minRating>=4?'active':''}" onclick="toggleMinRating()">★ 4+</button>
+    <button class="chip ${state.filters.availableSoon?'active':''}" onclick="toggleAvailableSoon()">🗓️ Свободен сегодня/завтра</button>
+    <input type="number" inputmode="numeric" placeholder="Цена до, ₽" value="${state.filters.maxPrice||''}" style="flex:0 0 120px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:12.5px;" onchange="setMaxPrice(this.value)">
   </div>`;
 
   let cardsHtml;
@@ -991,8 +1105,16 @@ function renderListStep(masters){
     }).join('');
   }
 
-  document.getElementById('content').innerHTML = cityBar + chips + filterbar + cardsHtml;
+  document.getElementById('content').innerHTML = cityBar + chips + filterbar + filterbar2 + cardsHtml;
 }
+function hasSlotsSoon(m){
+  const d0 = todayISO(0), d1 = todayISO(1);
+  return !!((m.slots && m.slots[d0] && m.slots[d0].length) || (m.slots && m.slots[d1] && m.slots[d1].length));
+}
+function toggleMinRating(){ state.filters.minRating = state.filters.minRating>=4 ? 0 : 4; fillCatalog(); }
+function toggleAvailableSoon(){ state.filters.availableSoon = !state.filters.availableSoon; fillCatalog(); }
+function setMaxPrice(v){ const n=Number(v); state.filters.maxPrice = (v && !isNaN(n) && n>0) ? n : null; fillCatalog(); }
+window.toggleMinRating=toggleMinRating; window.toggleAvailableSoon=toggleAvailableSoon; window.setMaxPrice=setMaxPrice;
 function backToSpecs(){ state.catalogStep='specs'; fillCatalog(); }
 window.backToSpecs = backToSpecs;
 
@@ -1052,7 +1174,10 @@ async function fillMasterDetail(){
   }
   state._eligibleReviewBookings = eligibleBookings;
 
-  const back = `<div class="backbar"><button class="backbtn" onclick="backToCatalog()">←</button><div style="font-weight:700">${escapeHtml(m.name)}</div></div>`;
+  const back = state._adminPreviewReturn
+    ? `<div class="backbar"><button class="backbtn" onclick="backFromAdminPreview()">←</button><div style="font-weight:700">${escapeHtml(m.name)}</div></div>
+       <div class="pillnote" style="margin:0 18px 10px;background:#E4DCF3;border-color:#D6C6EE;color:#4B3B7A;">👁 Вы смотрите профиль глазами клиента. <button class="link-btn" style="margin-left:4px" onclick="backFromAdminPreview()">Вернуться в кабинет владельца</button></div>`
+    : `<div class="backbar"><button class="backbtn" onclick="backToCatalog()">←</button><div style="font-weight:700">${escapeHtml(m.name)}</div></div>`;
 
   const header = `<div class="card" style="display:flex;gap:12px;align-items:center;">
     <div class="avatar" style="width:64px;height:64px;font-size:30px;${avatarStyle(m)}">${avatarInner(m,spec)}</div>
@@ -1093,6 +1218,12 @@ async function fillMasterDetail(){
       <div class="field"><label>Ваше имя</label><input id="rvName" value="${escapeHtml(state.clientName)}" placeholder="Имя"></div>
       <div class="field"><label>Оценка</label><div class="starpick" id="rvStars">${[1,2,3,4,5].map(i=>`<span data-i="${i}" onclick="pickStar(${i})">★</span>`).join('')}</div></div>
       <div class="field"><label>Отзыв</label><textarea id="rvText" placeholder="Расскажите, как всё прошло"></textarea></div>
+      <div class="field">
+        <label>Фото (необязательно, например «до/после»)</label>
+        <input id="rvFile" type="file" accept="image/*" onchange="uploadReviewPhoto(this)">
+        <div id="rvUploadStatus" style="font-size:12px;color:var(--ink-soft);margin-top:6px;"></div>
+        ${state._pendingReviewPhoto?`<img src="${state._pendingReviewPhoto}" style="width:72px;height:72px;object-fit:cover;border-radius:10px;margin-top:6px;">`:''}
+      </div>
       <button class="btn primary" onclick="submitReview('${m.id}')">Оставить отзыв</button>
     ` : `
       <div class="divider"></div>
@@ -1103,6 +1234,7 @@ async function fillMasterDetail(){
         <div class="review">
           <div class="review-top"><span class="review-name">${escapeHtml(r.name)}</span><span class="stars">${starsStr(r.rating)}</span></div>
           <div class="review-text">${escapeHtml(r.comment)}</div>
+          ${r.photoUrl?`<img src="${r.photoUrl}" style="width:100%;max-width:220px;border-radius:12px;margin-top:8px;display:block;">`:''}
         </div>`).join('') : '<div class="empty" style="padding:10px 0 20px">Пока нет отзывов — станьте первым!</div>'}
       ${reviewForm}
     </div>`;
@@ -1119,10 +1251,41 @@ async function fillMasterDetail(){
 }
 function backToCatalog(){ state.selectedMasterId=null; state.view='catalog'; render(); }
 window.backToCatalog=backToCatalog;
+function backFromAdminPreview(){
+  state._adminPreviewReturn = false;
+  state.selectedMasterId = null;
+  state.adminScreen = 'dashboard';
+  state.view = 'admin';
+  render();
+}
+window.backFromAdminPreview = backFromAdminPreview;
 function setDTab(t){ state.masterDetailTab=t; if(t!=='book') state.booking=null; fillMasterDetail(); }
 window.setDTab=setDTab;
 function pickStar(i){ state._pickedStar=i; fillMasterDetail(); }
 window.pickStar=pickStar;
+
+async function uploadReviewPhoto(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('rvUploadStatus');
+  if(statusEl) statusEl.textContent = 'Загружаем…';
+  try{
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `reviews/${uid()}.${ext}`;
+    const { error: upErr } = await sb.storage.from('portfolios').upload(path, file, { upsert:false, contentType: file.type || 'image/jpeg' });
+    if(upErr) throw upErr;
+    const { data } = sb.storage.from('portfolios').getPublicUrl(path);
+    const url = data && data.publicUrl;
+    if(!url) throw new Error('Не удалось получить ссылку на фото');
+    state._pendingReviewPhoto = url;
+    if(statusEl) statusEl.textContent = 'Фото добавлено ✓';
+    fillMasterDetail();
+  }catch(e){
+    console.error('Review photo upload failed', e);
+    if(statusEl) statusEl.textContent = 'Не получилось загрузить фото (возможно, не настроено хранилище Supabase Storage) — можно оставить отзыв без фото.';
+  }
+}
+window.uploadReviewPhoto = uploadReviewPhoto;
 
 async function submitReview(masterId){
   const name = document.getElementById('rvName').value.trim();
@@ -1135,13 +1298,14 @@ async function submitReview(masterId){
   await sset('my-client-name', name, false);
   state.clientName = name;
   const reviews = await loadReviews(masterId);
-  reviews.push({id:uid(), masterId, name, rating, comment:text, createdAt:Date.now(), bookingId});
+  reviews.push({id:uid(), masterId, name, rating, comment:text, createdAt:Date.now(), bookingId, photoUrl: state._pendingReviewPhoto || null});
   await saveReviews(masterId, reviews);
   const m = await loadMaster(masterId);
   m.ratingSum = (m.ratingSum||0) + rating;
   m.ratingCount = (m.ratingCount||0) + 1;
   await saveMaster(m);
   state._pickedStar=null;
+  state._pendingReviewPhoto=null;
   showToast('Спасибо за отзыв!');
   fillMasterDetail();
 }
@@ -1163,7 +1327,7 @@ function renderBookingForm(m, bookings, waitlist){
   let slotsHtml = '';
   if(b.date){
     const daySlots = (m.slots && m.slots[b.date]) || [];
-    const takenTimes = bookings.filter(bk=>bk.date===b.date && bk.status!=='cancelled').map(bk=>bk.time);
+    const takenTimes = bookings.filter(bk=>bk.date===b.date && bk.status!=='cancelled').flatMap(occupiedTimesForBooking);
     slotsHtml = `<div class="slotgrid">${daySlots.map(t=>{
       const taken = takenTimes.includes(t);
       return `<div class="slot ${b.time===t?'on':''} ${taken?'taken':''}" onclick="${taken?'':`pickTime('${t}')`}">${t}</div>`;
@@ -1218,7 +1382,8 @@ async function submitBooking(masterId){
   // Перечитываем самые свежие записи прямо перед сохранением, чтобы минимизировать
   // окно гонки, если кто-то другой записался на этот же слот почти одновременно.
   const bookings = await loadBookings(masterId);
-  const alreadyTaken = bookings.some(b=>b.status!=='cancelled' && b.date===state.booking.date && b.time===state.booking.time);
+  const wantTimes = occupiedTimesForBooking({time:state.booking.time, duration:service.duration||60});
+  const alreadyTaken = bookings.some(b=>b.status!=='cancelled' && b.date===state.booking.date && occupiedTimesForBooking(b).some(t=>wantTimes.includes(t)));
   if(alreadyTaken){
     showToast('Увы, это время только что заняли. Выберите другое.');
     state.booking.time = null;
@@ -1228,6 +1393,7 @@ async function submitBooking(masterId){
 
   const booking = {
     id:uid(), masterId, serviceId:service.id, serviceName:service.name, price:service.price,
+    duration: service.duration||60,
     date:state.booking.date, time:state.booking.time,
     clientName:name, clientContact:contact, status:'pending', createdAt:Date.now(),
     clientTelegramId: (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : null
@@ -1271,8 +1437,20 @@ window.submitBooking = submitBooking;
 async function fillMyBookings(){
   const mine = await sget('my-client-bookings', false) || [];
   const hero = `<div class="hero"><h1>Мои записи</h1><p>Статусы ваших заявок к мастерам.</p></div>`;
+
+  const refLink = `https://t.me/${BOT_USERNAME}?startapp=ref_${ownerId()}`;
+  const referrals = await sget('referrals:'+ownerId(), true) || [];
+  const referralCard = `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">👯 Пригласите подругу</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Отправьте эту ссылку — когда подруга откроет приложение по ней, вы обе станете приоритетными клиентами у мастеров (это отметка для мастера, помогает при прочих равных).${referrals.length?` Уже приглашено: ${referrals.length}.`:''}</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input readonly value="${refLink}" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:12px;color:var(--ink-soft);" onclick="this.select()">
+      <button class="btn primary small" style="width:auto;padding:0 16px;white-space:nowrap;" onclick="copyText('${refLink}')">Скопировать</button>
+    </div>
+  </div>`;
+
   if(!mine.length){
-    document.getElementById('content').innerHTML = hero + `<div class="empty"><div class="big">🗓️</div>Пока нет записей.<br>Найдите мастера в каталоге и оставьте заявку.</div>`;
+    document.getElementById('content').innerHTML = hero + referralCard + `<div class="empty"><div class="big">🗓️</div>Пока нет записей.<br>Найдите мастера в каталоге и оставьте заявку.</div>`;
     return;
   }
   const rows=[];
@@ -1298,10 +1476,33 @@ async function fillMyBookings(){
       <div class="divider"></div>
       <div style="font-size:13.5px;color:var(--ink-soft)">📅 ${fmtDate(bk.date)} в ${bk.time} · ${bk.price}₽</div>
       ${canCancel ? `<div style="margin-top:10px;"><button class="btn danger small" onclick="clientCancelBooking('${entry.masterId}','${bk.id}')">Отменить запись</button></div>` : ''}
+      ${isCompleted && m ? `<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <button class="btn ghost small" onclick="repeatBooking('${entry.masterId}','${bk.serviceId}')">🔁 Повторить запись</button>
+        <button class="btn ghost small" onclick="goToReview('${entry.masterId}')">⭐ Оставить отзыв</button>
+      </div>` : ''}
     </div>`);
   }
-  document.getElementById('content').innerHTML = hero + rows.join('');
+  document.getElementById('content').innerHTML = hero + referralCard + rows.join('');
 }
+
+/* Повторная запись «как в прошлый раз» — сразу открывает форму записи к тому же мастеру
+   с той же услугой, минуя повторный выбор города/специализации. */
+function repeatBooking(masterId, serviceId){
+  state.view = 'catalog';
+  state.selectedMasterId = masterId;
+  state.masterDetailTab = 'book';
+  state.booking = {serviceId, date:null, time:null};
+  render();
+}
+window.repeatBooking = repeatBooking;
+
+function goToReview(masterId){
+  state.view = 'catalog';
+  state.selectedMasterId = masterId;
+  state.masterDetailTab = 'reviews';
+  render();
+}
+window.goToReview = goToReview;
 
 async function clientCancelBooking(masterId, bookingId){
   const sure = window.confirm('Отменить эту запись? Мастер получит уведомление.');
@@ -1465,6 +1666,13 @@ async function renderMasterDashboard(m, isDemo){
   const bookings = isDemo? [] : await loadBookings(m.id);
   const pending = bookings.filter(b=>b.status==='pending').length;
 
+  // Отмечаем «был онлайн» — не чаще раза в час, чтобы не плодить лишние записи в базе.
+  // Используется владельцем для алерта об оттоке (платящий мастер, который давно не заходил).
+  if(!isDemo && (!m.lastSeenAt || Date.now()-m.lastSeenAt > 3600000)){
+    m.lastSeenAt = Date.now();
+    saveMaster(m); // не блокируем рендер ожиданием сохранения
+  }
+
   let chat = [];
   if(!isDemo){
     chat = await loadChat(m.id);
@@ -1508,6 +1716,7 @@ async function renderMasterDashboard(m, isDemo){
     <button class="${state.masterTab==='portfolio'?'active':''}" onclick="setMTab('portfolio')">Работы</button>
     <button class="${state.masterTab==='schedule'?'active':''}" onclick="setMTab('schedule')">Расписание</button>
     <button class="${state.masterTab==='bookings'?'active':''}" onclick="setMTab('bookings')">Записи${pending?` (${pending})`:''}</button>
+    <button class="${state.masterTab==='clients'?'active':''}" onclick="setMTab('clients')">👥 Клиенты</button>
     <button class="${state.masterTab==='chat'?'active':''}" onclick="setMTab('chat')">💬 Чат${chatUnread?` (${chatUnread})`:''}</button>
   </div>`;
 
@@ -1517,6 +1726,7 @@ async function renderMasterDashboard(m, isDemo){
   else if(state.masterTab==='portfolio') body = renderMPortfolio(m, isDemo);
   else if(state.masterTab==='schedule') body = renderMSchedule(m, isDemo);
   else if(state.masterTab==='bookings') body = renderMBookings(m, bookings, isDemo);
+  else if(state.masterTab==='clients') body = await renderMClients(m, isDemo, bookings);
   else if(state.masterTab==='chat') body = renderMChat(m, isDemo, chat);
 
   const dashHeader = `<div class="hero" style="padding-top:20px;padding-bottom:0;display:flex;align-items:center;gap:12px;">
@@ -1771,8 +1981,27 @@ function renderMProfile(m, isDemo){
       <input id="myBookingLink" readonly value="${masterBookingLink(m.id)}" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:12.5px;color:var(--ink-soft);" onclick="this.select()">
       <button class="btn primary small" style="width:auto;padding:0 16px;white-space:nowrap;" onclick="copyText(masterBookingLink('${m.id}'))">Скопировать</button>
     </div>
+    <button class="btn ghost small" style="margin-top:10px;" onclick="toggleQr()">🔳 Показать QR-код</button>
+    <div id="qrBox" style="display:none;text-align:center;margin-top:12px;">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(masterBookingLink(m.id))}" alt="QR-код ссылки для записи" style="width:200px;height:200px;border-radius:14px;border:1px solid var(--line);">
+      <div style="font-size:11.5px;color:var(--ink-soft);margin-top:8px;">Сохраните картинку (зажмите/ПКМ) и добавьте в сторис или на визитку.</div>
+    </div>
     ${BOT_USERNAME==='YOUR_BOT_USERNAME' ? `<div class="pillnote" style="margin:10px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:#B23A48;">⚠️ Ссылка ещё не работает — владельцу платформы нужно указать username Telegram-бота в настройках приложения (константа BOT_USERNAME).</div>` : ''}
   </div>`;
+
+  const onVacation = m.vacationUntil && m.vacationUntil >= todayISO(0);
+  const vacationCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🌴 Отпуск / перерыв</div>
+    ${onVacation
+      ? `<div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:10px;">Профиль скрыт из каталога до ${fmtDate(m.vacationUntil)}. Клиенты не смогут вас найти и записаться.</div>
+         <button class="btn teal small" onclick="endVacation()">Я вернулся — показать профиль снова</button>`
+      : `<div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:10px;">Уезжаете или берёте перерыв? Скройте профиль из каталога на нужные даты, не теряя рейтинг, отзывы и расписание.</div>
+         <div style="display:flex;gap:8px;align-items:center;">
+           <input id="vacDate" type="date" min="${todayISO(1)}" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:13px;">
+           <button class="btn ghost small" style="width:auto;padding:0 16px;white-space:nowrap;" onclick="startVacation()">Уйти в отпуск</button>
+         </div>`}
+  </div>`;
+
   return `<div class="card">
     <div class="field"><label>Имя</label><input id="pfName" value="${escapeHtml(m.name)}" ${isDemo?'disabled':''}></div>
     <div class="field"><label>Специализация</label><select id="pfSpec" ${isDemo?'disabled':''}>${Object.entries(SPECS).map(([k,v])=>`<option value="${k}" ${m.specialization===k?'selected':''}>${v.icon} ${v.label}</option>`).join('')}</select></div>
@@ -1783,8 +2012,33 @@ function renderMProfile(m, isDemo){
     <div class="field"><label>О себе</label><textarea id="pfBio" ${isDemo?'disabled':''}>${escapeHtml(m.bio||'')}</textarea></div>
     ${isDemo? '<div class="pillnote" style="margin:0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">В демо-режиме изменения не сохраняются.</div>' : `<button class="btn primary" onclick="saveProfileEdits()">Сохранить</button>`}
   </div>
-  ${linkCard}`;
+  ${linkCard}
+  ${vacationCard}`;
 }
+function toggleQr(){
+  const el = document.getElementById('qrBox');
+  if(el) el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+window.toggleQr = toggleQr;
+async function startVacation(){
+  const dateEl = document.getElementById('vacDate');
+  const d = dateEl && dateEl.value;
+  if(!d){ showToast('Укажите дату возвращения'); return; }
+  const m = await loadMaster(state.myMasterId);
+  m.vacationUntil = d;
+  await saveMaster(m);
+  showToast('Профиль скрыт из каталога до вашего возвращения');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.startVacation = startVacation;
+async function endVacation(){
+  const m = await loadMaster(state.myMasterId);
+  m.vacationUntil = null;
+  await saveMaster(m);
+  showToast('С возвращением! Профиль снова виден клиентам');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.endVacation = endVacation;
 async function saveProfileEdits(){
   const m = await loadMaster(state.myMasterId);
   m.name = document.getElementById('pfName').value.trim() || m.name;
@@ -1998,6 +2252,96 @@ function renderMBookings(m, bookings, isDemo){
   </div>`;
   }).join('');
 }
+
+/* ============ МИНИ-CRM: КЛИЕНТЫ + РАССЫЛКА ============ */
+async function renderMClients(m, isDemo, bookings){
+  if(isDemo){
+    return `<div class="card"><div class="empty" style="padding:20px 0">👥 Здесь появится список ваших клиентов: кто и когда записывался, заметки и рассылка — доступно после создания настоящего профиля.</div></div>`;
+  }
+  const notes = await sget('client-notes:'+m.id, true) || {};
+  const priorityClients = await sget('priority-clients', true) || [];
+  const map = new Map();
+  bookings.forEach(b=>{
+    const key = b.clientTelegramId || b.clientContact;
+    if(!key) return;
+    if(!map.has(key)) map.set(key, {key, name:b.clientName, contact:b.clientContact, telegramId:b.clientTelegramId, visits:0, lastDate:null, spent:0});
+    const c = map.get(key);
+    c.visits++;
+    if(!c.lastDate || b.date>c.lastDate) c.lastDate = b.date;
+    if(b.status==='confirmed' && isBookingPast(b)) c.spent += (b.price||0);
+  });
+  const list = Array.from(map.values()).sort((a,b)=>(b.lastDate||'').localeCompare(a.lastDate||''));
+  list.forEach(c=>{ c.note = notes[c.key] || ''; });
+  state._clientList = list; // для доступа по индексу из onclick без экранирования спецсимволов в ключах
+
+  const withTelegram = list.filter(c=>c.telegramId).length;
+  const broadcastCard = `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">📢 Написать всем клиентам</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Сообщение придёт от бота всем клиентам, у которых есть Telegram (сейчас это ${withTelegram} из ${list.length}). Удобно для «освободилось время завтра» или «у меня новая услуга».</div>
+    <textarea id="broadcastText" placeholder="Например: Привет! Завтра в 14:00 освободилось окошко, если нужно — записывайтесь 🙂" style="min-height:70px;"></textarea>
+    <button class="btn primary small" style="margin-top:8px;" onclick="broadcastToClients('${m.id}')" ${withTelegram?'':'disabled'}>Отправить всем (${withTelegram})</button>
+  </div>`;
+
+  if(!list.length){
+    return broadcastCard + `<div class="card"><div class="empty" style="padding:10px 0">Пока нет клиентов — они появятся здесь после первых записей.</div></div>`;
+  }
+
+  const rows = list.map((c,i)=>`<div class="card">
+    <div class="mcard-top">
+      <div>
+        <div class="mcard-name" style="font-size:14.5px;">${escapeHtml(c.name)} ${priorityClients.includes(c.key)?'<span class="badge active" style="margin-left:4px;">⭐ приоритетный</span>':''}</div>
+        <div class="mcard-city">📞 ${escapeHtml(c.contact)}</div>
+      </div>
+      ${c.telegramId?`<button class="btn ghost small" style="width:auto;padding:0 12px;" onclick="messageOneClient(${i})">✉️</button>`:''}
+    </div>
+    <div style="font-size:12.5px;color:var(--ink-soft);margin-top:6px;">🗓️ ${c.visits} визит${c.visits===1?'':c.visits<5?'а':'ов'} · последний ${fmtDate(c.lastDate)}${c.spent?` · ${c.spent}₽ потрачено`:''}</div>
+    <div class="divider"></div>
+    <textarea id="clientNote_${i}" placeholder="Заметка (например: аллергия на такой-то состав, любит крепкий кофе...)" style="min-height:44px;font-size:12.5px;" onblur="saveClientNote('${m.id}', ${i})">${escapeHtml(c.note)}</textarea>
+  </div>`).join('');
+
+  return broadcastCard + rows;
+}
+window.renderMClients = renderMClients;
+
+async function saveClientNote(masterId, i){
+  const c = (state._clientList||[])[i];
+  if(!c) return;
+  const el = document.getElementById('clientNote_'+i);
+  const text = el ? el.value.trim() : '';
+  const notes = await sget('client-notes:'+masterId, true) || {};
+  notes[c.key] = text;
+  await sset('client-notes:'+masterId, notes, true);
+}
+window.saveClientNote = saveClientNote;
+
+function messageOneClient(i){
+  const c = (state._clientList||[])[i];
+  if(!c || !c.telegramId) return;
+  const text = window.prompt(`Сообщение для ${c.name}:`, '');
+  if(!text || !text.trim()) return;
+  notifyTelegram(c.telegramId, text.trim());
+  showToast('Сообщение отправлено');
+}
+window.messageOneClient = messageOneClient;
+
+async function broadcastToClients(masterId){
+  const el = document.getElementById('broadcastText');
+  const text = (el && el.value || '').trim();
+  if(!text){ showToast('Введите текст сообщения'); return; }
+  const list = state._clientList || [];
+  const targets = list.filter(c=>c.telegramId);
+  if(!targets.length){ showToast('Нет клиентов с Telegram для рассылки'); return; }
+  const m = await loadMaster(masterId);
+  let sent = 0;
+  for(const c of targets){
+    const ok = await notifyTelegram(c.telegramId, `💌 Сообщение от мастера «${m.name}»:\n${text}`);
+    if(ok) sent++;
+  }
+  showToast(`Отправлено ${sent} из ${targets.length}`);
+  if(el) el.value = '';
+}
+window.broadcastToClients = broadcastToClients;
+
 async function setBookingStatus(bookingId, status){
   const bookings = await loadBookings(state.myMasterId);
   const b = bookings.find(x=>x.id===bookingId);
@@ -2029,6 +2373,7 @@ async function fillAdmin(){
     // Real Telegram session: identity already verified by Telegram ID, no password needed.
     if(!state.isOwner) return renderAdminDenied();
     if(state.adminScreen==='trends') return renderAdminTrends();
+    if(state.adminScreen==='broadcast') return renderAdminBroadcast();
     if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
     if(state.adminScreen==='chatlist') return renderAdminChatList();
     if(state.adminScreen==='chat' && state.adminChatMasterId) return renderAdminChatThread(state.adminChatMasterId);
@@ -2038,6 +2383,7 @@ async function fillAdmin(){
   // Opened outside Telegram (e.g. testing in a browser) — fall back to demo password.
   if(!state.adminAuthed) return renderAdminLogin();
   if(state.adminScreen==='trends') return renderAdminTrends();
+  if(state.adminScreen==='broadcast') return renderAdminBroadcast();
   if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
   if(state.adminScreen==='chatlist') return renderAdminChatList();
   if(state.adminScreen==='chat' && state.adminChatMasterId) return renderAdminChatThread(state.adminChatMasterId);
@@ -2090,6 +2436,11 @@ async function renderAdminDashboard(){
   state._ownerAlertCount = pendingModeration.length + totalChatUnread;
   const mrr = paidActive.length * 490;
 
+  // Алерт про отток: платящий мастер (не на пробном), который давно не открывал приложение —
+  // возможный кандидат на неоплату следующего цикла, стоит написать заранее.
+  const churnRisk = paidActive.filter(m => !m.lastSeenAt || (Date.now() - m.lastSeenAt) > 14*24*3600*1000);
+  state._adminMastersCache = masters; // для экспорта в CSV без повторной загрузки
+
   // Снимок статистики на сегодня — источник данных для экрана «Динамика».
   // Пишется один раз в день (если владелец вообще не откроет кабинет в какой-то день — точка
   // просто не появится; для полностью автоматических ежедневных снимков см. DAILY_DIGEST_SETUP.md).
@@ -2124,6 +2475,17 @@ async function renderAdminDashboard(){
       <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Fraunces',serif;">${totalBookings}</div><div style="font-size:11.5px;color:var(--ink-soft)">Всего записей</div></div>
     </div>
   </div>`;
+
+  const churnAlert = churnRisk.length ? `<div class="card" style="background:#FBEFD6;border:1px solid #F3DFA8;">
+    <div style="font-weight:700;font-size:13.5px;color:#8A5A1F;margin-bottom:6px;">⚠️ Риск оттока (${churnRisk.length})</div>
+    <div style="font-size:12px;color:#8A5A1F;line-height:1.5;">Платят подписку, но не заходили в приложение 14+ дней — стоит написать и узнать, всё ли в порядке:</div>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+      ${churnRisk.map(m=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:#8A5A1F;">
+        <span>${escapeHtml(m.name)} — ${m.lastSeenAt ? Math.floor((Date.now()-m.lastSeenAt)/86400000)+' дн. назад' : 'ни разу не заходил(а)'}</span>
+        ${m.telegramId?`<button class="link-btn" style="font-size:12px;" onclick="openAdminChat('${m.id}')">Написать</button>`:''}
+      </div>`).join('')}
+    </div>
+  </div>` : '';
 
   const moderationQueue = pendingModeration.length ? `
     <div style="padding:0 18px 8px;font-weight:700;font-size:13.5px;">🕓 Ждут проверки (${pendingModeration.length})</div>
@@ -2164,7 +2526,7 @@ async function renderAdminDashboard(){
       ? `<span class="badge pending">💌 Прислал(а) квитанцию — ${m.paymentClaimMethod==='sbp'?'СБП':'карта'}</span>` : '';
     const confirmBtn = (m.paymentClaimStatus==='pending' && !m.subscriptionActive)
       ? `<button class="btn teal small" onclick="adminConfirmPayment('${m.id}')">Оплата поступила — активировать</button>` : '';
-    return `<div class="card">
+    return `<div class="card" data-search="${escapeHtml((m.name+' '+m.city+' '+spec.label).toLowerCase())}">
       <div class="mcard-top">
         <div>
           <div class="mcard-name" style="font-size:15px;">${spec.icon} ${escapeHtml(m.name)}</div>
@@ -2177,6 +2539,7 @@ async function renderAdminDashboard(){
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${confirmBtn}
         <button class="btn ghost small" onclick="adminEditMaster('${m.id}')">Редактировать</button>
+        <button class="btn ghost small" onclick="previewAsClient('${m.id}')">👁 Как клиент</button>
         <button class="btn ${m.disabledByAdmin?'teal':'ghost'} small" onclick="adminToggleDisabled('${m.id}')">${m.disabledByAdmin?'Включить в каталог':'Отключить от каталога'}</button>
         <button class="btn danger small" onclick="adminDeleteMaster('${m.id}')">Удалить</button>
       </div>
@@ -2194,6 +2557,17 @@ async function renderAdminDashboard(){
     <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='trends'; fillAdmin();">
       📈 Динамика
     </button>
+  </div>
+  <div class="section-pad" style="display:flex;gap:10px;">
+    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='broadcast'; fillAdmin();">
+      📢 Всем мастерам
+    </button>
+    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="exportMastersCSV()">
+      📤 Экспорт CSV
+    </button>
+  </div>
+  <div class="section-pad">
+    <input placeholder="🔍 Поиск по имени, городу, специализации…" oninput="filterAdminMasterList(this.value)" style="width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;">
   </div>`;
 
   document.getElementById('content').innerHTML = `
@@ -2202,12 +2576,79 @@ async function renderAdminDashboard(){
     </div>
     ${identityLine}
     ${overview}
+    ${churnAlert}
     ${chatEntry}
     ${moderationQueue}
-    ${masters.length? list : `<div class="empty"><div class="big">🗂️</div>Пока нет ни одного мастера на платформе.</div>`}
+    <div id="adminMasterList">${masters.length? list : `<div class="empty"><div class="big">🗂️</div>Пока нет ни одного мастера на платформе.</div>`}</div>
   `;
 }
 window.adminEditMaster = (id)=>{ state.adminEditingId=id; fillAdmin(); };
+
+function filterAdminMasterList(q){
+  const query = q.trim().toLowerCase();
+  document.querySelectorAll('#adminMasterList [data-search]').forEach(el=>{
+    el.style.display = (!query || el.dataset.search.includes(query)) ? '' : 'none';
+  });
+}
+window.filterAdminMasterList = filterAdminMasterList;
+
+function exportMastersCSV(){
+  const masters = state._adminMastersCache || [];
+  if(!masters.length){ showToast('Нет данных для экспорта'); return; }
+  const headers = ['Имя','Город','Специализация','Статус подписки','Дата регистрации','Telegram ID','Рейтинг','Отзывов'];
+  const rows = masters.map(m=>[
+    m.name, m.city, (SPECS[m.specialization]&&SPECS[m.specialization].label)||m.specialization,
+    m.subscriptionActive ? (m.isTrial?'Пробный период':'Оплачено') : 'Не оплачено',
+    new Date(m.createdAt).toLocaleDateString('ru-RU'),
+    m.telegramId||'', ratingOf(m).toFixed(1), m.ratingCount||0
+  ]);
+  const csv = [headers, ...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `beautyhub-masters-${todayISO(0)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+  showToast('Файл готов — проверьте загрузки браузера');
+}
+window.exportMastersCSV = exportMastersCSV;
+
+/* Владелец смотрит профиль мастера ровно так, как его видит клиент — для проверки при спорах/модерации. */
+function previewAsClient(masterId){
+  state._adminPreviewReturn = true;
+  state.view = 'catalog';
+  state.selectedMasterId = masterId;
+  state.masterDetailTab = 'about';
+  render();
+}
+window.previewAsClient = previewAsClient;
+
+async function renderAdminBroadcast(){
+  const masters = (await loadAllMasters()).filter(m=>m.telegramId);
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Написать всем мастерам</div></div>
+  <div class="card">
+    <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Сообщение от бота придёт всем мастерам с привязанным Telegram (сейчас ${masters.length}). Подходит для «Завтра техработы» или «Вышла новая функция».</div>
+    <textarea id="ownerBroadcastText" placeholder="Текст сообщения всем мастерам..." style="min-height:90px;"></textarea>
+    <button class="btn primary" style="margin-top:10px;" onclick="sendOwnerBroadcast()" ${masters.length?'':'disabled'}>Отправить всем (${masters.length})</button>
+  </div>`;
+}
+window.renderAdminBroadcast = renderAdminBroadcast;
+
+async function sendOwnerBroadcast(){
+  const el = document.getElementById('ownerBroadcastText');
+  const text = (el && el.value || '').trim();
+  if(!text){ showToast('Введите текст сообщения'); return; }
+  const masters = (await loadAllMasters()).filter(m=>m.telegramId);
+  let sent = 0;
+  for(const m of masters){
+    const ok = await notifyTelegram(m.telegramId, `📢 Сообщение от BeautyHub:\n${text}`);
+    if(ok) sent++;
+  }
+  showToast(`Отправлено ${sent} из ${masters.length}`);
+  if(el) el.value = '';
+}
+window.sendOwnerBroadcast = sendOwnerBroadcast;
 
 /* ============ MASTER ↔ OWNER CHAT (owner side) ============ */
 function openAdminChat(masterId){
