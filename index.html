@@ -551,6 +551,19 @@ async function addChatToIndex(masterId){
    clientKey — тот же идентификатор, что используется для личных данных клиента (ownerId()),
    так что «я в списке или нет» всегда проверяется по актуальным данным, без рассинхронизации. */
 async function loadWaitlist(masterId){ return await sget('waitlist:'+masterId, true) || []; }
+
+/* Счётчик просмотров профиля для мини-аналитики мастера. Не считаем собственные заходы мастера
+   на свою страницу и заходы владельца в режиме «просмотр как клиент» — иначе цифры будут врать. */
+async function trackProfileView(m){
+  try{
+    if(!m || m.isDemo) return;
+    if(state.myMasterId === m.id) return;
+    if(state._adminPreviewReturn) return;
+    const key = 'profile-views:'+m.id;
+    const cur = await sget(key, true) || 0;
+    await sset(key, cur+1, true);
+  }catch(e){ /* тихо игнорируем — счётчик не критичен для работы приложения */ }
+}
 async function saveWaitlist(masterId, arr){ await sset('waitlist:'+masterId, arr, true); }
 
 async function joinWaitlist(masterId){
@@ -731,6 +744,25 @@ async function init(){
         }
       }
     }catch(e){ console.warn('referral handling failed:', e); }
+  }
+  // Пришли по реферальной ссылке мастера (t.me/бот?startapp=mref_<masterId>) — запоминаем,
+  // кто пригласил, чтобы начислить бонус обоим при одобрении новой анкеты модератором.
+  if(state._startParam && state._startParam.startsWith('mref_')){
+    try{
+      const refMasterId = state._startParam.slice('mref_'.length);
+      if(refMasterId && refMasterId !== state.myMasterId){
+        const already = await sget('my-referred-by-master', false);
+        if(!already){
+          await sset('my-referred-by-master', refMasterId, false);
+          setTimeout(()=>showToast('Вы пришли по приглашению коллеги — разместите профиль и оба получите бонусные дни доступа 🎁'), 300);
+        }
+      }
+    }catch(e){ console.warn('master referral handling failed:', e); }
+  }
+  // Вернулись после оплаты подписки через ЮKassa (t.me/бот?startapp=paid_<masterId>) — вебхук
+  // обычно успевает активировать подписку за секунды, но на всякий случай подсказываем обновить.
+  if(state._startParam && state._startParam.startsWith('paid_')){
+    setTimeout(()=>showToast('Проверяем статус оплаты… Если подписка не появилась сразу — подождите немного и нажмите «Обновить статус оплаты»'), 300);
   }
   state.loading = false;
   render();
@@ -1052,7 +1084,7 @@ function renderListStep(masters){
   if(state.filters.maxPrice) list = list.filter(m=>{ const pf=priceFrom(m); return pf==null || pf<=state.filters.maxPrice; });
   if(state.filters.availableSoon) list = list.filter(hasSlotsSoon);
 
-  if(state.filters.sort==='rating') list.sort((a,b)=>ratingOf(b)-ratingOf(a));
+  if(state.filters.sort==='rating') list.sort((a,b)=>(b.featured?1:0)-(a.featured?1:0) || ratingOf(b)-ratingOf(a));
   else if(state.filters.sort==='name') list.sort((a,b)=>a.name.localeCompare(b.name,'ru'));
   else if(state.filters.sort==='price') list.sort((a,b)=>(priceFrom(a)||0)-(priceFrom(b)||0));
 
@@ -1087,7 +1119,7 @@ function renderListStep(masters){
       const avg = ratingOf(m);
       const pf = priceFrom(m);
       const favOn = isFavorite(m.id);
-      return `<div class="mcard">
+      return `<div class="mcard" style="${m.featured?'border:1.5px solid var(--gold);':''}">
         <div class="avatar" style="cursor:pointer;${avatarStyle(m)}" onclick="openMaster('${m.id}')">${avatarInner(m,spec)}</div>
         <div class="mcard-body" style="cursor:pointer;" onclick="openMaster('${m.id}')">
           <div class="mcard-top">
@@ -1097,7 +1129,10 @@ function renderListStep(masters){
             </div>
             ${pf!=null?`<div class="price-from">от ${pf}₽</div>`:''}
           </div>
-          <span class="tag" style="background:${specBg(m.specialization)};color:${specFg(m.specialization)}">${spec.icon} ${spec.label}</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="tag" style="background:${specBg(m.specialization)};color:${specFg(m.specialization)}">${spec.icon} ${spec.label}</span>
+            ${m.featured?`<span class="tag" style="background:#F3E3B8;color:#8A5A1F;">⭐ Мастер месяца</span>`:''}
+          </div>
           <div class="rating-row"><span class="stars">${starsStr(avg)}</span> ${avg? avg.toFixed(1):'нет оценок'} ${m.ratingCount?`· ${m.ratingCount} отзыв.`:''}</div>
         </div>
         <button class="link-btn" style="font-size:19px;padding:0 2px;align-self:flex-start;color:${favOn?'var(--rose-deep)':'var(--ink-soft)'}" onclick="toggleFavorite('${m.id}')">${favOn?'♥':'♡'}</button>
@@ -1154,6 +1189,7 @@ window.openMasterForBooking = openMasterForBooking;
 async function fillMasterDetail(){
   const m = await loadMaster(state.selectedMasterId);
   if(!m){ document.getElementById('content').innerHTML = `<div class="empty">Мастер не найден</div>`; return; }
+  trackProfileView(m); // не блокируем рендер ожиданием записи счётчика
   const reviews = await loadReviews(m.id);
   const bookings = await loadBookings(m.id);
   const waitlist = await loadWaitlist(m.id);
@@ -1604,14 +1640,15 @@ window.enterDemo=enterDemo; window.exitDemo=exitDemo;
 function startRegistration(){
   document.getElementById('content').innerHTML = `
   <div class="backbar"><button class="backbtn" onclick="fillMasterArea()">←</button><div style="font-weight:700">Регистрация мастера</div></div>
+  <div class="pillnote" style="margin:0 18px 14px;">⏱️ Занимает 2 минуты. Достаточно имени, специализации и города — остальное можно дозаполнить позже, пока анкету проверяет модератор.</div>
   <div class="card">
     <div class="field"><label>Имя</label><input id="regName" placeholder="Как вас видят клиенты"></div>
     <div class="field"><label>Специализация</label><select id="regSpec">${Object.entries(SPECS).map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join('')}</select></div>
     <div class="row2">
       <div class="field"><label>Город</label><input id="regCity" placeholder="Москва"></div>
-      <div class="field"><label>Адрес приёма</label><input id="regAddress" placeholder="ул. Пример, 1"></div>
+      <div class="field"><label>Адрес приёма (необязательно)</label><input id="regAddress" placeholder="ул. Пример, 1"></div>
     </div>
-    <div class="field"><label>О себе</label><textarea id="regBio" placeholder="Опыт, специализация, материалы…"></textarea></div>
+    <div class="field"><label>О себе (необязательно)</label><textarea id="regBio" placeholder="Опыт, специализация, материалы… можно добавить позже"></textarea></div>
     <button class="btn primary" onclick="finishRegistration()">Создать профиль</button>
   </div>`;
 }
@@ -1627,6 +1664,7 @@ async function finishRegistration(){
   const id = uid();
   // Автоматически подтягиваем аватарку из Telegram-профиля мастера (если разрешено его настройками приватности).
   const avatarUrl = (state.tgUser && state.tgUser.photo_url) ? state.tgUser.photo_url : null;
+  const referredByMasterId = await sget('my-referred-by-master', false) || null;
   const master = {
     id, specialization:spec, name, city, address, bio,
     services:[], portfolio:[], slots:{},
@@ -1634,6 +1672,7 @@ async function finishRegistration(){
     ratingSum:0, ratingCount:0, createdAt:Date.now(), isDemo:false, disabledByAdmin:false,
     telegramId: (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : null,
     avatarUrl,
+    referredByMasterId, referralBonusGranted: false,
     paymentClaimStatus: null, paymentClaimMethod: null, paymentClaimAt: null,
     moderationStatus: 'pending', // pending | approved | rejected
     moderationReason: null,
@@ -1642,6 +1681,10 @@ async function finishRegistration(){
   };
   await saveMaster(master);
   await addMasterToIndex(id);
+  if(referredByMasterId){
+    const refs = await sget('master-referrals:'+referredByMasterId, true) || [];
+    if(!refs.includes(id)){ refs.push(id); await sset('master-referrals:'+referredByMasterId, refs, true); }
+  }
   await saveBookings(id, []);
   await saveReviews(id, []);
   await sset('my-master-id', id, false);
@@ -1721,7 +1764,7 @@ async function renderMasterDashboard(m, isDemo){
   </div>`;
 
   let body='';
-  if(state.masterTab==='profile') body = renderMProfile(m, isDemo);
+  if(state.masterTab==='profile') body = await renderMProfile(m, isDemo, bookings);
   else if(state.masterTab==='services') body = renderMServices(m, isDemo);
   else if(state.masterTab==='portfolio') body = renderMPortfolio(m, isDemo);
   else if(state.masterTab==='schedule') body = renderMSchedule(m, isDemo);
@@ -1891,6 +1934,14 @@ function renderPaywall(m){
     }
   }
 
+  const onlinePayBlock = `<div class="section-pad">
+    <button class="btn primary" id="ykPayBtn" onclick="payViaYookassa('${m.id}')">💳 Оплатить онлайн — 490₽</button>
+    <div class="pillnote" style="margin-top:10px;">Картой или через СБП прямо в браузере, без переписки и ожидания — подписка активируется автоматически сразу после оплаты.</div>
+  </div>
+  <div class="section-pad" style="text-align:center;padding-top:0;">
+    <button class="link-btn" onclick="toggleManualPayment()">Или переведите вручную (без комиссии сервиса)</button>
+  </div>`;
+
   document.getElementById('content').innerHTML = `
   ${backDuringTrial}
   <div class="hero" style="${duringTrial?'padding-top:6px;':''}"><h1>${duringTrial?'Оплатить подписку заранее':(trialJustExpired?'Пробный период закончился':'Активируйте профиль')}</h1><p>${duringTrial?'Профиль уже виден клиентам благодаря пробному доступу. Оплатите сейчас, чтобы размещение продлилось на месяц без перерыва.':(trialJustExpired?'Бесплатный доступ закончился, и профиль временно скрыт из каталога. Оплатите подписку — и клиенты снова смогут вас найти.':'Ваш профиль сохранён, но пока не виден клиентам. Оформите ежемесячную подписку, чтобы клиенты могли находить вас и записываться.')}</p></div>
@@ -1898,16 +1949,50 @@ function renderPaywall(m){
     <div style="font-family:'Fraunces',serif;font-size:30px;font-weight:600;">490₽<span style="font-size:14px;color:var(--ink-soft);font-weight:500;"> / месяц</span></div>
     <div style="font-size:13px;color:var(--ink-soft);margin-top:6px;">Без ограничений по записям и услугам</div>
   </div>
-  <div style="padding:0 18px 8px;font-weight:700;font-size:13.5px;">Выберите способ оплаты</div>
-  ${methodPicker}
-  <div style="height:14px"></div>
-  ${requisites}
-  ${claimBlock}
+  ${onlinePayBlock}
+  <div id="manualPaymentBlock" style="display:none;">
+    <div style="padding:14px 18px 8px;font-weight:700;font-size:13.5px;">Выберите способ перевода</div>
+    ${methodPicker}
+    <div style="height:14px"></div>
+    ${requisites}
+    ${claimBlock}
+  </div>
   <div class="section-pad" style="margin-top:6px;">
     ${duringTrial ? `<button class="btn ghost" onclick="state.forcePaywall=false; fillMasterArea();">Вернуться в кабинет</button>` : `<button class="btn ghost" onclick="editWhileInactive()">Настроить профиль без подписки</button>`}
+    <div style="height:8px"></div>
+    <button class="btn ghost" onclick="fillMasterArea()">🔄 Обновить статус оплаты</button>
   </div>`;
 }
 window.renderPaywall = renderPaywall;
+
+function toggleManualPayment(){
+  const el = document.getElementById('manualPaymentBlock');
+  if(el) el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+window.toggleManualPayment = toggleManualPayment;
+
+async function payViaYookassa(masterId){
+  const btn = document.getElementById('ykPayBtn');
+  const originalText = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = 'Готовим оплату…'; }
+  try{
+    const { data, error } = await sb.functions.invoke('create-payment', { body: { masterId } });
+    if(error) throw new Error(error.message || 'Функция оплаты недоступна');
+    if(!data || !data.ok || !data.confirmationUrl) throw new Error((data && data.error) || 'Не удалось создать платёж');
+    const url = data.confirmationUrl;
+    if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink){
+      window.Telegram.WebApp.openLink(url);
+    } else {
+      window.open(url, '_blank');
+    }
+    showToast('Открыли страницу оплаты — после оплаты вернитесь в приложение и нажмите «Обновить статус оплаты»');
+  }catch(e){
+    console.error('payViaYookassa failed', e);
+    showToast('Не удалось открыть онлайн-оплату. Попробуйте ещё раз или переведите вручную ниже.');
+  }
+  if(btn){ btn.disabled = false; btn.textContent = originalText; }
+}
+window.payViaYookassa = payViaYookassa;
 
 function pickPaymentMethod(method){
   state.paywallMethod = method;
@@ -1957,6 +2042,7 @@ window.submitPaymentClaim = submitPaymentClaim;
 function editWhileInactive(){ state.masterTab='profile'; state._forceEdit=true; fillMasterAreaEditMode(); }
 async function fillMasterAreaEditMode(){
   const m = await loadMaster(state.myMasterId);
+  const bookings = await loadBookings(m.id);
   const tabs = `<div class="subnav">
     <button class="${state.masterTab==='profile'?'active':''}" onclick="setMTabEdit('profile')">Профиль</button>
     <button class="${state.masterTab==='services'?'active':''}" onclick="setMTabEdit('services')">Услуги</button>
@@ -1964,7 +2050,7 @@ async function fillMasterAreaEditMode(){
     <button class="${state.masterTab==='schedule'?'active':''}" onclick="setMTabEdit('schedule')">Расписание</button>
   </div>`;
   let body='';
-  if(state.masterTab==='profile') body = renderMProfile(m,false);
+  if(state.masterTab==='profile') body = await renderMProfile(m, false, bookings);
   else if(state.masterTab==='services') body = renderMServices(m,false);
   else if(state.masterTab==='portfolio') body = renderMPortfolio(m,false);
   else if(state.masterTab==='schedule') body = renderMSchedule(m,false);
@@ -1973,7 +2059,30 @@ async function fillMasterAreaEditMode(){
 function setMTabEdit(t){ state.masterTab=t; fillMasterAreaEditMode(); }
 window.editWhileInactive=editWhileInactive; window.setMTabEdit=setMTabEdit;
 
-function renderMProfile(m, isDemo){
+async function renderMProfile(m, isDemo, bookings){
+  const views = isDemo ? 0 : (await sget('profile-views:'+m.id, true) || 0);
+  const requests = (bookings||[]).length;
+  const conversion = views ? Math.round((requests/views)*100) : 0;
+  const analyticsCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:10px;">📊 Мини-аналитика</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div style="text-align:center;"><div style="font-size:20px;font-weight:700;font-family:'Fraunces',serif;">${views}</div><div style="font-size:10.5px;color:var(--ink-soft);">просмотров профиля</div></div>
+      <div style="text-align:center;"><div style="font-size:20px;font-weight:700;font-family:'Fraunces',serif;color:var(--teal)">${requests}</div><div style="font-size:10.5px;color:var(--ink-soft);">заявок получено</div></div>
+      <div style="text-align:center;"><div style="font-size:20px;font-weight:700;font-family:'Fraunces',serif;color:var(--rose-deep)">${conversion}%</div><div style="font-size:10.5px;color:var(--ink-soft);">конверсия в заявку</div></div>
+    </div>
+  </div>`;
+
+  const masterRefLink = `https://t.me/${BOT_USERNAME}?startapp=mref_${m.id}`;
+  const masterRefs = isDemo ? [] : (await sget('master-referrals:'+m.id, true) || []);
+  const masterRefCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">👥 Пригласите коллегу-мастера</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Коллега зарегистрируется по вашей ссылке — вы оба получите +3 дня бонусного доступа, как только модератор одобрит его анкету.${masterRefs.length?` Уже приглашено: ${masterRefs.length}.`:''}</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input readonly value="${masterRefLink}" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:12px;color:var(--ink-soft);" onclick="this.select()">
+      <button class="btn primary small" style="width:auto;padding:0 16px;white-space:nowrap;" onclick="copyText('${masterRefLink}')">Скопировать</button>
+    </div>
+  </div>`;
+
   const linkCard = isDemo ? '' : `<div class="card">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🔗 Ваша ссылка для клиентов</div>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Отправьте эту ссылку клиентам в директ, сторис или на сайт — она откроет ваш профиль в приложении сразу на странице записи.</div>
@@ -2012,7 +2121,9 @@ function renderMProfile(m, isDemo){
     <div class="field"><label>О себе</label><textarea id="pfBio" ${isDemo?'disabled':''}>${escapeHtml(m.bio||'')}</textarea></div>
     ${isDemo? '<div class="pillnote" style="margin:0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">В демо-режиме изменения не сохраняются.</div>' : `<button class="btn primary" onclick="saveProfileEdits()">Сохранить</button>`}
   </div>
+  ${analyticsCard}
   ${linkCard}
+  ${masterRefCard}
   ${vacationCard}`;
 }
 function toggleQr(){
@@ -2270,6 +2381,11 @@ async function renderMClients(m, isDemo, bookings){
     if(!c.lastDate || b.date>c.lastDate) c.lastDate = b.date;
     if(b.status==='confirmed' && isBookingPast(b)) c.spent += (b.price||0);
   });
+  const imported = await sget('imported-clients:'+m.id, true) || [];
+  imported.forEach(ic=>{
+    if(!ic.contact || map.has(ic.contact)) return;
+    map.set(ic.contact, {key:ic.contact, name:ic.name, contact:ic.contact, telegramId:null, visits:0, lastDate:null, spent:0, imported:true});
+  });
   const list = Array.from(map.values()).sort((a,b)=>(b.lastDate||'').localeCompare(a.lastDate||''));
   list.forEach(c=>{ c.note = notes[c.key] || ''; });
   state._clientList = list; // для доступа по индексу из onclick без экранирования спецсимволов в ключах
@@ -2282,26 +2398,57 @@ async function renderMClients(m, isDemo, bookings){
     <button class="btn primary small" style="margin-top:8px;" onclick="broadcastToClients('${m.id}')" ${withTelegram?'':'disabled'}>Отправить всем (${withTelegram})</button>
   </div>`;
 
+  const importCard = `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">📥 Импортировать базу клиентов</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Переносите базу из блокнота или другого сервиса — по одному клиенту на строке, формат «Имя, телефон или @username». Так вы сразу увидите их здесь.</div>
+    <textarea id="importClientsText" placeholder="Анна, +79001234567&#10;Мария, @maria_beauty" style="min-height:80px;"></textarea>
+    <button class="btn ghost small" style="margin-top:8px;" onclick="importClients('${m.id}')">Импортировать</button>
+  </div>`;
+
   if(!list.length){
-    return broadcastCard + `<div class="card"><div class="empty" style="padding:10px 0">Пока нет клиентов — они появятся здесь после первых записей.</div></div>`;
+    return broadcastCard + importCard + `<div class="card"><div class="empty" style="padding:10px 0">Пока нет клиентов — они появятся здесь после первых записей или импорта.</div></div>`;
   }
 
   const rows = list.map((c,i)=>`<div class="card">
     <div class="mcard-top">
       <div>
-        <div class="mcard-name" style="font-size:14.5px;">${escapeHtml(c.name)} ${priorityClients.includes(c.key)?'<span class="badge active" style="margin-left:4px;">⭐ приоритетный</span>':''}</div>
+        <div class="mcard-name" style="font-size:14.5px;">${escapeHtml(c.name)} ${priorityClients.includes(c.key)?'<span class="badge active" style="margin-left:4px;">⭐ приоритетный</span>':''}${c.imported?'<span class="badge demo" style="margin-left:4px;">импорт</span>':''}</div>
         <div class="mcard-city">📞 ${escapeHtml(c.contact)}</div>
       </div>
       ${c.telegramId?`<button class="btn ghost small" style="width:auto;padding:0 12px;" onclick="messageOneClient(${i})">✉️</button>`:''}
     </div>
-    <div style="font-size:12.5px;color:var(--ink-soft);margin-top:6px;">🗓️ ${c.visits} визит${c.visits===1?'':c.visits<5?'а':'ов'} · последний ${fmtDate(c.lastDate)}${c.spent?` · ${c.spent}₽ потрачено`:''}</div>
+    <div style="font-size:12.5px;color:var(--ink-soft);margin-top:6px;">🗓️ ${c.visits} визит${c.visits===1?'':c.visits<5?'а':'ов'}${c.lastDate?` · последний ${fmtDate(c.lastDate)}`:''}${c.spent?` · ${c.spent}₽ потрачено`:''}</div>
     <div class="divider"></div>
     <textarea id="clientNote_${i}" placeholder="Заметка (например: аллергия на такой-то состав, любит крепкий кофе...)" style="min-height:44px;font-size:12.5px;" onblur="saveClientNote('${m.id}', ${i})">${escapeHtml(c.note)}</textarea>
   </div>`).join('');
 
-  return broadcastCard + rows;
+  return broadcastCard + importCard + rows;
 }
 window.renderMClients = renderMClients;
+
+async function importClients(masterId){
+  const el = document.getElementById('importClientsText');
+  const raw = (el && el.value || '').trim();
+  if(!raw){ showToast('Вставьте список клиентов, по одному на строке'); return; }
+  const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  const existing = await sget('imported-clients:'+masterId, true) || [];
+  const existingContacts = new Set(existing.map(c=>c.contact));
+  let added = 0;
+  for(const line of lines){
+    const parts = line.split(',').map(p=>p.trim());
+    const name = parts[0] || 'Клиент';
+    const contact = parts[1] || '';
+    if(!contact || existingContacts.has(contact)) continue;
+    existing.push({name, contact, importedAt:Date.now()});
+    existingContacts.add(contact);
+    added++;
+  }
+  await sset('imported-clients:'+masterId, existing, true);
+  showToast(added ? `Импортировано клиентов: ${added}` : 'Ничего нового не добавлено (возможно, уже есть в базе)');
+  if(el) el.value='';
+  fillMasterArea();
+}
+window.importClients = importClients;
 
 async function saveClientNote(masterId, i){
   const c = (state._clientList||[])[i];
@@ -2374,6 +2521,7 @@ async function fillAdmin(){
     if(!state.isOwner) return renderAdminDenied();
     if(state.adminScreen==='trends') return renderAdminTrends();
     if(state.adminScreen==='broadcast') return renderAdminBroadcast();
+    if(state.adminScreen==='reviewsShowcase') return renderAdminReviewsShowcase();
     if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
     if(state.adminScreen==='chatlist') return renderAdminChatList();
     if(state.adminScreen==='chat' && state.adminChatMasterId) return renderAdminChatThread(state.adminChatMasterId);
@@ -2384,6 +2532,7 @@ async function fillAdmin(){
   if(!state.adminAuthed) return renderAdminLogin();
   if(state.adminScreen==='trends') return renderAdminTrends();
   if(state.adminScreen==='broadcast') return renderAdminBroadcast();
+  if(state.adminScreen==='reviewsShowcase') return renderAdminReviewsShowcase();
   if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
   if(state.adminScreen==='chatlist') return renderAdminChatList();
   if(state.adminScreen==='chat' && state.adminChatMasterId) return renderAdminChatThread(state.adminChatMasterId);
@@ -2522,6 +2671,7 @@ async function renderAdminDashboard(){
           ? `<span class="badge active">Оплачено до ${fmtDate(m.subscriptionUntil)}</span>`
           : (m.trialExpiredNotifiedAt ? `<span class="badge inactive">⏳ Пробный истёк, не оплачено</span>` : `<span class="badge inactive">Не оплачено</span>`));
     const visBadge = m.disabledByAdmin ? `<span class="badge cancelled">Скрыт админом</span>` : '';
+    const featuredBadge = m.featured ? `<span class="badge active" style="background:#F3E3B8;color:#8A5A1F;">⭐ Мастер месяца</span>` : '';
     const claimBadge = (m.paymentClaimStatus==='pending' && !m.subscriptionActive)
       ? `<span class="badge pending">💌 Прислал(а) квитанцию — ${m.paymentClaimMethod==='sbp'?'СБП':'карта'}</span>` : '';
     const confirmBtn = (m.paymentClaimStatus==='pending' && !m.subscriptionActive)
@@ -2533,13 +2683,14 @@ async function renderAdminDashboard(){
           <div class="mcard-city">📍 ${escapeHtml(m.city)} · ${spec.label}</div>
         </div>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${subBadge}${visBadge}${claimBadge}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${subBadge}${visBadge}${featuredBadge}${claimBadge}</div>
       <div style="font-size:12.5px;color:var(--ink-soft);margin-top:8px;">⭐ ${ratingOf(m)?ratingOf(m).toFixed(1):'—'} (${m.ratingCount||0}) · 🗓️ ${bk.length} записей</div>
       <div class="divider"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${confirmBtn}
         <button class="btn ghost small" onclick="adminEditMaster('${m.id}')">Редактировать</button>
         <button class="btn ghost small" onclick="previewAsClient('${m.id}')">👁 Как клиент</button>
+        <button class="btn ${m.featured?'teal':'ghost'} small" onclick="adminToggleFeatured('${m.id}')">${m.featured?'Убрать из «Мастер месяца»':'⭐ Сделать «Мастер месяца»'}</button>
         <button class="btn ${m.disabledByAdmin?'teal':'ghost'} small" onclick="adminToggleDisabled('${m.id}')">${m.disabledByAdmin?'Включить в каталог':'Отключить от каталога'}</button>
         <button class="btn danger small" onclick="adminDeleteMaster('${m.id}')">Удалить</button>
       </div>
@@ -2564,6 +2715,11 @@ async function renderAdminDashboard(){
     </button>
     <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="exportMastersCSV()">
       📤 Экспорт CSV
+    </button>
+  </div>
+  <div class="section-pad">
+    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reviewsShowcase'; fillAdmin();">
+      🌟 Витрина отзывов для канала
     </button>
   </div>
   <div class="section-pad">
@@ -2634,6 +2790,49 @@ async function renderAdminBroadcast(){
   </div>`;
 }
 window.renderAdminBroadcast = renderAdminBroadcast;
+
+/* ============ ВИТРИНА ОТЗЫВОВ (для репоста в канал) ============ */
+async function renderAdminReviewsShowcase(){
+  const masterIds = await sget('masters-index', true) || [];
+  const items = [];
+  for(const id of masterIds){
+    const m = await sget('master:'+id, true);
+    if(!m) continue;
+    const reviews = await loadReviews(id);
+    reviews.forEach(r=>{
+      if(r.rating>=4) items.push({...r, masterName:m.name, masterSpec:m.specialization});
+    });
+  }
+  // Сначала с фото и высоким рейтингом — такие лучше всего заходят в канале.
+  items.sort((a,b)=> (b.photoUrl?1:0)-(a.photoUrl?1:0) || b.rating-a.rating || b.createdAt-a.createdAt);
+  state._reviewShowcase = items;
+
+  const rows = items.length ? items.slice(0,30).map((r,i)=>`<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="mcard-name" style="font-size:13.5px;">${SPECS[r.masterSpec]?SPECS[r.masterSpec].icon:''} ${escapeHtml(r.masterName)}</div>
+      <span class="stars">${starsStr(r.rating)}</span>
+    </div>
+    <div style="font-size:13px;color:var(--ink-soft);margin-top:6px;">«${escapeHtml(r.comment)}»</div>
+    ${r.photoUrl?`<img src="${r.photoUrl}" style="width:100%;max-width:200px;border-radius:10px;margin-top:8px;display:block;">`:''}
+    <div class="divider"></div>
+    <button class="btn ghost small" onclick="copyReviewForPost(${i})">📋 Скопировать текст для поста</button>
+  </div>`).join('') : `<div class="empty"><div class="big">🌟</div>Пока нет отзывов с оценкой 4+ для витрины.</div>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Витрина отзывов</div></div>
+  <div class="pillnote" style="margin:0 18px 14px;">Лучшие отзывы (оценка 4+, приоритет — с фото) готовы для репоста в ваш Telegram-канал. Текст форматируется автоматически, фото сохраните отдельно и приложите к посту.</div>
+  ${rows}`;
+}
+window.renderAdminReviewsShowcase = renderAdminReviewsShowcase;
+
+function copyReviewForPost(i){
+  const r = (state._reviewShowcase||[])[i];
+  if(!r) return;
+  const spec = SPECS[r.masterSpec];
+  const text = `${starsStr(r.rating)}\n«${r.comment}»\n\n— отзыв о мастере ${spec?spec.label.toLowerCase():''} ${r.masterName} на BeautyHub${r.photoUrl?'\n\n📸 Фото прикреплено':''}`;
+  copyText(text);
+}
+window.copyReviewForPost = copyReviewForPost;
 
 async function sendOwnerBroadcast(){
   const el = document.getElementById('ownerBroadcastText');
@@ -2887,6 +3086,15 @@ async function sendChatFromOwner(masterId){
 }
 window.sendChatFromOwner = sendChatFromOwner;
 
+async function adminToggleFeatured(id){
+  const m = await loadMaster(id);
+  m.featured = !m.featured;
+  await saveMaster(m);
+  showToast(m.featured ? 'Отмечен «Мастер месяца» — будет выделен в каталоге' : 'Убран из «Мастер месяца»');
+  fillAdmin();
+}
+window.adminToggleFeatured = adminToggleFeatured;
+
 async function adminToggleDisabled(id){
   const m = await loadMaster(id);
   m.disabledByAdmin = !m.disabledByAdmin;
@@ -2919,14 +3127,45 @@ async function adminApproveMaster(id){
   // Пробный доступ на 24 часа: сразу появляется в каталоге, оплата потребуется по истечении
   m.subscriptionActive = true;
   m.isTrial = true;
-  m.trialEndsAt = Date.now() + 24*60*60*1000;
+  const REFERRAL_BONUS_HOURS = 72; // +3 дня обоим за приглашение коллеги
+  const bonusHours = (m.referredByMasterId && !m.referralBonusGranted) ? REFERRAL_BONUS_HOURS : 0;
+  m.trialEndsAt = Date.now() + (24 + bonusHours) * 3600000;
   m.subscriptionUntil = null;
   m.trialExpiredNotifiedAt = null;
+  if(bonusHours){
+    m.referralBonusGranted = true;
+    await grantMasterReferralBonus(m.referredByMasterId, REFERRAL_BONUS_HOURS);
+  }
   await saveMaster(m);
-  showToast('Мастер одобрен — включён пробный доступ на 24 часа');
+  showToast(bonusHours ? 'Мастер одобрен — пробный доступ 24ч + 3 дня бонус за приглашение коллеги' : 'Мастер одобрен — включён пробный доступ на 24 часа');
   fillAdmin();
 }
 window.adminApproveMaster = adminApproveMaster;
+
+/* Начисляет мастеру-пригласившему бонусные часы доступа — продлевает пробный период
+   либо оплаченную подписку, а если доступ уже неактивен, выдаёт короткий бонусный пробный период. */
+async function grantMasterReferralBonus(masterId, hours){
+  try{
+    const m = await loadMaster(masterId);
+    if(!m) return;
+    if(m.isTrial && m.trialEndsAt){
+      m.trialEndsAt += hours*3600000;
+    } else if(m.subscriptionActive && m.subscriptionUntil){
+      const d = new Date(m.subscriptionUntil+'T00:00:00');
+      d.setDate(d.getDate() + Math.ceil(hours/24));
+      m.subscriptionUntil = d.toISOString().slice(0,10);
+    } else {
+      m.subscriptionActive = true;
+      m.isTrial = true;
+      m.trialEndsAt = Date.now() + hours*3600000;
+      m.trialExpiredNotifiedAt = null;
+    }
+    await saveMaster(m);
+    if(m.telegramId){
+      await notifyTelegram(m.telegramId, `🎁 Вам начислен бонус +${Math.round(hours/24)} дн. доступа — коллега зарегистрировался по вашей приглашительной ссылке на BeautyHub!`);
+    }
+  }catch(e){ console.warn('grantMasterReferralBonus failed:', e); }
+}
 
 async function adminRejectMaster(id){
   const reason = window.prompt('Укажите причину отклонения (мастер её увидит):', '');
@@ -2961,7 +3200,7 @@ async function renderAdminEdit(id){
     <div style="font-weight:700;font-size:13.5px;margin-bottom:8px;">История платежей</div>
     ${history.length ? history.map(h=>`
       <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px;">
-        <span>${h.method==='sbp'?'📱 СБП':'💳 Карта'} · ${new Date(h.confirmedAt).toLocaleDateString('ru-RU')}</span>
+        <span>${h.method==='sbp'?'📱 СБП':h.method==='yookassa'?'💳 ЮKassa (онлайн)':'💳 Карта'} · ${new Date(h.confirmedAt).toLocaleDateString('ru-RU')}</span>
         <span style="color:var(--ink-soft)">до ${fmtDate(h.subscriptionUntil)}</span>
       </div>`).join('') : `<div style="font-size:12.5px;color:var(--ink-soft)">Платежей ещё не было</div>`}
   </div>`;
