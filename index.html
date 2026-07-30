@@ -276,7 +276,7 @@ input,select,textarea{font-family:inherit;}
 /* ============ CONFIG ============ */
 const OWNER_TELEGRAM_IDS = ['8078091086']; // владелец платформы — доступ к кабинету только с этого Telegram-аккаунта
 const OWNER_TELEGRAM_USERNAME = 'whitespirited'; // ваш @username в Telegram (без @) — сюда попадут мастера с кнопки «Отправить квитанцию»
-const BOT_USERNAME = 'BeautyHubs_bot'; // ⚠️ ЗАПОЛНИТЕ: username вашего Telegram-бота (без @), через который открывается это приложение.
+const BOT_USERNAME = 'YOUR_BOT_USERNAME'; // ⚠️ ЗАПОЛНИТЕ: username вашего Telegram-бота (без @), через который открывается это приложение.
                                             // Нужен, чтобы генерировать персональные ссылки-приглашения мастеров для клиентов.
 const SPECS = {
   manicure:{label:'Маникюр', icon:'💅'},
@@ -2882,6 +2882,7 @@ async function renderAdminDashboard(){
     <div class="divider" style="margin:4px 18px 14px;"></div>
   ` : '';
 
+  const isOwnerRole = state.adminRole==='owner' || !state.isTelegramContext; // вне Telegram (тест-режим) считаем полным доступом
   const list = masters.filter(m=>m.moderationStatus!=='pending').slice().sort((a,b)=>{
     // Мастера с ожидающей проверки квитанцией — в начало списка, чтобы их не пропустить
     const aPending = a.paymentClaimStatus==='pending' ? 1 : 0;
@@ -2931,8 +2932,6 @@ async function renderAdminDashboard(){
   const identityLine = state.isTelegramContext
     ? `<div class="pillnote" style="margin:0 18px 14px;">Вход подтверждён по Telegram ID ${state.tgUser?state.tgUser.id:''}.</div>`
     : `<div class="section-pad"><button class="btn ghost small" onclick="adminLogout()">Выйти из кабинета владельца</button></div>`;
-
-  const isOwnerRole = state.adminRole==='owner' || !state.isTelegramContext; // вне Telegram (тест-режим) считаем полным доступом
 
   const chatEntry = `<div class="section-pad" style="display:flex;gap:10px;">
     <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='chatlist'; fillAdmin();">
