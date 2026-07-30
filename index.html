@@ -512,6 +512,7 @@ async function checkTrialExpiry(m){
   const alreadyHandled = !!m.trialExpiredNotifiedAt;
   m.subscriptionActive = false;
   m.isTrial = false;
+  m.trialEndsAt = null;
   m.trialExpiredNotifiedAt = m.trialExpiredNotifiedAt || Date.now();
   await saveMaster(m);
 
@@ -2690,6 +2691,7 @@ async function renderAdminDashboard(){
         ${confirmBtn}
         <button class="btn ghost small" onclick="adminEditMaster('${m.id}')">Редактировать</button>
         <button class="btn ghost small" onclick="previewAsClient('${m.id}')">👁 Как клиент</button>
+        <button class="btn teal small" onclick="adminExtendSubscription('${m.id}', 30)">➕ +30 дней вручную</button>
         <button class="btn ${m.featured?'teal':'ghost'} small" onclick="adminToggleFeatured('${m.id}')">${m.featured?'Убрать из «Мастер месяца»':'⭐ Сделать «Мастер месяца»'}</button>
         <button class="btn ${m.disabledByAdmin?'teal':'ghost'} small" onclick="adminToggleDisabled('${m.id}')">${m.disabledByAdmin?'Включить в каталог':'Отключить от каталога'}</button>
         <button class="btn danger small" onclick="adminDeleteMaster('${m.id}')">Удалить</button>
@@ -3085,6 +3087,34 @@ async function sendChatFromOwner(masterId){
   renderAdminChatThread(masterId);
 }
 window.sendChatFromOwner = sendChatFromOwner;
+
+/* Ручное продление подписки владельцем — работает независимо от того, как мастер платил
+   (онлайн через ЮKassa, вручную переводом или вообще никак). Нужно как страховка на случай
+   сбоя автоматики (например, вебхук ЮKassa не дошёл) и для любых договорённостей вручную. */
+async function adminExtendSubscription(masterId, days){
+  const m = await loadMaster(masterId);
+  if(!m) return;
+  const base = (m.subscriptionActive && m.subscriptionUntil && !m.isTrial)
+    ? new Date(m.subscriptionUntil+'T00:00:00')
+    : new Date();
+  base.setDate(base.getDate() + days);
+  m.subscriptionUntil = base.toISOString().slice(0,10);
+  m.subscriptionActive = true;
+  m.isTrial = false;
+  m.trialEndsAt = null;
+  m.trialExpiredNotifiedAt = null;
+  m.subscriptionReminderForUntil = null;
+  m.paymentClaimStatus = null;
+  m.paymentHistory = m.paymentHistory || [];
+  m.paymentHistory.push({ method:'manual-admin', amount:null, confirmedAt:Date.now(), subscriptionUntil:m.subscriptionUntil });
+  await saveMaster(m);
+  showToast(`Подписка продлена вручную до ${m.subscriptionUntil}`);
+  if(m.telegramId){
+    notifyTelegram(m.telegramId, `✅ Владелец платформы вручную активировал вашу подписку BeautyHub до ${m.subscriptionUntil}.`);
+  }
+  fillAdmin();
+}
+window.adminExtendSubscription = adminExtendSubscription;
 
 async function adminToggleFeatured(id){
   const m = await loadMaster(id);
