@@ -1390,14 +1390,24 @@ function renderBookingForm(m, bookings, waitlist){
       : `<button class="btn ghost" onclick="joinWaitlist('${m.id}')">Встать в лист ожидания</button>`}
   </div>`;
 
+  const depositAmount = Number(m.depositRequired) > 0 ? Number(m.depositRequired) : 0;
+  const depositRequisites = depositAmount>0 ? `<div class="pillnote" style="margin:0 0 12px;background:#F3E3B8;border-color:#E8D19A;color:#8A5A1F;">
+    💰 Этот мастер требует предоплату <b>${depositAmount}₽</b> при записи. Переведите её мастеру напрямую:
+    ${m.depositPhone?`<div style="margin-top:6px;">📱 СБП: <b>${escapeHtml(m.depositPhone)}</b></div>`:''}
+    ${m.depositCard?`<div style="margin-top:2px;">💳 Карта: <b>${escapeHtml(m.depositCard)}</b></div>`:''}
+    <div style="margin-top:6px;">После перевода нажмите кнопку ниже — мастер увидит заявку и сам подтвердит получение денег.</div>
+  </div>` : '';
+
   return `<div class="card">
+    ${depositRequisites}
     <div class="field"><label>Услуга</label><select id="bkService" onchange="setBookField('serviceId', this.value)">${serviceOpts}</select></div>
     <div class="field"><label>Дата</label><div class="chiprow" style="padding:0;overflow-x:auto;">${dayChips}</div></div>
     ${b.date?`<div class="field"><label>Время</label>${slotsHtml}</div>`:''}
     <div class="field"><label>Ваше имя</label><input id="bkName" value="${escapeHtml(state.clientName)}" placeholder="Имя"></div>
     <div class="field"><label>Телефон / Telegram</label><input id="bkContact" value="${escapeHtml(state.clientContact)}" placeholder="@username или телефон"></div>
-    <button class="btn primary" onclick="submitBooking('${m.id}')" ${(!b.date||!b.time)?'disabled':''}>Отправить заявку на запись</button>
-    <div class="pillnote" style="margin:10px 0 0;">После отправки заявка придёт мастеру. Как только он подтвердит запись, вы увидите статус во вкладке «Мои записи».</div>
+    <button class="btn primary" onclick="submitBooking('${m.id}')" ${(!b.date||!b.time)?'disabled':''}>${depositAmount>0?`Я перевёл(а) ${depositAmount}₽, отправить заявку`:'Отправить заявку на запись'}</button>
+    <div class="pillnote" style="margin:10px 0 0;">${depositAmount>0?'Заявка придёт мастеру с пометкой «ожидает подтверждения предоплаты» — он подтвердит получение денег сам.':'После отправки заявка придёт мастеру. Как только он подтвердит запись, вы увидите статус во вкладке «Мои записи».'}</div>
+
   </div>
   ${waitlistCard}`;
 }
@@ -1444,7 +1454,9 @@ async function submitBooking(masterId){
     date:state.booking.date, time:state.booking.time,
     clientName:name, clientContact:contact, status:'pending', createdAt:Date.now(),
     clientTelegramId: (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : null,
-    depositAmount, depositStatus: depositAmount>0 ? 'awaiting' : null
+    // Предоплата идёт мастеру напрямую (на его СБП/карту) — платформа деньги не принимает
+    // и не может подтвердить перевод автоматически, поэтому мастер подтверждает получение сам.
+    depositAmount, depositStatus: depositAmount>0 ? 'awaiting_confirmation' : null
   };
   bookings.push(booking);
   await saveBookings(masterId, bookings);
@@ -1457,57 +1469,30 @@ async function submitBooking(masterId){
   await sset('my-client-bookings', mine, false);
 
   state.booking=null;
-
-  if(depositAmount>0){
-    // Мастер требует предоплату — не отправляем уведомление, пока клиент не оплатит депозит.
-    showToast(`Заявка создана. Для подтверждения внесите предоплату ${depositAmount}₽.`);
-    state.masterDetailTab='about';
-    fillMasterDetail();
-    await payDepositForBooking(masterId, booking.id, depositAmount);
-    return;
-  }
-
-  showToast('Заявка отправлена мастеру! Ожидайте подтверждения.');
+  showToast(depositAmount>0
+    ? `Заявка отправлена мастеру. Он подтвердит получение предоплаты ${depositAmount}₽ и запись.`
+    : 'Заявка отправлена мастеру! Ожидайте подтверждения.');
   state.masterDetailTab='about';
   fillMasterDetail();
 
   // Мгновенное уведомление мастеру о новой заявке (в чат приложения + от бота в Telegram).
   try{
+    const depositNote = depositAmount>0 ? `\n\n💰 Клиент указал, что перевёл предоплату ${depositAmount}₽ вам напрямую — проверьте поступление и подтвердите в заявке.` : '';
     const chat = await loadChat(masterId);
     chat.push({
       id: uid(), from:'owner',
-      text: `🗓️ Новая заявка на запись!\n${service.name} · ${fmtDate(booking.date)} в ${booking.time}\nКлиент: ${name} (${contact})`,
+      text: `🗓️ Новая заявка на запись!\n${service.name} · ${fmtDate(booking.date)} в ${booking.time}\nКлиент: ${name} (${contact})${depositNote}`,
       createdAt: Date.now(), readByOwner:true, readByMaster:false
     });
     await saveChat(masterId, chat);
     await addChatToIndex(masterId);
     if(m.telegramId){
       await notifyTelegram(m.telegramId,
-        `🗓️ Новая заявка на запись!\n\nУслуга: ${service.name}\nКогда: ${fmtDate(booking.date)} в ${booking.time}\nКлиент: ${name}\nКонтакт: ${contact}\n\nПодтвердите или отклоните её во вкладке «Мастеру → Записи».`);
+        `🗓️ Новая заявка на запись!\n\nУслуга: ${service.name}\nКогда: ${fmtDate(booking.date)} в ${booking.time}\nКлиент: ${name}\nКонтакт: ${contact}${depositNote}\n\nПодтвердите или отклоните её во вкладке «Мастеру → Записи».`);
     }
   }catch(e){ console.warn('booking notify failed:', e); }
 }
 window.submitBooking = submitBooking;
-
-/* Оплата депозита за запись через ЮKassa. Мастеру приходит уведомление о заявке только
-   после того, как депозит реально поступит (см. yookassa-webhook, type:'deposit'). */
-async function payDepositForBooking(masterId, bookingId, amount){
-  try{
-    const { data, error } = await sb.functions.invoke('create-payment', { body: { type:'deposit', masterId, bookingId, amount } });
-    if(error) throw new Error(error.message || 'Функция оплаты недоступна');
-    if(!data || !data.ok || !data.confirmationUrl) throw new Error((data && data.error) || 'Не удалось создать платёж');
-    const url = data.confirmationUrl;
-    if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink){
-      window.Telegram.WebApp.openLink(url);
-    } else {
-      window.open(url, '_blank');
-    }
-  }catch(e){
-    console.error('payDepositForBooking failed', e);
-    showToast('Не удалось открыть оплату предоплаты. Попробуйте ещё раз из «Моих записей».');
-  }
-}
-window.payDepositForBooking = payDepositForBooking;
 
 /* ============================================================
    MY BOOKINGS (CLIENT)
@@ -1553,8 +1538,7 @@ async function fillMyBookings(){
       </div>
       <div class="divider"></div>
       <div style="font-size:13.5px;color:var(--ink-soft)">📅 ${fmtDate(bk.date)} в ${bk.time} · ${bk.price}₽</div>
-      ${bk.depositAmount?`<div style="font-size:12.5px;margin-top:4px;color:${bk.depositStatus==='paid'?'var(--teal)':'var(--gold)'};">${bk.depositStatus==='paid'?'✅ Предоплата получена':'⏳ Ожидается предоплата '+bk.depositAmount+'₽'}</div>`:''}
-      ${(bk.depositStatus==='awaiting' && !past) ? `<div style="margin-top:10px;"><button class="btn primary small" onclick="payDepositForBooking('${entry.masterId}','${bk.id}',${bk.depositAmount})">💳 Внести предоплату ${bk.depositAmount}₽</button></div>` : ''}
+      ${bk.depositAmount?`<div style="font-size:12.5px;margin-top:4px;color:${bk.depositStatus==='confirmed'?'var(--teal)':'var(--gold)'};">${bk.depositStatus==='confirmed'?'✅ Мастер подтвердил получение предоплаты':'⏳ Мастер ещё не подтвердил получение предоплаты '+bk.depositAmount+'₽'}</div>`:''}
       ${canCancel ? `<div style="margin-top:10px;"><button class="btn danger small" onclick="clientCancelBooking('${entry.masterId}','${bk.id}')">Отменить запись</button></div>` : ''}
       ${isCompleted && m ? `<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <button class="btn ghost small" onclick="repeatBooking('${entry.masterId}','${bk.serviceId}')">🔁 Повторить запись</button>
@@ -2174,11 +2158,11 @@ async function renderMProfile(m, isDemo, bookings){
 
   const depositCard = isDemo ? '' : `<div class="card">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">💰 Предоплата за запись</div>
-    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Если включено, клиент вносит предоплату онлайн сразу при записи (через ЮKassa) — заявка приходит вам, только если предоплата реально поступила. Хорошо снижает неявки.</div>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <input id="pfDeposit" type="number" min="0" step="50" placeholder="0 — предоплата не требуется" value="${m.depositRequired||''}" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;">
-      <button class="btn ghost small" style="width:auto;padding:0 16px;white-space:nowrap;" onclick="saveDepositSetting('${m.id}')">Сохранить</button>
-    </div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Если включено, клиент при записи увидит ваши реквизиты и переведёт предоплату <b>вам напрямую</b> — платформа деньги не принимает и не удерживает. Вы сами подтверждаете получение перевода в заявке.</div>
+    <div class="field"><label>Сумма предоплаты, ₽</label><input id="pfDeposit" type="number" min="0" step="50" placeholder="0 — предоплата не требуется" value="${m.depositRequired||''}"></div>
+    <div class="field"><label>Телефон для СБП (необязательно)</label><input id="pfDepositPhone" placeholder="+7 900 000-00-00" value="${escapeHtml(m.depositPhone||'')}"></div>
+    <div class="field"><label>Номер карты (необязательно)</label><input id="pfDepositCard" placeholder="0000 0000 0000 0000" value="${escapeHtml(m.depositCard||'')}"></div>
+    <button class="btn ghost small" onclick="saveDepositSetting('${m.id}')">Сохранить</button>
   </div>`;
 
   const onVacation = m.vacationUntil && m.vacationUntil >= todayISO(0);
@@ -2212,9 +2196,19 @@ async function renderMProfile(m, isDemo, bookings){
 }
 async function saveDepositSetting(masterId){
   const el = document.getElementById('pfDeposit');
+  const phoneEl = document.getElementById('pfDepositPhone');
+  const cardEl = document.getElementById('pfDepositCard');
   const val = el ? Number(el.value) : 0;
+  const phone = phoneEl ? phoneEl.value.trim() : '';
+  const card = cardEl ? cardEl.value.trim() : '';
   const m = await loadMaster(masterId);
   m.depositRequired = (val && val>0) ? val : null;
+  m.depositPhone = phone || null;
+  m.depositCard = card || null;
+  if(m.depositRequired && !phone && !card){
+    showToast('Укажите телефон для СБП или номер карты — иначе клиенту некуда будет перевести предоплату');
+    return;
+  }
   await saveMaster(m);
   showToast(m.depositRequired ? `Предоплата ${m.depositRequired}₽ включена` : 'Предоплата отключена');
   (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
@@ -2475,7 +2469,10 @@ function renderMBookings(m, bookings, isDemo){
     <div class="divider"></div>
     <div style="font-size:13px;color:var(--ink-soft);">📅 ${fmtDate(b.date)} в ${b.time}</div>
     <div style="font-size:13px;color:var(--ink-soft);margin-top:2px;">📞 ${escapeHtml(b.clientContact)}</div>
-    ${b.depositAmount?`<div style="font-size:12.5px;margin-top:4px;color:${b.depositStatus==='paid'?'var(--teal)':'var(--gold)'};">${b.depositStatus==='paid'?'✅':'⏳'} Предоплата ${b.depositAmount}₽ — ${b.depositStatus==='paid'?'получена':'ожидается'}</div>`:''}
+    ${b.depositAmount?`<div style="font-size:12.5px;margin-top:4px;color:${b.depositStatus==='confirmed'?'var(--teal)':'var(--gold)'};">${b.depositStatus==='confirmed'?'✅':'⏳'} Предоплата ${b.depositAmount}₽ — ${b.depositStatus==='confirmed'?'получена':'ожидает вашего подтверждения'}</div>`:''}
+    ${(b.depositAmount && b.depositStatus==='awaiting_confirmation')?`<div style="margin-top:10px;">
+      <button class="btn teal small" onclick="confirmDepositReceived('${b.id}')">✅ Деньги получены</button>
+    </div>`:''}
     ${(b.status==='pending' && !past)?`<div style="display:flex;gap:8px;margin-top:10px;">
       <button class="btn teal small" style="flex:1" onclick="setBookingStatus('${b.id}','confirmed')">Подтвердить</button>
       <button class="btn danger small" style="flex:1" onclick="setBookingStatus('${b.id}','cancelled')">Отклонить</button>
@@ -2491,6 +2488,20 @@ function renderMBookings(m, bookings, isDemo){
   }).join('');
   return financeCard + exportBtn + rows;
 }
+
+async function confirmDepositReceived(bookingId){
+  const bookings = await loadBookings(state.myMasterId);
+  const b = bookings.find(x=>x.id===bookingId);
+  if(!b) return;
+  b.depositStatus = 'confirmed';
+  await saveBookings(state.myMasterId, bookings);
+  showToast('Отмечено: предоплата получена');
+  if(b.clientTelegramId){
+    notifyTelegram(b.clientTelegramId, `✅ Мастер подтвердил получение предоплаты ${b.depositAmount}₽.\n${b.serviceName} · ${fmtDate(b.date)} в ${b.time}`);
+  }
+  fillMasterArea();
+}
+window.confirmDepositReceived = confirmDepositReceived;
 
 async function markAttendance(bookingId, attendance){
   const bookings = await loadBookings(state.myMasterId);
