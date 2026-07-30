@@ -553,6 +553,122 @@ async function addChatToIndex(masterId){
    так что «я в списке или нет» всегда проверяется по актуальным данным, без рассинхронизации. */
 async function loadWaitlist(masterId){ return await sget('waitlist:'+masterId, true) || []; }
 
+/* ============ ЧАТ «РАЗМЕСТИТЬ ОБЪЯВЛЕНИЕ» — доступен любому посетителю ============
+   В отличие от чата мастера с владельцем (привязан к профилю мастера), этот чат
+   доступен и клиентам, и мастерам, и вообще любому, кто открыл приложение — привязка
+   идёт к ownerId() (тот же идентификатор, что используется для личных данных клиента),
+   а не к masterId. */
+async function loadVisitorChat(key){ return await sget('visitor-chat:'+key, true) || []; }
+async function saveVisitorChat(key, arr){ await sset('visitor-chat:'+key, arr, true); }
+async function addVisitorChatToIndex(key){
+  const ids = await sget('visitor-chat-index', true) || [];
+  if(!ids.includes(key)){ ids.push(key); await sset('visitor-chat-index', ids, true); }
+}
+
+function openAnnouncementChat(){
+  state._returnViewBeforeChat = state.view;
+  state.view = 'visitorChat';
+  render();
+}
+window.openAnnouncementChat = openAnnouncementChat;
+
+function closeAnnouncementChat(){
+  state.view = state._returnViewBeforeChat || 'catalog';
+  render();
+}
+window.closeAnnouncementChat = closeAnnouncementChat;
+
+async function fillVisitorChat(){
+  const key = ownerId();
+  const chat = await loadVisitorChat(key);
+  let changed = false;
+  chat.forEach(msg=>{ if(msg.from==='owner' && !msg.readByVisitor){ msg.readByVisitor = true; changed = true; } });
+  if(changed) await saveVisitorChat(key, chat);
+
+  const bubbles = chat.length ? chat.map(msg=>`
+    <div class="chat-msg ${msg.from==='visitor'?'out':'in'}">
+      <div class="chat-bubble">${escapeHtml(msg.text)}</div>
+      <div class="chat-time">${new Date(msg.createdAt).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+    </div>`).join('') : `<div class="empty" style="padding:30px 10px;">📣 Напишите владельцу платформы, если хотите разместить объявление или баннер в приложении — например, расскажите об акции или новости, которую хотите показать клиентам или мастерам.</div>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="closeAnnouncementChat()">←</button><div style="font-weight:700">Разместить объявление</div></div>
+  <div class="card" style="padding:12px;">
+    <div class="chat-wrap">${bubbles}</div>
+  </div>
+  <div class="section-pad" style="display:flex;gap:8px;align-items:flex-end;">
+    <textarea id="visitorChatInput" placeholder="Например: хочу разместить объявление о скидке для клиентов…" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;min-height:44px;max-height:120px;"></textarea>
+    <button class="btn primary" style="width:auto;padding:0 18px;height:44px;" onclick="sendVisitorChat()">➤</button>
+  </div>
+  <div class="pillnote">Сообщение сразу придёт владельцу платформы — он свяжется с вами, чтобы обсудить размещение.</div>`;
+}
+
+async function sendVisitorChat(){
+  const input = document.getElementById('visitorChatInput');
+  const text = (input && input.value || '').trim();
+  if(!text){ showToast('Введите текст сообщения'); return; }
+  const key = ownerId();
+  const chat = await loadVisitorChat(key);
+  chat.push({
+    id: uid(), from:'visitor', text, createdAt:Date.now(),
+    readByVisitor:true, readByOwner:false,
+    visitorName: state.tgUser ? [state.tgUser.first_name,state.tgUser.last_name].filter(Boolean).join(' ') : (state.clientName||'Гость'),
+    visitorTelegramId: state.tgUser ? String(state.tgUser.id) : null,
+    visitorRole: state.userRole || null
+  });
+  await saveVisitorChat(key, chat);
+  await addVisitorChatToIndex(key);
+
+  const who = state.tgUser ? [state.tgUser.first_name,state.tgUser.last_name].filter(Boolean).join(' ') : (state.clientName||'Гость');
+  for(const ownerTgId of OWNER_TELEGRAM_IDS){
+    notifyTelegram(ownerTgId, `📣 Заявка на размещение объявления\n\nОт: ${who} (${state.userRole==='master'?'мастер':'клиент'})\n\n${text}`);
+  }
+  showToast('Сообщение отправлено владельцу');
+  fillVisitorChat();
+}
+window.sendVisitorChat = sendVisitorChat;
+
+/* ============ БАННЕРЫ / ОБЪЯВЛЕНИЯ ВЛАДЕЛЬЦА ============ */
+async function loadBanners(){ return await sget('banners', true) || []; }
+async function saveBanners(arr){ await sset('banners', arr, true); }
+
+/* Возвращает актуальные баннеры для аудитории ('clients' | 'masters'), с учётом дат
+   действия и того, что человек уже закрыл этот баннер у себя (не показываем повторно). */
+async function getActiveBanners(audience){
+  const all = await loadBanners();
+  const today = todayISO(0);
+  const dismissed = await sget('dismissed-banners', false) || [];
+  return all.filter(b=>
+    b.active !== false &&
+    (b.audience==='all' || b.audience===audience) &&
+    (!b.startDate || b.startDate<=today) &&
+    (!b.endDate || b.endDate>=today) &&
+    !dismissed.includes(b.id)
+  );
+}
+
+function renderBannersHtml(banners){
+  if(!banners.length) return '';
+  return banners.map(b=>`<div class="section-pad" style="padding-bottom:0;" data-banner-id="${b.id}">
+    <div class="card" style="display:flex;gap:10px;align-items:flex-start;background:${b.style==='gold'?'#FBEFD6':b.style==='teal'?'#DDEDE6':'#F3E3EE'};border:1px solid ${b.style==='gold'?'#F3DFA8':b.style==='teal'?'#BFE0D4':'#E6C7DD'};">
+      <div style="font-size:20px;line-height:1;">${escapeHtml(b.emoji||'📣')}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:13px;color:var(--ink);">${escapeHtml(b.text)}</div>
+        ${b.link?`<a href="${escapeHtml(b.link)}" target="_blank" style="font-size:12px;font-weight:700;color:var(--rose-deep);display:inline-block;margin-top:4px;">Подробнее →</a>`:''}
+      </div>
+      <button onclick="dismissBanner('${b.id}')" style="background:none;border:none;font-size:15px;color:var(--ink-soft);cursor:pointer;line-height:1;padding:2px;">✕</button>
+    </div>
+  </div>`).join('');
+}
+
+async function dismissBanner(id){
+  const dismissed = await sget('dismissed-banners', false) || [];
+  if(!dismissed.includes(id)){ dismissed.push(id); await sset('dismissed-banners', dismissed, false); }
+  const el = document.querySelector(`[data-banner-id="${id}"]`);
+  if(el) el.remove();
+}
+window.dismissBanner = dismissBanner;
+
 /* Счётчик просмотров профиля для мини-аналитики мастера. Не считаем собственные заходы мастера
    на свою страницу и заходы владельца в режиме «просмотр как клиент» — иначе цифры будут врать. */
 async function trackProfileView(m){
@@ -829,6 +945,7 @@ function render(){
   else if(state.view==='master') html += renderMasterAreaPlaceholder();
   else if(state.view==='admin') html += `<div class="loading">Загрузка…</div>`;
   else if(state.view==='favorites') html += `<div class="loading">Загрузка…</div>`;
+  else if(state.view==='visitorChat') html += `<div class="loading">Загрузка…</div>`;
   html += '</div>' + renderNav();
   if(state.toast) html += `<div class="toast">${escapeHtml(state.toast)}</div>`;
   app.innerHTML = html;
@@ -840,6 +957,7 @@ function render(){
   if(state.view==='master') safeFill(fillMasterArea);
   if(state.view==='admin') safeFill(fillAdmin);
   if(state.view==='favorites') safeFill(fillFavorites);
+  if(state.view==='visitorChat') safeFill(fillVisitorChat);
 }
 
 /* Ловит любую ошибку внутри асинхронных экранов и показывает её текстом
@@ -893,7 +1011,7 @@ function goto(view){
   state.view = view;
   if(view==='catalog') state.selectedMasterId=null;
   if(view==='master') state.forcePaywall=false;
-  if(view==='admin'){ state.adminScreen='dashboard'; state.adminChatMasterId=null; state.adminEditingId=null; }
+  if(view==='admin'){ state.adminScreen='dashboard'; state.adminChatMasterId=null; state.adminAdRequestKey=null; state.adminEditingId=null; }
   render();
 }
 window.goto = goto;
@@ -966,13 +1084,14 @@ async function fillCatalog(){
   const allMasters = await loadAllMasters();
   const liveMasters = allMasters.filter(m=>m.subscriptionActive && !m.isDemo && !m.disabledByAdmin && m.moderationStatus==='approved' && !(m.vacationUntil && m.vacationUntil>=todayISO(0)));
 
-  if(!state.filters.city){ return renderCityStep(liveMasters); }
+  if(!state.filters.city){ return await renderCityStep(liveMasters); }
   if(state.catalogStep==='specs'){ return renderSpecStep(liveMasters); }
   return renderListStep(liveMasters);
 }
 
 /* --- STEP 1: choose city --- */
-function renderCityStep(masters){
+async function renderCityStep(masters){
+  const bannersHtml = renderBannersHtml(await getActiveBanners('clients'));
   const counts = {};
   masters.forEach(m=>{ counts[m.city] = (counts[m.city]||0)+1; });
   const allCities = Object.keys(counts);
@@ -1021,9 +1140,10 @@ function renderCityStep(masters){
     <button class="btn ghost" onclick="chooseCityManual()">Найти мастеров в этом городе</button>
   </div>`;
 
-  const becomeMasterLink = state.userRole==='client' ? `<div class="section-pad" style="text-align:center;"><button class="link-btn" onclick="becomeMaster()">Вы мастер? Разместите свой профиль →</button></div>` : '';
+  const becomeMasterLink = state.userRole==='client' ? `<div class="section-pad" style="text-align:center;padding-bottom:0;"><button class="link-btn" onclick="becomeMaster()">Вы мастер? Разместите свой профиль →</button></div>` : '';
+  const placeAdLink = `<div class="section-pad" style="text-align:center;"><button class="link-btn" onclick="openAnnouncementChat()">📣 Разместить объявление →</button></div>`;
 
-  document.getElementById('content').innerHTML = hero + searchBox + popularChips + cityList + manual + becomeMasterLink;
+  document.getElementById('content').innerHTML = bannersHtml + hero + searchBox + popularChips + cityList + manual + becomeMasterLink + placeAdLink;
 }
 function filterCityList(q){
   const query = q.trim().toLowerCase();
@@ -1834,7 +1954,11 @@ async function renderMasterDashboard(m, isDemo){
     <div class="avatar" style="width:44px;height:44px;font-size:20px;border-radius:14px;${avatarStyle(m)}">${avatarInner(m,SPECS[m.specialization])}</div>
     <h1 style="font-size:22px;margin:0;">${escapeHtml(m.name)}</h1>
   </div>`;
-  document.getElementById('content').innerHTML = dashHeader + demoBanner + subInfo + tabs + body;
+  const ownerBannersHtml = isDemo ? '' : renderBannersHtml(await getActiveBanners('masters'));
+  const placeAdLink = isDemo ? '' : `<div class="section-pad" style="padding-top:${ownerBannersHtml?'0':'14px'};padding-bottom:0;text-align:center;">
+    <button class="link-btn" onclick="openAnnouncementChat()">📣 Разместить объявление →</button>
+  </div>`;
+  document.getElementById('content').innerHTML = dashHeader + ownerBannersHtml + placeAdLink + demoBanner + subInfo + tabs + body;
 }
 function setMTab(t){ state.masterTab=t; fillMasterArea(); }
 window.setMTab = setMTab;
@@ -1844,6 +1968,8 @@ function renderMChat(m, isDemo, chat){
   if(isDemo){
     return `<div class="card"><div class="empty" style="padding:20px 0">💬 Чат с владельцем платформы доступен после создания настоящего профиля — в демо-режиме он отключён.</div></div>`;
   }
+  const prefill = state._adPrefill ? 'Здравствуйте! Хочу разместить объявление/баннер в приложении — подскажите, пожалуйста, условия и как это оформить.' : '';
+  state._adPrefill = false;
   const bubbles = (chat && chat.length) ? chat.map(msg=>`
     <div class="chat-msg ${msg.from==='master'?'out':'in'}">
       <div class="chat-bubble">${escapeHtml(msg.text)}</div>
@@ -1854,7 +1980,7 @@ function renderMChat(m, isDemo, chat){
     <div class="chat-wrap" id="chatScroll">${bubbles}</div>
   </div>
   <div class="section-pad" style="display:flex;gap:8px;align-items:flex-end;">
-    <textarea id="chatInput" placeholder="Напишите сообщение владельцу…" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;min-height:44px;max-height:120px;"></textarea>
+    <textarea id="chatInput" placeholder="Напишите сообщение владельцу…" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;min-height:44px;max-height:120px;">${escapeHtml(prefill)}</textarea>
     <button class="btn primary" style="width:auto;padding:0 18px;height:44px;" onclick="sendChatFromMaster()">➤</button>
   </div>
   <div class="pillnote">Сообщение сохранится в приложении и сразу откроет чат с владельцем платформы в Telegram с готовым текстом — нажмите там «отправить», чтобы он получил уведомление мгновенно.</div>`;
@@ -2757,6 +2883,9 @@ async function fillAdmin(){
     if(state.adminScreen==='funnel') return renderAdminFunnel();
     if(state.adminScreen==='auditlog') return renderAdminAuditLog();
     if(state.adminScreen==='admins') return renderAdminAdmins();
+    if(state.adminScreen==='banners') return renderAdminBanners();
+    if(state.adminScreen==='adrequests') return renderAdminAdRequests();
+    if(state.adminScreen==='adrequest' && state.adminAdRequestKey) return renderAdminAdRequestThread(state.adminAdRequestKey);
     if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
     if(state.adminScreen==='chatlist') return renderAdminChatList();
     if(state.adminScreen==='chat' && state.adminChatMasterId) return renderAdminChatThread(state.adminChatMasterId);
@@ -2771,6 +2900,9 @@ async function fillAdmin(){
   if(state.adminScreen==='funnel') return renderAdminFunnel();
   if(state.adminScreen==='auditlog') return renderAdminAuditLog();
   if(state.adminScreen==='admins') return renderAdminAdmins();
+  if(state.adminScreen==='banners') return renderAdminBanners();
+  if(state.adminScreen==='adrequests') return renderAdminAdRequests();
+  if(state.adminScreen==='adrequest' && state.adminAdRequestKey) return renderAdminAdRequestThread(state.adminAdRequestKey);
   if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
   if(state.adminScreen==='chatlist') return renderAdminChatList();
   if(state.adminScreen==='chat' && state.adminChatMasterId) return renderAdminChatThread(state.adminChatMasterId);
@@ -2975,6 +3107,16 @@ async function renderAdminDashboard(){
     <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reviewsShowcase'; fillAdmin();">
       🌟 Витрина отзывов
     </button>
+  </div>
+  <div class="section-pad">
+    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='banners'; fillAdmin();">
+      📣 Баннеры / объявления
+    </button>
+  </div>
+  <div class="section-pad">
+    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='adrequests'; fillAdmin();">
+      🗣️ Заявки на объявления
+    </button>
   </div>` : `<div class="section-pad">
     <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reviewsShowcase'; fillAdmin();">
       🌟 Витрина отзывов для канала
@@ -3163,6 +3305,7 @@ async function renderAdminAuditLog(){
     disable_master:'🚫 Скрыл из каталога', enable_master:'✅ Вернул в каталог',
     set_featured:'⭐ Отметил «Мастер месяца»', unset_featured:'⭐ Убрал «Мастер месяца»',
     add_admin:'👤 Добавил администратора', remove_admin:'👤 Убрал администратора',
+    create_banner:'📣 Опубликовал баннер',
   };
   const rows = log.length ? log.map(e=>`<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -3216,6 +3359,176 @@ async function removeSupportAdmin(id){
   renderAdminAdmins();
 }
 window.removeSupportAdmin = removeSupportAdmin;
+
+/* ============ БАННЕРЫ / ОБЪЯВЛЕНИЯ ============ */
+async function renderAdminBanners(){
+  const banners = (await loadBanners()).slice().sort((a,b)=>b.createdAt-a.createdAt);
+  const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Баннеры / объявления</div></div>`;
+  const intro = `<div class="pillnote" style="margin:0 18px 14px;">Баннер показывается на главном экране клиентов и/или в кабинете мастеров, пока не закрыт крестиком (у каждого человека — своё «закрыто», повторно не всплывёт). Удобно для акций, техработ, анонсов новых функций.</div>`;
+
+  const form = `<div class="card">
+    <div class="field"><label>Текст объявления</label><textarea id="bnText" placeholder="Например: С 1 по 5 августа скидка 20% на первую запись!" style="min-height:60px;"></textarea></div>
+    <div class="row2">
+      <div class="field"><label>Эмодзи</label><input id="bnEmoji" placeholder="📣" maxlength="4" value="📣"></div>
+      <div class="field"><label>Кому показывать</label><select id="bnAudience">
+        <option value="all">Всем</option>
+        <option value="clients">Только клиентам</option>
+        <option value="masters">Только мастерам</option>
+      </select></div>
+    </div>
+    <div class="field"><label>Ссылка «Подробнее» (необязательно)</label><input id="bnLink" placeholder="https://..."></div>
+    <div class="row2">
+      <div class="field"><label>Показывать с (необязательно)</label><input id="bnStart" type="date"></div>
+      <div class="field"><label>Показывать по (необязательно)</label><input id="bnEnd" type="date"></div>
+    </div>
+    <div class="field"><label>Цвет</label><select id="bnStyle">
+      <option value="rose">Розовый (по умолчанию)</option>
+      <option value="gold">Жёлтый (акция/важное)</option>
+      <option value="teal">Зелёный (нейтральная новость)</option>
+    </select></div>
+    <button class="btn primary" onclick="createBanner()">Опубликовать баннер</button>
+  </div>`;
+
+  const list = banners.length ? banners.map(b=>`<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+      <div style="flex:1;">
+        <div style="font-weight:700;font-size:13px;">${escapeHtml(b.emoji||'📣')} ${escapeHtml(b.text)}</div>
+        <div style="font-size:11px;color:var(--ink-soft);margin-top:4px;">
+          ${b.audience==='all'?'Всем':b.audience==='clients'?'Клиентам':'Мастерам'}
+          ${b.startDate?` · с ${fmtDate(b.startDate)}`:''}${b.endDate?` · по ${fmtDate(b.endDate)}`:''}
+          ${b.active===false?' · <span style="color:var(--danger);">выключен</span>':''}
+        </div>
+      </div>
+      <span class="badge ${b.active===false?'cancelled':'active'}">${b.active===false?'Скрыт':'Активен'}</span>
+    </div>
+    <div class="divider"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn ghost small" onclick="toggleBannerActive('${b.id}')">${b.active===false?'Включить':'Выключить'}</button>
+      <button class="btn danger small" onclick="deleteBanner('${b.id}')">Удалить</button>
+    </div>
+  </div>`).join('') : `<div class="empty"><div class="big">📣</div>Пока нет баннеров.</div>`;
+
+  document.getElementById('content').innerHTML = back + intro + form + `<div style="padding:14px 18px 8px;font-weight:700;font-size:13.5px;">Все баннеры</div>` + list;
+}
+window.renderAdminBanners = renderAdminBanners;
+
+async function createBanner(){
+  const text = document.getElementById('bnText').value.trim();
+  if(!text){ showToast('Введите текст объявления'); return; }
+  const banners = await loadBanners();
+  banners.push({
+    id: uid(),
+    text,
+    emoji: document.getElementById('bnEmoji').value.trim() || '📣',
+    audience: document.getElementById('bnAudience').value,
+    link: document.getElementById('bnLink').value.trim() || null,
+    startDate: document.getElementById('bnStart').value || null,
+    endDate: document.getElementById('bnEnd').value || null,
+    style: document.getElementById('bnStyle').value,
+    active: true,
+    createdAt: Date.now()
+  });
+  await saveBanners(banners);
+  showToast('Баннер опубликован');
+  logAdminAction('create_banner', text.slice(0,60));
+  renderAdminBanners();
+}
+window.createBanner = createBanner;
+
+async function toggleBannerActive(id){
+  const banners = await loadBanners();
+  const b = banners.find(x=>x.id===id);
+  if(!b) return;
+  b.active = b.active===false ? true : false;
+  await saveBanners(banners);
+  renderAdminBanners();
+}
+window.toggleBannerActive = toggleBannerActive;
+
+async function deleteBanner(id){
+  const sure = window.confirm('Удалить этот баннер?');
+  if(!sure) return;
+  const banners = (await loadBanners()).filter(b=>b.id!==id);
+  await saveBanners(banners);
+  showToast('Баннер удалён');
+  renderAdminBanners();
+}
+window.deleteBanner = deleteBanner;
+
+/* ============ ЗАЯВКИ НА РАЗМЕЩЕНИЕ ОБЪЯВЛЕНИЙ (от любого посетителя) ============ */
+async function renderAdminAdRequests(){
+  const keys = await sget('visitor-chat-index', true) || [];
+  const rows = [];
+  for(const key of keys){
+    const chat = await loadVisitorChat(key);
+    if(!chat.length) continue;
+    const unread = chat.filter(msg=>msg.from==='visitor' && !msg.readByOwner).length;
+    const last = chat[chat.length-1];
+    const lastVisitorMsg = chat.slice().reverse().find(msg=>msg.from==='visitor');
+    rows.push({ key, unread, last, name: lastVisitorMsg?lastVisitorMsg.visitorName:'Гость', role: lastVisitorMsg?lastVisitorMsg.visitorRole:null });
+  }
+  rows.sort((a,b)=>(b.last?b.last.createdAt:0)-(a.last?a.last.createdAt:0));
+
+  const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Заявки на объявления</div></div>`;
+  const listHtml = rows.length ? rows.map(r=>{
+    const preview = r.last ? escapeHtml(r.last.text.length>70 ? r.last.text.slice(0,70)+'…' : r.last.text) : '';
+    const fromLabel = r.last && r.last.from==='owner' ? 'Вы: ' : '';
+    return `<div class="card" style="cursor:pointer;" onclick="state.adminScreen='adrequest'; state.adminAdRequestKey='${r.key}'; fillAdmin();">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div class="mcard-name" style="font-size:14px;">${escapeHtml(r.name)} ${r.role?`<span class="badge demo" style="margin-left:4px;">${r.role==='master'?'мастер':'клиент'}</span>`:''}</div>
+        ${r.unread?`<span class="badge cancelled">${r.unread}</span>`:''}
+      </div>
+      <div style="font-size:12.5px;color:var(--ink-soft);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fromLabel}${preview}</div>
+    </div>`;
+  }).join('') : `<div class="empty"><div class="big">🗣️</div>Пока никто не обращался по поводу объявлений.</div>`;
+
+  document.getElementById('content').innerHTML = back + listHtml;
+}
+window.renderAdminAdRequests = renderAdminAdRequests;
+
+async function renderAdminAdRequestThread(key){
+  const chat = await loadVisitorChat(key);
+  let changed = false;
+  chat.forEach(msg=>{ if(msg.from==='visitor' && !msg.readByOwner){ msg.readByOwner = true; changed = true; } });
+  if(changed) await saveVisitorChat(key, chat);
+
+  const lastVisitorMsg = chat.slice().reverse().find(msg=>msg.from==='visitor');
+  const name = lastVisitorMsg ? lastVisitorMsg.visitorName : 'Гость';
+
+  const bubbles = chat.length ? chat.map(msg=>`
+    <div class="chat-msg ${msg.from==='owner'?'out':'in'}">
+      <div class="chat-bubble">${escapeHtml(msg.text)}</div>
+      <div class="chat-time">${new Date(msg.createdAt).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+    </div>`).join('') : `<div class="empty" style="padding:30px 10px;">Переписки пока нет.</div>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="state.adminScreen='adrequests'; fillAdmin();">←</button><div style="font-weight:700">${escapeHtml(name)}</div></div>
+  <div class="card" style="padding:12px;">
+    <div class="chat-wrap">${bubbles}</div>
+  </div>
+  <div class="section-pad" style="display:flex;gap:8px;align-items:flex-end;">
+    <textarea id="adReqInput" placeholder="Ответить…" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;min-height:44px;max-height:120px;"></textarea>
+    <button class="btn primary" style="width:auto;padding:0 18px;height:44px;" onclick="sendAdRequestReply('${key}')">➤</button>
+  </div>`;
+}
+window.renderAdminAdRequestThread = renderAdminAdRequestThread;
+
+async function sendAdRequestReply(key){
+  const input = document.getElementById('adReqInput');
+  const text = (input && input.value || '').trim();
+  if(!text){ showToast('Введите текст ответа'); return; }
+  const chat = await loadVisitorChat(key);
+  chat.push({ id:uid(), from:'owner', text, createdAt:Date.now(), readByOwner:true, readByVisitor:false });
+  await saveVisitorChat(key, chat);
+
+  const lastVisitorMsg = chat.slice().reverse().find(msg=>msg.from==='visitor');
+  if(lastVisitorMsg && lastVisitorMsg.visitorTelegramId){
+    notifyTelegram(lastVisitorMsg.visitorTelegramId, `💬 Ответ от владельца платформы BeautyHub:\n${text}`);
+  }
+  showToast('Ответ отправлен');
+  renderAdminAdRequestThread(key);
+}
+window.sendAdRequestReply = sendAdRequestReply;
 
 async function sendOwnerBroadcast(){
   const el = document.getElementById('ownerBroadcastText');
