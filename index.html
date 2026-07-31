@@ -59,7 +59,7 @@ input,select,textarea{font-family:inherit;}
   background:linear-gradient(135deg,var(--rose),var(--rose-deep));
   display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;
 }
-.brand .word{font-family:'Inter',sans-serif;font-weight:800;font-size:19px;letter-spacing:-0.3px;}
+.brand .word{font-family:'Inter',sans-serif;font-size:19px;letter-spacing:-0.3px;}
 .brand .word em{font-style:italic;color:var(--rose);}
 .hdr-icon{width:36px;height:36px;border-radius:50%;background:var(--surface);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;font-size:15px;}
 
@@ -92,7 +92,7 @@ input,select,textarea{font-family:inherit;}
 }
 .mcard-body{flex:1;min-width:0;}
 .mcard-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;}
-.mcard-name{font-family:'Inter',sans-serif;font-weight:800;font-size:16.5px;line-height:1.2;letter-spacing:-.2px;}
+.mcard-name{font-family:'Inter',sans-serif;font-size:16.5px;line-height:1.2;letter-spacing:-.2px;}
 .mcard-city{color:var(--ink-soft);font-size:12.5px;margin-top:2px;}
 .tag{
   display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;
@@ -124,9 +124,10 @@ input,select,textarea{font-family:inherit;}
 .navbtn.active{color:var(--rose);}
 .navbtn.active::before{
   content:'';position:absolute;top:2px;left:10%;right:10%;bottom:2px;
-  background:var(--pink-tint);border-radius:14px;
+  background:var(--pink-tint);border-radius:14px;z-index:-1;
 }
-.navbtn .ic{font-size:19px;}
+.navbtn .ic{font-size:19px;position:relative;z-index:1;}
+.navbtn > *{position:relative;z-index:1;}
 .navdot{
   position:absolute;top:6px;right:28%;width:8px;height:8px;border-radius:50%;background:var(--danger);
   border:2px solid var(--surface);
@@ -179,6 +180,7 @@ input,select,textarea{font-family:inherit;}
 .badge.active{background:#DDEDE6;color:#2E6B52;}
 .badge.inactive{background:#F3D8DE;color:#8C3B52;}
 .badge.demo{background:#E4DCF3;color:#4B3B7A;}
+.badge.completed{background:#E7E2DC;color:#6B5C52;}
 
 .gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;}
 .gallery img{width:100%;height:78px;object-fit:cover;border-radius:10px;background:var(--line);}
@@ -188,6 +190,37 @@ input,select,textarea{font-family:inherit;}
 .svc-name{font-weight:600;font-size:14px;}
 .svc-meta{color:var(--ink-soft);font-size:12px;margin-top:2px;}
 .svc-price{font-weight:700;color:var(--rose-deep);}
+
+/* city picker (главный экран выбора города) */
+.city-hero-badge{
+  width:44px;height:44px;border-radius:14px;
+  background:linear-gradient(135deg,var(--rose),var(--rose-deep));
+  display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;
+  margin-bottom:12px;box-shadow:var(--shadow);
+}
+.search-input{
+  display:flex;align-items:center;gap:9px;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  padding:12px 14px;box-shadow:var(--shadow);
+}
+.search-input .search-ic{font-size:15px;opacity:.55;flex:0 0 auto;}
+.search-input input{border:none;background:none;flex:1;font-size:14.5px;color:var(--ink);outline:none;padding:0;min-width:0;}
+.search-input input::placeholder{color:var(--ink-soft);}
+.city-list-card{padding:6px;max-height:50vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.city-row{
+  display:flex;align-items:center;gap:12px;padding:11px 10px;border-radius:14px;
+  cursor:pointer;transition:background .15s;border-bottom:1px solid var(--line);
+}
+.city-row:last-child{border-bottom:none;}
+.city-row:active{background:var(--bg);}
+.city-row-pin{
+  width:38px;height:38px;border-radius:11px;flex:0 0 38px;
+  background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:16px;
+}
+.city-row-body{flex:1;min-width:0;}
+.city-row-name{font-weight:600;font-size:14.5px;}
+.city-row-count{color:var(--ink-soft);font-size:12px;margin-top:1px;}
+.city-row-arrow{color:var(--ink-soft);font-size:15px;flex:0 0 auto;}
 
 .slot{
   padding:8px 4px;border-radius:10px;background:var(--bg);border:1px solid var(--line);
@@ -231,7 +264,17 @@ input,select,textarea{font-family:inherit;}
 .starpick span.on{color:var(--gold);}
 .link-btn{color:var(--rose-deep);font-weight:700;font-size:13px;}
 
-/* master hub screen */
+/* chat */
+.chat-wrap{display:flex;flex-direction:column;gap:10px;max-height:52vh;overflow-y:auto;padding:2px;}
+.chat-msg{display:flex;flex-direction:column;max-width:78%;}
+.chat-msg.in{align-items:flex-start;align-self:flex-start;}
+.chat-msg.out{align-items:flex-end;align-self:flex-end;}
+.chat-bubble{padding:10px 13px;border-radius:14px;font-size:13.5px;line-height:1.45;white-space:pre-wrap;word-break:break-word;}
+.chat-msg.in .chat-bubble{background:var(--bg);color:var(--ink);border-bottom-left-radius:4px;}
+.chat-msg.out .chat-bubble{background:linear-gradient(135deg,var(--rose),var(--rose-deep));color:#fff;border-bottom-right-radius:4px;}
+.chat-time{font-size:10.5px;color:var(--ink-soft);margin-top:3px;padding:0 2px;}
+
+/* master hub screen (из референса дизайна — доступно для переиспользования) */
 .statgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 18px 4px;}
 .statcard{background:var(--surface);border-radius:16px;padding:14px;text-align:center;box-shadow:var(--shadow);}
 .statcard .n{font-size:20px;font-weight:800;}
@@ -256,11 +299,15 @@ input,select,textarea{font-family:inherit;}
 /* ============ CONFIG ============ */
 const OWNER_TELEGRAM_IDS = ['8078091086']; // владелец платформы — доступ к кабинету только с этого Telegram-аккаунта
 const OWNER_TELEGRAM_USERNAME = 'whitespirited'; // ваш @username в Telegram (без @) — сюда попадут мастера с кнопки «Отправить квитанцию»
-
+const BOT_USERNAME = 'YOUR_BOT_USERNAME'; // ⚠️ ЗАПОЛНИТЕ: username вашего Telegram-бота (без @), через который открывается это приложение.
+                                            // Нужен, чтобы генерировать персональные ссылки-приглашения мастеров для клиентов.
 // ============================================================
 // ВРЕМЕННО ОТКЛЮЧЕНО: платная подписка мастеров.
 // Пока флаг false — все одобренные модератором мастера сразу видны в каталоге
-// БЕСПЛАТНО, без экрана оплаты. Чтобы снова включить подписку — поставьте true.
+// БЕСПЛАТНО, без экрана оплаты (в т.ч. без кнопки онлайн-оплаты через ЮKassa
+// и без ручного перевода/квитанций). Вся инфраструктура оплаты (ЮKassa,
+// ручной перевод, история платежей) остаётся в коде нетронутой — чтобы снова
+// включить подписку, поставьте true, и всё заработает как раньше.
 // ============================================================
 const SUBSCRIPTION_ENABLED = false;
 
@@ -339,6 +386,22 @@ function fmtDate(iso){
   return d.toLocaleDateString('ru-RU',{day:'numeric',month:'short',weekday:'short'});
 }
 function ratingOf(m){ return m.ratingCount ? (m.ratingSum/m.ratingCount) : 0; }
+/* Сколько последовательных часовых ячеек сетки (TIMES) занимает запись, исходя из длительности
+   услуги — грубое, но полезное приближение поверх фиксированной часовой сетки времени. */
+function occupiedTimesForBooking(bk){
+  const need = Math.max(1, Math.ceil((bk.duration||60)/60));
+  const idx = TIMES.indexOf(bk.time);
+  if(idx===-1) return [bk.time];
+  return TIMES.slice(idx, idx+need);
+}
+/* Прошло ли время записи. Используется, чтобы прятать кнопки «Отменить» у записей,
+   которые уже состоялись (или на которые клиент просто не пришёл) — отменять уже нечего. */
+function isBookingPast(b){
+  if(!b || !b.date || !b.time) return false;
+  const dt = new Date(`${b.date}T${b.time}`);
+  if(isNaN(dt.getTime())) return false;
+  return dt.getTime() < Date.now();
+}
 function starsStr(avg){
   const r = Math.round(avg);
   return '★'.repeat(r) + '☆'.repeat(5-r);
@@ -349,6 +412,18 @@ function priceFrom(m){
 }
 function escapeHtml(s){
   return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* Если у мастера есть аватарка (обычно подтянутая из Telegram-профиля при регистрации),
+   показываем её как фоновую картинку; иначе — иконку специализации, как раньше. */
+function avatarStyle(m){
+  if(m && m.avatarUrl){
+    return `background-image:url('${String(m.avatarUrl).replace(/'/g,'%27')}');background-size:cover;background-position:center;`;
+  }
+  return '';
+}
+function avatarInner(m, spec){
+  return (m && m.avatarUrl) ? '' : (spec ? spec.icon : '');
 }
 
 /* ============ SEED DEMO DATA (first run only, shared) ============ */
@@ -391,7 +466,8 @@ async function seedIfEmpty(){
       id, specialization:sm.spec, name:sm.name, city:sm.city, address:sm.address, bio:sm.bio,
       services, portfolio, slots, subscriptionActive:true, subscriptionUntil: todayISO(30),
       ratingSum, ratingCount:reviews.length, createdAt:Date.now(), isDemo:false, disabledByAdmin:false, telegramId:null,
-      moderationStatus:'approved', moderationReason:null, paymentHistory:[], isTrial:false, trialEndsAt:null
+      moderationStatus:'approved', moderationReason:null, paymentHistory:[], isTrial:false, trialEndsAt:null,
+      avatarUrl:null
     };
     await sset('master:'+id, master, true);
     await sset('reviews:'+id, reviews, true);
@@ -407,13 +483,13 @@ const ADMIN_PASSWORD = 'admin2026';
 const state = {
   view:'catalog', // catalog | mybookings | master | admin
   catalogStep:'city', // city | specs | list
-  filters:{spec:'all', city:null, sort:'rating'},
+  filters:{spec:'all', city:null, sort:'rating', minRating:0, maxPrice:null, availableSoon:false},
   selectedMasterId:null,
   adminAuthed:false,
   adminEditingId:null,
   masterDetailTab:'about',
   booking:null, // {serviceId, date, time}
-  masterTab:'hub',
+  masterTab:'profile',
   paywallMethod:null,
   forcePaywall:false,
   masterScheduleDate: todayISO(0),
@@ -426,11 +502,13 @@ const state = {
   loading:true,
   isTelegramContext:false, // true when actually opened inside Telegram
   tgUser:null,
-  tgStartParam:null,
   isOwner:false,
   adminSection:'pending', // pending | active | all — вкладки в кабинете владельца
   favorites:[], // избранные мастера клиента (masterId[])
   showFavoritesOnly:false,
+  userRole:null, // 'client' | 'master' — выбирается при первом запуске, скрывает вкладку «Мастеру» для клиентов
+  adminScreen:'dashboard', // dashboard | chatlist | chat — экраны внутри кабинета владельца
+  adminChatMasterId:null, // id мастера, чат с которым сейчас открыт у владельца
 };
 
 function showToast(msg){
@@ -445,14 +523,265 @@ async function loadAllMasters(){
   const list = [];
   for(const id of ids){
     const m = await sget('master:'+id, true);
-    if(m) list.push(m);
+    if(m){ await checkTrialExpiry(m); list.push(m); }
   }
   return list;
 }
-async function loadMaster(id){ return await sget('master:'+id, true); }
+async function loadMaster(id){
+  const m = await sget('master:'+id, true);
+  return await checkTrialExpiry(m);
+}
 async function saveMaster(m){ await sset('master:'+m.id, m, true); }
+
+/* Проверяет, не истёк ли пробный период мастера. Если да — один раз деактивирует профиль
+   (он пропадает из каталога, как при обычной неоплаченной подписке) и отправляет мастеру
+   уведомление с просьбой оплатить подписку: сообщением в чат приложения и — если настроена
+   Edge Function notify-telegram — сообщением от бота в Telegram.
+   Вызывается автоматически из loadMaster/loadAllMasters, поэтому отдельно её дёргать не нужно. */
+async function checkTrialExpiry(m){
+  if(!SUBSCRIPTION_ENABLED) return m; // подписка временно отключена — никого не деактивируем по истечении триала
+  if(!m || !m.isTrial || !m.trialEndsAt) return m;
+  if(Date.now() < m.trialEndsAt) return m;
+
+  const alreadyHandled = !!m.trialExpiredNotifiedAt;
+  m.subscriptionActive = false;
+  m.isTrial = false;
+  m.trialEndsAt = null;
+  m.trialExpiredNotifiedAt = m.trialExpiredNotifiedAt || Date.now();
+  await saveMaster(m);
+
+  if(!alreadyHandled){
+    try{
+      const chat = await loadChat(m.id);
+      chat.push({
+        id: uid(), from:'owner',
+        text: '⏳ Пробный период закончился, профиль временно скрыт из каталога. Оплатите подписку во вкладке «Мастеру → Профиль» — как только оплата подтвердится, клиенты снова смогут вас найти.',
+        createdAt: Date.now(), readByOwner:true, readByMaster:false
+      });
+      await saveChat(m.id, chat);
+      await addChatToIndex(m.id);
+      if(m.telegramId){
+        await notifyTelegram(m.telegramId,
+          `⏳ Пробный период BeautyHub закончился.\nВаш профиль «${m.name}» временно скрыт из каталога.\nОплатите подписку в приложении (вкладка «Мастеру»), чтобы клиенты снова могли вас найти и записаться.`);
+      }
+    }catch(e){
+      console.warn('checkTrialExpiry notify failed:', e);
+    }
+  }
+  return m;
+}
 async function loadBookings(masterId){ return await sget('bookings:'+masterId, true) || []; }
 async function saveBookings(masterId, arr){ await sset('bookings:'+masterId, arr, true); }
+/* Чат «мастер ↔ владелец платформы». Хранится общим ключом на пару, шаблон сообщения:
+   { id, from:'master'|'owner', text, createdAt, readByMaster, readByOwner } */
+async function loadChat(masterId){ return await sget('chat:'+masterId, true) || []; }
+async function saveChat(masterId, arr){ await sset('chat:'+masterId, arr, true); }
+async function addChatToIndex(masterId){
+  const ids = await sget('chat-index', true) || [];
+  if(!ids.includes(masterId)){ ids.push(masterId); await sset('chat-index', ids, true); }
+}
+
+/* Лист ожидания «нет свободного времени у мастера». Хранится общим ключом на мастера:
+   [{ id, clientKey, clientName, clientContact, clientTelegramId, createdAt }]
+   clientKey — тот же идентификатор, что используется для личных данных клиента (ownerId()),
+   так что «я в списке или нет» всегда проверяется по актуальным данным, без рассинхронизации. */
+async function loadWaitlist(masterId){ return await sget('waitlist:'+masterId, true) || []; }
+
+/* ============ ЧАТ «РАЗМЕСТИТЬ ОБЪЯВЛЕНИЕ» — доступен любому посетителю ============
+   В отличие от чата мастера с владельцем (привязан к профилю мастера), этот чат
+   доступен и клиентам, и мастерам, и вообще любому, кто открыл приложение — привязка
+   идёт к ownerId() (тот же идентификатор, что используется для личных данных клиента),
+   а не к masterId. */
+async function loadVisitorChat(key){ return await sget('visitor-chat:'+key, true) || []; }
+async function saveVisitorChat(key, arr){ await sset('visitor-chat:'+key, arr, true); }
+async function addVisitorChatToIndex(key){
+  const ids = await sget('visitor-chat-index', true) || [];
+  if(!ids.includes(key)){ ids.push(key); await sset('visitor-chat-index', ids, true); }
+}
+
+function openAnnouncementChat(){
+  state._returnViewBeforeChat = state.view;
+  state.view = 'visitorChat';
+  render();
+}
+window.openAnnouncementChat = openAnnouncementChat;
+
+function closeAnnouncementChat(){
+  state.view = state._returnViewBeforeChat || 'catalog';
+  render();
+}
+window.closeAnnouncementChat = closeAnnouncementChat;
+
+async function fillVisitorChat(){
+  const key = ownerId();
+  const chat = await loadVisitorChat(key);
+  let changed = false;
+  chat.forEach(msg=>{ if(msg.from==='owner' && !msg.readByVisitor){ msg.readByVisitor = true; changed = true; } });
+  if(changed) await saveVisitorChat(key, chat);
+
+  const bubbles = chat.length ? chat.map(msg=>`
+    <div class="chat-msg ${msg.from==='visitor'?'out':'in'}">
+      <div class="chat-bubble">${escapeHtml(msg.text)}</div>
+      <div class="chat-time">${new Date(msg.createdAt).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+    </div>`).join('') : `<div class="empty" style="padding:30px 10px;">📣 Напишите владельцу платформы, если хотите разместить объявление или баннер в приложении — например, расскажите об акции или новости, которую хотите показать клиентам или мастерам.</div>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="closeAnnouncementChat()">←</button><div style="font-weight:700">Разместить объявление</div></div>
+  <div class="card" style="padding:12px;">
+    <div class="chat-wrap">${bubbles}</div>
+  </div>
+  <div class="section-pad" style="display:flex;gap:8px;align-items:flex-end;">
+    <textarea id="visitorChatInput" placeholder="Например: хочу разместить объявление о скидке для клиентов…" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;min-height:44px;max-height:120px;"></textarea>
+    <button class="btn primary" style="width:auto;padding:0 18px;height:44px;" onclick="sendVisitorChat()">➤</button>
+  </div>
+  <div class="pillnote">Сообщение сразу придёт владельцу платформы — он свяжется с вами, чтобы обсудить размещение.</div>`;
+}
+
+async function sendVisitorChat(){
+  const input = document.getElementById('visitorChatInput');
+  const text = (input && input.value || '').trim();
+  if(!text){ showToast('Введите текст сообщения'); return; }
+  const key = ownerId();
+  const chat = await loadVisitorChat(key);
+  chat.push({
+    id: uid(), from:'visitor', text, createdAt:Date.now(),
+    readByVisitor:true, readByOwner:false,
+    visitorName: state.tgUser ? [state.tgUser.first_name,state.tgUser.last_name].filter(Boolean).join(' ') : (state.clientName||'Гость'),
+    visitorTelegramId: state.tgUser ? String(state.tgUser.id) : null,
+    visitorRole: state.userRole || null
+  });
+  await saveVisitorChat(key, chat);
+  await addVisitorChatToIndex(key);
+
+  const who = state.tgUser ? [state.tgUser.first_name,state.tgUser.last_name].filter(Boolean).join(' ') : (state.clientName||'Гость');
+  for(const ownerTgId of OWNER_TELEGRAM_IDS){
+    notifyTelegram(ownerTgId, `📣 Заявка на размещение объявления\n\nОт: ${who} (${state.userRole==='master'?'мастер':'клиент'})\n\n${text}`);
+  }
+  showToast('Сообщение отправлено владельцу');
+  fillVisitorChat();
+}
+window.sendVisitorChat = sendVisitorChat;
+
+/* ============ БАННЕРЫ / ОБЪЯВЛЕНИЯ ВЛАДЕЛЬЦА ============ */
+async function loadBanners(){ return await sget('banners', true) || []; }
+async function saveBanners(arr){ await sset('banners', arr, true); }
+
+/* Возвращает актуальные баннеры для аудитории ('clients' | 'masters'), с учётом дат
+   действия и того, что человек уже закрыл этот баннер у себя (не показываем повторно). */
+async function getActiveBanners(audience){
+  const all = await loadBanners();
+  const today = todayISO(0);
+  const dismissed = await sget('dismissed-banners', false) || [];
+  return all.filter(b=>
+    b.active !== false &&
+    (b.audience==='all' || b.audience===audience) &&
+    (!b.startDate || b.startDate<=today) &&
+    (!b.endDate || b.endDate>=today) &&
+    !dismissed.includes(b.id)
+  );
+}
+
+function renderBannersHtml(banners){
+  if(!banners.length) return '';
+  return banners.map(b=>`<div class="section-pad" style="padding-bottom:0;" data-banner-id="${b.id}">
+    <div class="card" style="display:flex;gap:10px;align-items:flex-start;background:${b.style==='gold'?'#FBEFD6':b.style==='teal'?'#DDEDE6':'#F3E3EE'};border:1px solid ${b.style==='gold'?'#F3DFA8':b.style==='teal'?'#BFE0D4':'#E6C7DD'};">
+      <div style="font-size:20px;line-height:1;">${escapeHtml(b.emoji||'📣')}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:13px;color:var(--ink);">${escapeHtml(b.text)}</div>
+        ${b.link?`<a href="${escapeHtml(b.link)}" target="_blank" style="font-size:12px;font-weight:700;color:var(--rose-deep);display:inline-block;margin-top:4px;">Подробнее →</a>`:''}
+      </div>
+      <button onclick="dismissBanner('${b.id}')" style="background:none;border:none;font-size:15px;color:var(--ink-soft);cursor:pointer;line-height:1;padding:2px;">✕</button>
+    </div>
+  </div>`).join('');
+}
+
+async function dismissBanner(id){
+  const dismissed = await sget('dismissed-banners', false) || [];
+  if(!dismissed.includes(id)){ dismissed.push(id); await sset('dismissed-banners', dismissed, false); }
+  const el = document.querySelector(`[data-banner-id="${id}"]`);
+  if(el) el.remove();
+}
+window.dismissBanner = dismissBanner;
+
+/* Счётчик просмотров профиля для мини-аналитики мастера. Не считаем собственные заходы мастера
+   на свою страницу и заходы владельца в режиме «просмотр как клиент» — иначе цифры будут врать. */
+async function trackProfileView(m){
+  try{
+    if(!m || m.isDemo) return;
+    if(state.myMasterId === m.id) return;
+    if(state._adminPreviewReturn) return;
+    const key = 'profile-views:'+m.id;
+    const cur = await sget(key, true) || 0;
+    await sset(key, cur+1, true);
+  }catch(e){ /* тихо игнорируем — счётчик не критичен для работы приложения */ }
+}
+async function saveWaitlist(masterId, arr){ await sset('waitlist:'+masterId, arr, true); }
+
+async function joinWaitlist(masterId){
+  const nameEl = document.getElementById('bkName');
+  const contactEl = document.getElementById('bkContact');
+  const name = (nameEl && nameEl.value || state.clientName || '').trim();
+  const contact = (contactEl && contactEl.value || state.clientContact || '').trim();
+  if(!name || !contact){ showToast('Укажите имя и контакт для связи, чтобы встать в лист ожидания'); return; }
+  await sset('my-client-name', name, false);
+  await sset('my-client-contact', contact, false);
+  state.clientName = name; state.clientContact = contact;
+
+  const list = await loadWaitlist(masterId);
+  const key = ownerId();
+  if(!list.some(w=>w.clientKey===key)){
+    list.push({
+      id: uid(), clientKey:key, clientName:name, clientContact:contact,
+      clientTelegramId: (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : null,
+      createdAt: Date.now()
+    });
+    await saveWaitlist(masterId, list);
+  }
+  showToast('Вы в листе ожидания! Сообщим, как только появится время.');
+  fillMasterDetail();
+}
+window.joinWaitlist = joinWaitlist;
+
+async function leaveWaitlist(masterId){
+  const list = await loadWaitlist(masterId);
+  await saveWaitlist(masterId, list.filter(w=>w.clientKey!==ownerId()));
+  showToast('Вы вышли из листа ожидания');
+  fillMasterDetail();
+}
+window.leaveWaitlist = leaveWaitlist;
+
+/* Уведомляет всех, кто стоит в листе ожидания мастера, что появилось новое свободное время
+   (мастер открыл слоты или у кого-то отменилась запись), и очищает список — кто не успеет
+   записаться, всегда может встать в лист ожидания заново. */
+async function notifyWaitlist(masterId){
+  try{
+    const list = await loadWaitlist(masterId);
+    if(!list.length) return;
+    const m = await loadMaster(masterId);
+    const text = `🔔 У мастера «${m?m.name:''}» появилось новое свободное время!\nОткройте приложение и запишитесь — обычно разбирают быстро.`;
+    for(const w of list){
+      if(w.clientTelegramId) await notifyTelegram(w.clientTelegramId, text);
+    }
+    await saveWaitlist(masterId, []);
+  }catch(e){ console.warn('notifyWaitlist failed:', e); }
+}
+
+/* Автоматическая отправка уведомления через Telegram-бота.
+   Вызывает Supabase Edge Function 'notify-telegram', которая на сервере
+   (там, где безопасно хранить секретный токен бота) шлёт сообщение через Bot API.
+   Если функция ещё не задеплоена — просто возвращает false, вызывающий код
+   сам решает, что делать дальше (например, показать резервный способ отправки). */
+async function notifyTelegram(chatId, text){
+  if(!sb || !chatId) return false;
+  try{
+    const { data, error } = await sb.functions.invoke('notify-telegram', { body: { chatId: String(chatId), text } });
+    if(error){ console.warn('notifyTelegram: функция недоступна или вернула ошибку —', error.message||error); return false; }
+    return !!(data && data.ok);
+  }catch(e){
+    console.warn('notifyTelegram threw:', e && e.message ? e.message : e);
+    return false;
+  }
+}
 async function loadReviews(masterId){ return await sget('reviews:'+masterId, true) || []; }
 async function saveReviews(masterId, arr){ await sset('reviews:'+masterId, arr, true); }
 async function addMasterToIndex(id){
@@ -471,27 +800,50 @@ async function sdelete(key, shared=false){
 }
 
 /* ============ INIT ============ */
-function detectTelegramIdentity(){
+/* Резервный способ достать start_param: некоторые версии Telegram (особенно Desktop/Web)
+   в момент самого первого рендера ещё не успевают заполнить initDataUnsafe.start_param,
+   зато параметр уже есть в адресной строке как #tgWebAppStartParam=... или ?startapp=... —
+   на всякий случай проверяем оба места. */
+function readStartParamFromLocation(){
+  try{
+    const hash = (window.location.hash || '').replace(/^#/, '');
+    const search = (window.location.search || '').replace(/^\?/, '');
+    const params = new URLSearchParams(hash + '&' + search);
+    return params.get('tgWebAppStartParam') || params.get('startapp') || null;
+  }catch(e){ return null; }
+}
+
+async function detectTelegramIdentity(){
   try{
     const tg = window.Telegram && window.Telegram.WebApp;
     if(tg && tg.initData && tg.initData.length > 0){
       tg.ready(); tg.expand();
-      try{
-        tg.setHeaderColor && tg.setHeaderColor('#1B0E1F');
-        tg.setBackgroundColor && tg.setBackgroundColor('#FCDCED');
-      }catch(e){}
       state.isTelegramContext = true;
       state.tgUser = (tg.initDataUnsafe && tg.initDataUnsafe.user) || null;
-      state.tgStartParam = (tg.initDataUnsafe && tg.initDataUnsafe.start_param) || null;
       const idStr = state.tgUser ? String(state.tgUser.id) : null;
-      state.isOwner = !!idStr && OWNER_TELEGRAM_IDS.includes(idStr);
+      const isMainOwner = !!idStr && OWNER_TELEGRAM_IDS.includes(idStr);
+      let supportRole = null;
+      if(!isMainOwner && idStr){
+        const adminRoles = await sget('admin-roles', true) || {};
+        supportRole = adminRoles[idStr] || null;
+      }
+      state.isOwner = isMainOwner || !!supportRole;
+      state.adminRole = isMainOwner ? 'owner' : supportRole; // 'owner' | 'support' | null
+      // Ссылка-приглашение мастера: t.me/<bot>?startapp=book_<masterId> -> Telegram кладёт это в start_param.
+      state._startParam = (tg.initDataUnsafe && tg.initDataUnsafe.start_param) || readStartParamFromLocation() || null;
     } else {
       state.isTelegramContext = false;
       state.isOwner = false;
+      state.adminRole = null;
+      // Для тестирования в обычном браузере: ?startapp=book_<id> в адресной строке
+      const urlParam = new URLSearchParams(window.location.search).get('startapp');
+      state._startParam = urlParam || readStartParamFromLocation() || null;
     }
   }catch(e){
     state.isTelegramContext = false;
     state.isOwner = false;
+    state.adminRole = null;
+    state._startParam = null;
   }
 }
 
@@ -500,10 +852,16 @@ async function init(){
     renderSetupError(SUPABASE_INIT_ERROR);
     return;
   }
-  detectTelegramIdentity();
+  await detectTelegramIdentity();
   await seedIfEmpty();
   state.myMasterId = await sget('my-master-id', false);
   if(state.myMasterId){ state.myMaster = await loadMaster(state.myMasterId); }
+  state.userRole = await sget('my-role', false) || null;
+  if(state.myMasterId && state.userRole !== 'master'){
+    // Если у устройства уже есть профиль мастера, роль всегда «мастер», даже если раньше выбрали иначе.
+    state.userRole = 'master';
+    await sset('my-role', 'master', false);
+  }
   state.clientName = await sget('my-client-name', false) || '';
   state.clientContact = await sget('my-client-contact', false) || '';
   state.favorites = await sget('my-favorites', false) || [];
@@ -512,19 +870,61 @@ async function init(){
     const full = [state.tgUser.first_name, state.tgUser.last_name].filter(Boolean).join(' ');
     if(full) state.clientName = full;
   }
-  state.loading = false;
-
-  // Если приложение открыто по личной ссылке мастера (start=master_<id>) — сразу открываем его профиль
-  if(state.tgStartParam && state.tgStartParam.startsWith('master_')){
-    const sharedMasterId = state.tgStartParam.slice('master_'.length);
-    const sharedMaster = await loadMaster(sharedMasterId);
-    if(sharedMaster){
+  // Пришли по персональной ссылке мастера (t.me/бот?startapp=book_<id>) — сразу открываем его страницу записи.
+  if(state._startParam && state._startParam.startsWith('book_')){
+    const linkedMasterId = state._startParam.slice('book_'.length);
+    const linkedMaster = await loadMaster(linkedMasterId);
+    if(linkedMaster){
+      if(!state.userRole){ state.userRole = 'client'; await sset('my-role', 'client', false); }
       state.view = 'catalog';
-      state.selectedMasterId = sharedMasterId;
-      state.masterDetailTab = 'about';
+      state.selectedMasterId = linkedMasterId;
+      state.masterDetailTab = 'book';
+    } else {
+      setTimeout(()=>showToast('Не удалось найти мастера по ссылке — возможно, профиль удалён'), 300);
     }
   }
-
+  // Пришли по реферальной ссылке клиента (t.me/бот?startapp=ref_<clientKey>) — засчитываем приглашение.
+  if(state._startParam && state._startParam.startsWith('ref_')){
+    try{
+      const refKey = state._startParam.slice('ref_'.length);
+      const myKey = ownerId();
+      if(refKey && refKey !== myKey){
+        const alreadyReferred = await sget('my-referred-by', false);
+        if(!alreadyReferred){
+          await sset('my-referred-by', refKey, false);
+          const refs = await sget('referrals:'+refKey, true) || [];
+          if(!refs.includes(myKey)){ refs.push(myKey); await sset('referrals:'+refKey, refs, true); }
+          const priority = await sget('priority-clients', true) || [];
+          let changed = false;
+          if(!priority.includes(myKey)){ priority.push(myKey); changed = true; }
+          if(!priority.includes(refKey)){ priority.push(refKey); changed = true; }
+          if(changed) await sset('priority-clients', priority, true);
+          if(!state.userRole){ state.userRole = 'client'; await sset('my-role', 'client', false); }
+          setTimeout(()=>showToast('Вы пришли по приглашению — вы и ваша подруга теперь приоритетные клиенты ⭐'), 300);
+        }
+      }
+    }catch(e){ console.warn('referral handling failed:', e); }
+  }
+  // Пришли по реферальной ссылке мастера (t.me/бот?startapp=mref_<masterId>) — запоминаем,
+  // кто пригласил, чтобы начислить бонус обоим при одобрении новой анкеты модератором.
+  if(state._startParam && state._startParam.startsWith('mref_')){
+    try{
+      const refMasterId = state._startParam.slice('mref_'.length);
+      if(refMasterId && refMasterId !== state.myMasterId){
+        const already = await sget('my-referred-by-master', false);
+        if(!already){
+          await sset('my-referred-by-master', refMasterId, false);
+          setTimeout(()=>showToast('Вы пришли по приглашению коллеги — разместите профиль и оба получите бонусные дни доступа 🎁'), 300);
+        }
+      }
+    }catch(e){ console.warn('master referral handling failed:', e); }
+  }
+  // Вернулись после оплаты подписки через ЮKassa (t.me/бот?startapp=paid_<masterId>) — вебхук
+  // обычно успевает активировать подписку за секунды, но на всякий случай подсказываем обновить.
+  if(state._startParam && state._startParam.startsWith('paid_')){
+    setTimeout(()=>showToast('Проверяем статус оплаты… Если подписка не появилась сразу — подождите немного и нажмите «Обновить статус оплаты»'), 300);
+  }
+  state.loading = false;
   render();
 }
 
@@ -539,16 +939,47 @@ function renderSetupError(message){
     </div>`;
 }
 
+/* ============ ROLE ONBOARDING ============ */
+function renderRolePicker(){
+  return `
+  <div style="padding:64px 22px 24px;text-align:center;">
+    <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--rose),var(--rose-deep));display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;margin:0 auto 16px;">💄</div>
+    <div style="font-family:'Inter',sans-serif;font-weight:600;font-size:22px;margin-bottom:8px;">Добро пожаловать в Beauty<em style="color:var(--rose);font-style:italic;">Hub</em></div>
+    <div style="color:var(--ink-soft);font-size:14px;line-height:1.5;">Расскажите, зачем вы здесь — так мы покажем только нужные вам разделы.</div>
+  </div>
+  <div class="section-pad">
+    <button class="btn primary" onclick="chooseRole('client')" style="margin-bottom:12px;">🔎 Я ищу мастера</button>
+    <button class="btn ghost" onclick="chooseRole('master')">💼 Я мастер, хочу разместить профиль</button>
+  </div>
+  <div class="pillnote" style="margin-top:16px;">Это можно изменить позже: если вы клиент, но захотите разместить свой профиль мастера — такая возможность будет доступна в каталоге.</div>`;
+}
+async function chooseRole(role){
+  state.userRole = role;
+  await sset('my-role', role, false);
+  state.view = role==='master' ? 'master' : 'catalog';
+  render();
+}
+window.chooseRole = chooseRole;
+
+async function becomeMaster(){
+  state.userRole = 'master';
+  await sset('my-role', 'master', false);
+  goto('master');
+}
+window.becomeMaster = becomeMaster;
+
 /* ============ RENDER ROOT ============ */
 function render(){
   const app = document.getElementById('app');
   if(state.loading){ app.innerHTML = '<div class="loading">Загрузка…</div>'; return; }
+  if(!state.userRole){ app.innerHTML = renderRolePicker(); return; }
   let html = renderTopbar() + '<div id="content">';
   if(state.view==='catalog') html += renderCatalogPlaceholder();
   else if(state.view==='mybookings') html += renderMyBookingsPlaceholder();
   else if(state.view==='master') html += renderMasterAreaPlaceholder();
   else if(state.view==='admin') html += `<div class="loading">Загрузка…</div>`;
   else if(state.view==='favorites') html += `<div class="loading">Загрузка…</div>`;
+  else if(state.view==='visitorChat') html += `<div class="loading">Загрузка…</div>`;
   html += '</div>' + renderNav();
   if(state.toast) html += `<div class="toast">${escapeHtml(state.toast)}</div>`;
   app.innerHTML = html;
@@ -560,6 +991,7 @@ function render(){
   if(state.view==='master') safeFill(fillMasterArea);
   if(state.view==='admin') safeFill(fillAdmin);
   if(state.view==='favorites') safeFill(fillFavorites);
+  if(state.view==='visitorChat') safeFill(fillVisitorChat);
 }
 
 /* Ловит любую ошибку внутри асинхронных экранов и показывает её текстом
@@ -592,22 +1024,28 @@ function renderTopbar(){
 
 function renderNav(){
   const pendingBadge = state._pendingCount ? `<span class="navdot"></span>` : '';
+  const ownerBadge = state._ownerAlertCount ? `<span class="navdot"></span>` : '';
   const showAdminTab = state.isOwner || !state.isTelegramContext; // hidden entirely for non-owners inside real Telegram
-  const adminTab = showAdminTab ? `<button class="navbtn ${state.view==='admin'?'active':''}" onclick="goto('admin')"><span class="ic">🛠️</span>Владельцу</button>` : '';
+  const showMasterTab = state.userRole !== 'client'; // клиенты, искавшие мастеров при регистрации, эту вкладку не видят
+  const adminTab = showAdminTab ? `<button class="navbtn ${state.view==='admin'?'active':''}" onclick="goto('admin')">${ownerBadge}<span class="ic">🛠️</span>Владельцу</button>` : '';
+  const masterTab = showMasterTab ? `<button class="navbtn ${state.view==='master'?'active':''}" onclick="goto('master')">${pendingBadge}<span class="ic">💼</span>Мастеру</button>` : '';
   return `
   <div class="navbar"><div class="navbar-inner">
     <button class="navbtn ${state.view==='catalog'?'active':''}" onclick="goto('catalog')"><span class="ic">🔎</span>Каталог</button>
     <button class="navbtn ${state.view==='mybookings'?'active':''}" onclick="goto('mybookings')"><span class="ic">🗓️</span>Мои записи</button>
-    <button class="navbtn ${state.view==='master'?'active':''}" onclick="goto('master')">${pendingBadge}<span class="ic">💼</span>Мастеру</button>
+    ${masterTab}
     ${adminTab}
   </div></div>`;
 }
 
 function goto(view){
   if(view==='admin' && state.isTelegramContext && !state.isOwner) return; // safety net, tab hidden anyway
+  if(view==='master' && state.userRole==='client') return; // safety net, tab hidden anyway
+  state._adminPreviewReturn = false; // обычная навигация по низу экрана — выходим из режима «просмотр как клиент»
   state.view = view;
   if(view==='catalog') state.selectedMasterId=null;
-  if(view==='master'){ state.forcePaywall=false; state.masterTab='hub'; }
+  if(view==='master') state.forcePaywall=false;
+  if(view==='admin'){ state.adminScreen='dashboard'; state.adminChatMasterId=null; state.adminAdRequestKey=null; state.adminEditingId=null; }
   render();
 }
 window.goto = goto;
@@ -643,7 +1081,7 @@ async function fillFavorites(){
     const pf = priceFrom(m);
     cards.push(`<div class="card">
       <div style="display:flex;gap:12px;">
-        <div class="avatar" style="cursor:pointer;" onclick="openMaster('${m.id}')">${spec.icon}</div>
+        <div class="avatar" style="cursor:pointer;${avatarStyle(m)}" onclick="openMaster('${m.id}')">${avatarInner(m,spec)}</div>
         <div style="flex:1;cursor:pointer;" onclick="openMaster('${m.id}')">
           <div class="mcard-top">
             <div>
@@ -678,35 +1116,82 @@ function renderMasterAreaPlaceholder(){ return `<div class="loading">Загру�
    ============================================================ */
 async function fillCatalog(){
   const allMasters = await loadAllMasters();
-  const liveMasters = allMasters.filter(m=>m.subscriptionActive && !m.isDemo && !m.disabledByAdmin && m.moderationStatus==='approved');
+  const liveMasters = allMasters.filter(m=>m.subscriptionActive && !m.isDemo && !m.disabledByAdmin && m.moderationStatus==='approved' && !(m.vacationUntil && m.vacationUntil>=todayISO(0)));
 
-  if(!state.filters.city){ return renderCityStep(liveMasters); }
+  if(!state.filters.city){ return await renderCityStep(liveMasters); }
   if(state.catalogStep==='specs'){ return renderSpecStep(liveMasters); }
   return renderListStep(liveMasters);
 }
 
 /* --- STEP 1: choose city --- */
-function renderCityStep(masters){
+async function renderCityStep(masters){
+  const bannersHtml = renderBannersHtml(await getActiveBanners('clients'));
   const counts = {};
   masters.forEach(m=>{ counts[m.city] = (counts[m.city]||0)+1; });
-  const cities = Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+  const allCities = Object.keys(counts);
+  const isLong = allCities.length > 8;
 
-  const hero = `<div class="hero"><h1>В каком вы городе?</h1><p>Покажем мастеров маникюра, бровей, ресниц, тату и пирсинга рядом с вами.</p></div>`;
+  // Короткий список — оставляем по популярности (как раньше), длинный — сортируем по алфавиту,
+  // чтобы город было легче найти взглядом, и добавляем поиск + быстрые чипы самых частых городов.
+  const popular = allCities.slice().sort((a,b)=>counts[b]-counts[a]).slice(0,6);
+  const displayCities = isLong
+    ? allCities.slice().sort((a,b)=>a.localeCompare(b,'ru'))
+    : allCities.slice().sort((a,b)=>counts[b]-counts[a]);
 
-  const cityList = cities.length ? `<div class="card" style="padding:8px 6px;">
-    ${cities.map(c=>`<div class="svc-row" style="padding:12px 10px;cursor:pointer;" onclick="chooseCity('${escapeHtml(c).replace(/'/g,"\\'")}')">
-      <div class="svc-name">📍 ${escapeHtml(c)}</div>
-      <div class="svc-meta" style="margin:0;color:var(--ink-soft)">${counts[c]} мастер${counts[c]===1?'':counts[c]<5?'а':'ов'} →</div>
-    </div>`).join('')}
-  </div>` : `<div class="empty" style="padding:20px 30px"><div class="big">🏙️</div>Мастеров пока нет ни в одном городе.</div>`;
+  const hero = `<div class="hero">
+    <div class="city-hero-badge">📍</div>
+    <h1>В каком вы городе?</h1>
+    <p>Покажем мастеров маникюра, бровей, ресниц, тату и пирсинга рядом с вами${masters.length?` — сейчас на платформе ${masters.length} мастер${masters.length===1?'':masters.length<5?'а':'ов'}`:''}.</p>
+  </div>`;
+
+  const searchBox = isLong ? `<div class="section-pad">
+    <div class="search-input">
+      <span class="search-ic">🔍</span>
+      <input id="citySearch" placeholder="Начните вводить город…" autocomplete="off" oninput="filterCityList(this.value)">
+    </div>
+  </div>` : '';
+
+  const popularChips = isLong && popular.length>1 ? `<div class="chiprow" style="padding-top:10px;">
+    ${popular.map(c=>`<button class="chip" onclick="chooseCity('${escapeHtml(c).replace(/'/g,"\\'")}')">📍 ${escapeHtml(c)}</button>`).join('')}
+  </div>` : '';
+
+  const cityRows = displayCities.map(c=>`<div class="city-row" data-city="${escapeHtml(c.toLowerCase())}" onclick="chooseCity('${escapeHtml(c).replace(/'/g,"\\'")}')">
+      <div class="city-row-pin">📍</div>
+      <div class="city-row-body">
+        <div class="city-row-name">${escapeHtml(c)}</div>
+        <div class="city-row-count">${counts[c]} мастер${counts[c]===1?'':counts[c]<5?'а':'ов'}</div>
+      </div>
+      <div class="city-row-arrow">→</div>
+    </div>`).join('');
+
+  const cityList = displayCities.length ? `<div class="card city-list-card">
+      <div id="cityListInner">${cityRows}</div>
+      <div id="cityListEmpty" class="empty" style="display:none;padding:24px 10px;">Ничего не нашлось — попробуйте ввести город вручную ниже.</div>
+    </div>` : `<div class="empty" style="padding:20px 30px"><div class="big">🏙️</div>Мастеров пока нет ни в одном городе.</div>`;
 
   const manual = `<div class="section-pad">
-    <div class="field"><label>Или введите город вручную</label><input id="cityManual" placeholder="Например, Екатеринбург"></div>
+    <div class="field"><label>${isLong?'Не нашли свой город?':'Или введите город вручную'}</label><input id="cityManual" placeholder="Например, Екатеринбург"></div>
     <button class="btn ghost" onclick="chooseCityManual()">Найти мастеров в этом городе</button>
   </div>`;
 
-  document.getElementById('content').innerHTML = hero + cityList + manual;
+  const becomeMasterLink = state.userRole==='client' ? `<div class="section-pad" style="text-align:center;padding-bottom:0;"><button class="link-btn" onclick="becomeMaster()">Вы мастер? Разместите свой профиль →</button></div>` : '';
+  const placeAdLink = `<div class="section-pad" style="text-align:center;"><button class="link-btn" onclick="openAnnouncementChat()">📣 Разместить объявление →</button></div>`;
+
+  document.getElementById('content').innerHTML = bannersHtml + hero + searchBox + popularChips + cityList + manual + becomeMasterLink + placeAdLink;
 }
+function filterCityList(q){
+  const query = q.trim().toLowerCase();
+  const rows = document.querySelectorAll('#cityListInner .city-row');
+  let visible = 0;
+  rows.forEach(el=>{
+    const match = !query || el.dataset.city.includes(query);
+    el.style.display = match ? '' : 'none';
+    if(match) visible++;
+  });
+  const emptyEl = document.getElementById('cityListEmpty');
+  if(emptyEl) emptyEl.style.display = (query && visible===0) ? 'block' : 'none';
+}
+window.filterCityList = filterCityList;
 function chooseCity(c){
   state.filters.city = c;
   state.filters.spec = 'all';
@@ -759,8 +1244,11 @@ window.chooseSpec = chooseSpec;
 function renderListStep(masters){
   const inCity = masters.filter(m=>m.city===state.filters.city);
   let list = inCity.filter(m=> state.filters.spec==='all' || m.specialization===state.filters.spec);
+  if(state.filters.minRating) list = list.filter(m=>ratingOf(m) >= state.filters.minRating);
+  if(state.filters.maxPrice) list = list.filter(m=>{ const pf=priceFrom(m); return pf==null || pf<=state.filters.maxPrice; });
+  if(state.filters.availableSoon) list = list.filter(hasSlotsSoon);
 
-  if(state.filters.sort==='rating') list.sort((a,b)=>ratingOf(b)-ratingOf(a));
+  if(state.filters.sort==='rating') list.sort((a,b)=>(b.featured?1:0)-(a.featured?1:0) || ratingOf(b)-ratingOf(a));
   else if(state.filters.sort==='name') list.sort((a,b)=>a.name.localeCompare(b.name,'ru'));
   else if(state.filters.sort==='price') list.sort((a,b)=>(priceFrom(a)||0)-(priceFrom(b)||0));
 
@@ -780,6 +1268,12 @@ function renderListStep(masters){
     <button class="selectbox" style="flex:0 0 auto;font-weight:700;" onclick="changeCity()">Сменить город</button>
   </div>`;
 
+  const filterbar2 = `<div class="chiprow" style="padding-top:0;">
+    <button class="chip ${state.filters.minRating>=4?'active':''}" onclick="toggleMinRating()">★ 4+</button>
+    <button class="chip ${state.filters.availableSoon?'active':''}" onclick="toggleAvailableSoon()">🗓️ Свободен сегодня/завтра</button>
+    <input type="number" inputmode="numeric" placeholder="Цена до, ₽" value="${state.filters.maxPrice||''}" style="flex:0 0 120px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:12.5px;" onchange="setMaxPrice(this.value)">
+  </div>`;
+
   let cardsHtml;
   if(!list.length){
     cardsHtml = `<div class="empty"><div class="big">🪄</div>В этой категории пока нет мастеров в вашем городе.<br>Попробуйте другую специализацию.</div>`;
@@ -789,8 +1283,8 @@ function renderListStep(masters){
       const avg = ratingOf(m);
       const pf = priceFrom(m);
       const favOn = isFavorite(m.id);
-      return `<div class="mcard">
-        <div class="avatar" style="cursor:pointer;" onclick="openMaster('${m.id}')">${spec.icon}</div>
+      return `<div class="mcard" style="${m.featured?'border:1.5px solid var(--gold);':''}">
+        <div class="avatar" style="cursor:pointer;${avatarStyle(m)}" onclick="openMaster('${m.id}')">${avatarInner(m,spec)}</div>
         <div class="mcard-body" style="cursor:pointer;" onclick="openMaster('${m.id}')">
           <div class="mcard-top">
             <div>
@@ -799,7 +1293,10 @@ function renderListStep(masters){
             </div>
             ${pf!=null?`<div class="price-from">от ${pf}₽</div>`:''}
           </div>
-          <span class="tag" style="background:${specBg(m.specialization)};color:${specFg(m.specialization)}">${spec.icon} ${spec.label}</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="tag" style="background:${specBg(m.specialization)};color:${specFg(m.specialization)}">${spec.icon} ${spec.label}</span>
+            ${m.featured?`<span class="tag" style="background:#F3E3B8;color:#8A5A1F;">⭐ Мастер месяца</span>`:''}
+          </div>
           <div class="rating-row"><span class="stars">${starsStr(avg)}</span> ${avg? avg.toFixed(1):'нет оценок'} ${m.ratingCount?`· ${m.ratingCount} отзыв.`:''}</div>
         </div>
         <button class="link-btn" style="font-size:19px;padding:0 2px;align-self:flex-start;color:${favOn?'var(--rose-deep)':'var(--ink-soft)'}" onclick="toggleFavorite('${m.id}')">${favOn?'♥':'♡'}</button>
@@ -807,13 +1304,27 @@ function renderListStep(masters){
     }).join('');
   }
 
-  document.getElementById('content').innerHTML = cityBar + chips + filterbar + cardsHtml;
+  document.getElementById('content').innerHTML = cityBar + chips + filterbar + filterbar2 + cardsHtml;
 }
+function hasSlotsSoon(m){
+  const d0 = todayISO(0), d1 = todayISO(1);
+  return !!((m.slots && m.slots[d0] && m.slots[d0].length) || (m.slots && m.slots[d1] && m.slots[d1].length));
+}
+function toggleMinRating(){ state.filters.minRating = state.filters.minRating>=4 ? 0 : 4; fillCatalog(); }
+function toggleAvailableSoon(){ state.filters.availableSoon = !state.filters.availableSoon; fillCatalog(); }
+function setMaxPrice(v){ const n=Number(v); state.filters.maxPrice = (v && !isNaN(n) && n>0) ? n : null; fillCatalog(); }
+window.toggleMinRating=toggleMinRating; window.toggleAvailableSoon=toggleAvailableSoon; window.setMaxPrice=setMaxPrice;
 function backToSpecs(){ state.catalogStep='specs'; fillCatalog(); }
 window.backToSpecs = backToSpecs;
 
 function specBg(k){ return {manicure:'#F3D8DE',brows:'#E4DCF3',tattoo:'#D8E3F3',piercing:'#DDEDE6',lashes:'#F6E6D2'}[k]; }
 function specFg(k){ return {manicure:'#8C3B52',brows:'#4B3B7A',tattoo:'#2C4E7A',piercing:'#2E6B52',lashes:'#8A5A1F'}[k]; }
+
+/* Персональная ссылка мастера для клиентов: открывает Mini App сразу на его странице записи,
+   минуя выбор города и поиск (Telegram передаёт startapp как start_param). */
+function masterBookingLink(masterId){
+  return `https://t.me/${BOT_USERNAME}?startapp=book_${masterId}`;
+}
 
 function setSort(s){ state.filters.sort=s; fillCatalog(); }
 window.setSort=setSort;
@@ -842,8 +1353,10 @@ window.openMasterForBooking = openMasterForBooking;
 async function fillMasterDetail(){
   const m = await loadMaster(state.selectedMasterId);
   if(!m){ document.getElementById('content').innerHTML = `<div class="empty">Мастер не найден</div>`; return; }
+  trackProfileView(m); // не блокируем рендер ожиданием записи счётчика
   const reviews = await loadReviews(m.id);
   const bookings = await loadBookings(m.id);
+  const waitlist = await loadWaitlist(m.id);
   const spec = SPECS[m.specialization];
   const avg = ratingOf(m);
 
@@ -861,10 +1374,13 @@ async function fillMasterDetail(){
   }
   state._eligibleReviewBookings = eligibleBookings;
 
-  const back = `<div class="backbar"><button class="backbtn" onclick="backToCatalog()">←</button><div style="font-weight:700">${escapeHtml(m.name)}</div></div>`;
+  const back = state._adminPreviewReturn
+    ? `<div class="backbar"><button class="backbtn" onclick="backFromAdminPreview()">←</button><div style="font-weight:700">${escapeHtml(m.name)}</div></div>
+       <div class="pillnote" style="margin:0 18px 10px;background:#E4DCF3;border-color:#D6C6EE;color:#4B3B7A;">👁 Вы смотрите профиль глазами клиента. <button class="link-btn" style="margin-left:4px" onclick="backFromAdminPreview()">Вернуться в кабинет владельца</button></div>`
+    : `<div class="backbar"><button class="backbtn" onclick="backToCatalog()">←</button><div style="font-weight:700">${escapeHtml(m.name)}</div></div>`;
 
   const header = `<div class="card" style="display:flex;gap:12px;align-items:center;">
-    <div class="avatar" style="width:64px;height:64px;font-size:30px;">${spec.icon}</div>
+    <div class="avatar" style="width:64px;height:64px;font-size:30px;${avatarStyle(m)}">${avatarInner(m,spec)}</div>
     <div style="flex:1;">
       <div class="mcard-name" style="font-size:18px;">${escapeHtml(m.name)}</div>
       <div class="mcard-city">📍 ${escapeHtml(m.city)}${m.address?', '+escapeHtml(m.address):''}</div>
@@ -902,6 +1418,12 @@ async function fillMasterDetail(){
       <div class="field"><label>Ваше имя</label><input id="rvName" value="${escapeHtml(state.clientName)}" placeholder="Имя"></div>
       <div class="field"><label>Оценка</label><div class="starpick" id="rvStars">${[1,2,3,4,5].map(i=>`<span data-i="${i}" onclick="pickStar(${i})">★</span>`).join('')}</div></div>
       <div class="field"><label>Отзыв</label><textarea id="rvText" placeholder="Расскажите, как всё прошло"></textarea></div>
+      <div class="field">
+        <label>Фото (необязательно, например «до/после»)</label>
+        <input id="rvFile" type="file" accept="image/*" onchange="uploadReviewPhoto(this)">
+        <div id="rvUploadStatus" style="font-size:12px;color:var(--ink-soft);margin-top:6px;"></div>
+        ${state._pendingReviewPhoto?`<img src="${state._pendingReviewPhoto}" style="width:72px;height:72px;object-fit:cover;border-radius:10px;margin-top:6px;">`:''}
+      </div>
       <button class="btn primary" onclick="submitReview('${m.id}')">Оставить отзыв</button>
     ` : `
       <div class="divider"></div>
@@ -912,11 +1434,12 @@ async function fillMasterDetail(){
         <div class="review">
           <div class="review-top"><span class="review-name">${escapeHtml(r.name)}</span><span class="stars">${starsStr(r.rating)}</span></div>
           <div class="review-text">${escapeHtml(r.comment)}</div>
+          ${r.photoUrl?`<img src="${r.photoUrl}" style="width:100%;max-width:220px;border-radius:12px;margin-top:8px;display:block;">`:''}
         </div>`).join('') : '<div class="empty" style="padding:10px 0 20px">Пока нет отзывов — станьте первым!</div>'}
       ${reviewForm}
     </div>`;
   } else if(state.masterDetailTab==='book'){
-    body = renderBookingForm(m, bookings);
+    body = renderBookingForm(m, bookings, waitlist);
   }
 
   document.getElementById('content').innerHTML = back + header + tabs + body;
@@ -928,10 +1451,41 @@ async function fillMasterDetail(){
 }
 function backToCatalog(){ state.selectedMasterId=null; state.view='catalog'; render(); }
 window.backToCatalog=backToCatalog;
+function backFromAdminPreview(){
+  state._adminPreviewReturn = false;
+  state.selectedMasterId = null;
+  state.adminScreen = 'dashboard';
+  state.view = 'admin';
+  render();
+}
+window.backFromAdminPreview = backFromAdminPreview;
 function setDTab(t){ state.masterDetailTab=t; if(t!=='book') state.booking=null; fillMasterDetail(); }
 window.setDTab=setDTab;
 function pickStar(i){ state._pickedStar=i; fillMasterDetail(); }
 window.pickStar=pickStar;
+
+async function uploadReviewPhoto(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('rvUploadStatus');
+  if(statusEl) statusEl.textContent = 'Загружаем…';
+  try{
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `reviews/${uid()}.${ext}`;
+    const { error: upErr } = await sb.storage.from('portfolios').upload(path, file, { upsert:false, contentType: file.type || 'image/jpeg' });
+    if(upErr) throw upErr;
+    const { data } = sb.storage.from('portfolios').getPublicUrl(path);
+    const url = data && data.publicUrl;
+    if(!url) throw new Error('Не удалось получить ссылку на фото');
+    state._pendingReviewPhoto = url;
+    if(statusEl) statusEl.textContent = 'Фото добавлено ✓';
+    fillMasterDetail();
+  }catch(e){
+    console.error('Review photo upload failed', e);
+    if(statusEl) statusEl.textContent = 'Не получилось загрузить фото (возможно, не настроено хранилище Supabase Storage) — можно оставить отзыв без фото.';
+  }
+}
+window.uploadReviewPhoto = uploadReviewPhoto;
 
 async function submitReview(masterId){
   const name = document.getElementById('rvName').value.trim();
@@ -944,19 +1498,20 @@ async function submitReview(masterId){
   await sset('my-client-name', name, false);
   state.clientName = name;
   const reviews = await loadReviews(masterId);
-  reviews.push({id:uid(), masterId, name, rating, comment:text, createdAt:Date.now(), bookingId});
+  reviews.push({id:uid(), masterId, name, rating, comment:text, createdAt:Date.now(), bookingId, photoUrl: state._pendingReviewPhoto || null});
   await saveReviews(masterId, reviews);
   const m = await loadMaster(masterId);
   m.ratingSum = (m.ratingSum||0) + rating;
   m.ratingCount = (m.ratingCount||0) + 1;
   await saveMaster(m);
   state._pickedStar=null;
+  state._pendingReviewPhoto=null;
   showToast('Спасибо за отзыв!');
   fillMasterDetail();
 }
 window.submitReview = submitReview;
 
-function renderBookingForm(m, bookings){
+function renderBookingForm(m, bookings, waitlist){
   if(!m.services.length) return `<div class="card"><div class="empty" style="padding:20px 0">Мастер ещё не добавил услуги для записи</div></div>`;
   const b = state.booking || {serviceId:m.services[0].id, date:null, time:null};
   state.booking = b;
@@ -972,7 +1527,7 @@ function renderBookingForm(m, bookings){
   let slotsHtml = '';
   if(b.date){
     const daySlots = (m.slots && m.slots[b.date]) || [];
-    const takenTimes = bookings.filter(bk=>bk.date===b.date && bk.status!=='cancelled').map(bk=>bk.time);
+    const takenTimes = bookings.filter(bk=>bk.date===b.date && bk.status!=='cancelled').flatMap(occupiedTimesForBooking);
     slotsHtml = `<div class="slotgrid">${daySlots.map(t=>{
       const taken = takenTimes.includes(t);
       return `<div class="slot ${b.time===t?'on':''} ${taken?'taken':''}" onclick="${taken?'':`pickTime('${t}')`}">${t}</div>`;
@@ -980,15 +1535,35 @@ function renderBookingForm(m, bookings){
     if(!daySlots.length) slotsHtml = `<div class="empty" style="padding:10px 0">На эту дату нет свободного времени</div>`;
   }
 
+  const onWaitlist = (waitlist||[]).some(w=>w.clientKey===ownerId());
+  const waitlistCard = `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🔔 Нет подходящего времени?</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Встаньте в лист ожидания — как только у мастера появится новое свободное время (откроет слоты или у кого-то отменится запись), мы вам сразу напишем.</div>
+    ${onWaitlist
+      ? `<div class="pillnote" style="margin:0 0 10px;padding-left:0;padding-right:0;background:none;border:none;">✅ Вы в листе ожидания.</div><button class="btn ghost small" onclick="leaveWaitlist('${m.id}')">Выйти из списка</button>`
+      : `<button class="btn ghost" onclick="joinWaitlist('${m.id}')">Встать в лист ожидания</button>`}
+  </div>`;
+
+  const depositAmount = Number(m.depositRequired) > 0 ? Number(m.depositRequired) : 0;
+  const depositRequisites = depositAmount>0 ? `<div class="pillnote" style="margin:0 0 12px;background:#F3E3B8;border-color:#E8D19A;color:#8A5A1F;">
+    💰 Этот мастер требует предоплату <b>${depositAmount}₽</b> при записи. Переведите её мастеру напрямую:
+    ${m.depositPhone?`<div style="margin-top:6px;">📱 СБП: <b>${escapeHtml(m.depositPhone)}</b></div>`:''}
+    ${m.depositCard?`<div style="margin-top:2px;">💳 Карта: <b>${escapeHtml(m.depositCard)}</b></div>`:''}
+    <div style="margin-top:6px;">После перевода нажмите кнопку ниже — мастер увидит заявку и сам подтвердит получение денег.</div>
+  </div>` : '';
+
   return `<div class="card">
+    ${depositRequisites}
     <div class="field"><label>Услуга</label><select id="bkService" onchange="setBookField('serviceId', this.value)">${serviceOpts}</select></div>
     <div class="field"><label>Дата</label><div class="chiprow" style="padding:0;overflow-x:auto;">${dayChips}</div></div>
     ${b.date?`<div class="field"><label>Время</label>${slotsHtml}</div>`:''}
     <div class="field"><label>Ваше имя</label><input id="bkName" value="${escapeHtml(state.clientName)}" placeholder="Имя"></div>
     <div class="field"><label>Телефон / Telegram</label><input id="bkContact" value="${escapeHtml(state.clientContact)}" placeholder="@username или телефон"></div>
-    <button class="btn primary" onclick="submitBooking('${m.id}')" ${(!b.date||!b.time)?'disabled':''}>Отправить заявку на запись</button>
-    <div class="pillnote" style="margin:10px 0 0;">После отправки заявка придёт мастеру. Как только он подтвердит запись, вы увидите статус во вкладке «Мои записи».</div>
-  </div>`;
+    <button class="btn primary" onclick="submitBooking('${m.id}')" ${(!b.date||!b.time)?'disabled':''}>${depositAmount>0?`Я перевёл(а) ${depositAmount}₽, отправить заявку`:'Отправить заявку на запись'}</button>
+    <div class="pillnote" style="margin:10px 0 0;">${depositAmount>0?'Заявка придёт мастеру с пометкой «ожидает подтверждения предоплаты» — он подтвердит получение денег сам.':'После отправки заявка придёт мастеру. Как только он подтвердит запись, вы увидите статус во вкладке «Мои записи».'}</div>
+
+  </div>
+  ${waitlistCard}`;
 }
 function pickDate(d){ state.booking = {...state.booking, date:d, time:null}; fillMasterDetail(); }
 function pickTime(t){ state.booking = {...state.booking, time:t}; fillMasterDetail(); }
@@ -1017,7 +1592,8 @@ async function submitBooking(masterId){
   // Перечитываем самые свежие записи прямо перед сохранением, чтобы минимизировать
   // окно гонки, если кто-то другой записался на этот же слот почти одновременно.
   const bookings = await loadBookings(masterId);
-  const alreadyTaken = bookings.some(b=>b.status!=='cancelled' && b.date===state.booking.date && b.time===state.booking.time);
+  const wantTimes = occupiedTimesForBooking({time:state.booking.time, duration:service.duration||60});
+  const alreadyTaken = bookings.some(b=>b.status!=='cancelled' && b.date===state.booking.date && occupiedTimesForBooking(b).some(t=>wantTimes.includes(t)));
   if(alreadyTaken){
     showToast('Увы, это время только что заняли. Выберите другое.');
     state.booking.time = null;
@@ -1025,11 +1601,16 @@ async function submitBooking(masterId){
     return;
   }
 
+  const depositAmount = Number(m.depositRequired) > 0 ? Number(m.depositRequired) : 0;
   const booking = {
     id:uid(), masterId, serviceId:service.id, serviceName:service.name, price:service.price,
+    duration: service.duration||60,
     date:state.booking.date, time:state.booking.time,
     clientName:name, clientContact:contact, status:'pending', createdAt:Date.now(),
-    clientTelegramId: (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : null
+    clientTelegramId: (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : null,
+    // Предоплата идёт мастеру напрямую (на его СБП/карту) — платформа деньги не принимает
+    // и не может подтвердить перевод автоматически, поэтому мастер подтверждает получение сам.
+    depositAmount, depositStatus: depositAmount>0 ? 'awaiting_confirmation' : null
   };
   bookings.push(booking);
   await saveBookings(masterId, bookings);
@@ -1042,9 +1623,28 @@ async function submitBooking(masterId){
   await sset('my-client-bookings', mine, false);
 
   state.booking=null;
-  showToast('Заявка отправлена мастеру! Ожидайте подтверждения.');
+  showToast(depositAmount>0
+    ? `Заявка отправлена мастеру. Он подтвердит получение предоплаты ${depositAmount}₽ и запись.`
+    : 'Заявка отправлена мастеру! Ожидайте подтверждения.');
   state.masterDetailTab='about';
   fillMasterDetail();
+
+  // Мгновенное уведомление мастеру о новой заявке (в чат приложения + от бота в Telegram).
+  try{
+    const depositNote = depositAmount>0 ? `\n\n💰 Клиент указал, что перевёл предоплату ${depositAmount}₽ вам напрямую — проверьте поступление и подтвердите в заявке.` : '';
+    const chat = await loadChat(masterId);
+    chat.push({
+      id: uid(), from:'owner',
+      text: `🗓️ Новая заявка на запись!\n${service.name} · ${fmtDate(booking.date)} в ${booking.time}\nКлиент: ${name} (${contact})${depositNote}`,
+      createdAt: Date.now(), readByOwner:true, readByMaster:false
+    });
+    await saveChat(masterId, chat);
+    await addChatToIndex(masterId);
+    if(m.telegramId){
+      await notifyTelegram(m.telegramId,
+        `🗓️ Новая заявка на запись!\n\nУслуга: ${service.name}\nКогда: ${fmtDate(booking.date)} в ${booking.time}\nКлиент: ${name}\nКонтакт: ${contact}${depositNote}\n\nПодтвердите или отклоните её во вкладке «Мастеру → Записи».`);
+    }
+  }catch(e){ console.warn('booking notify failed:', e); }
 }
 window.submitBooking = submitBooking;
 
@@ -1054,8 +1654,20 @@ window.submitBooking = submitBooking;
 async function fillMyBookings(){
   const mine = await sget('my-client-bookings', false) || [];
   const hero = `<div class="hero"><h1>Мои записи</h1><p>Статусы ваших заявок к мастерам.</p></div>`;
+
+  const refLink = `https://t.me/${BOT_USERNAME}?startapp=ref_${ownerId()}`;
+  const referrals = await sget('referrals:'+ownerId(), true) || [];
+  const referralCard = `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">👯 Пригласите подругу</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Отправьте эту ссылку — когда подруга откроет приложение по ней, вы обе станете приоритетными клиентами у мастеров (это отметка для мастера, помогает при прочих равных).${referrals.length?` Уже приглашено: ${referrals.length}.`:''}</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input readonly value="${refLink}" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:12px;color:var(--ink-soft);" onclick="this.select()">
+      <button class="btn primary small" style="width:auto;padding:0 16px;white-space:nowrap;" onclick="copyText('${refLink}')">Скопировать</button>
+    </div>
+  </div>`;
+
   if(!mine.length){
-    document.getElementById('content').innerHTML = hero + `<div class="empty"><div class="big">🗓️</div>Пока нет записей.<br>Найдите мастера в каталоге и оставьте заявку.</div>`;
+    document.getElementById('content').innerHTML = hero + referralCard + `<div class="empty"><div class="big">🗓️</div>Пока нет записей.<br>Найдите мастера в каталоге и оставьте заявку.</div>`;
     return;
   }
   const rows=[];
@@ -1065,22 +1677,50 @@ async function fillMyBookings(){
     if(!bk) continue;
     const m = await loadMaster(entry.masterId);
     const spec = m?SPECS[m.specialization]:null;
-    const canCancel = bk.status==='pending' || bk.status==='confirmed';
+    const past = isBookingPast(bk);
+    const canCancel = (bk.status==='pending' || bk.status==='confirmed') && !past;
+    const isCompleted = bk.status==='confirmed' && past;
+    const statusLabel = isCompleted ? 'Состоялась' : (bk.status==='pending'?'Ожидает':bk.status==='confirmed'?'Подтверждено':'Отменено');
+    const statusClass = isCompleted ? 'completed' : bk.status;
     rows.push(`<div class="card">
       <div class="mcard-top">
         <div>
           <div class="mcard-name">${escapeHtml(bk.serviceName)}</div>
           <div class="mcard-city">${spec?spec.icon+' ':''}${m?escapeHtml(m.name):'Мастер'} · 📍 ${m?escapeHtml(m.city):''}</div>
         </div>
-        <span class="badge ${bk.status}">${bk.status==='pending'?'Ожидает':bk.status==='confirmed'?'Подтверждено':'Отменено'}</span>
+        <span class="badge ${statusClass}">${statusLabel}</span>
       </div>
       <div class="divider"></div>
       <div style="font-size:13.5px;color:var(--ink-soft)">📅 ${fmtDate(bk.date)} в ${bk.time} · ${bk.price}₽</div>
+      ${bk.depositAmount?`<div style="font-size:12.5px;margin-top:4px;color:${bk.depositStatus==='confirmed'?'var(--teal)':'var(--gold)'};">${bk.depositStatus==='confirmed'?'✅ Мастер подтвердил получение предоплаты':'⏳ Мастер ещё не подтвердил получение предоплаты '+bk.depositAmount+'₽'}</div>`:''}
       ${canCancel ? `<div style="margin-top:10px;"><button class="btn danger small" onclick="clientCancelBooking('${entry.masterId}','${bk.id}')">Отменить запись</button></div>` : ''}
+      ${isCompleted && m ? `<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <button class="btn ghost small" onclick="repeatBooking('${entry.masterId}','${bk.serviceId}')">🔁 Повторить запись</button>
+        <button class="btn ghost small" onclick="goToReview('${entry.masterId}')">⭐ Оставить отзыв</button>
+      </div>` : ''}
     </div>`);
   }
-  document.getElementById('content').innerHTML = hero + rows.join('');
+  document.getElementById('content').innerHTML = hero + referralCard + rows.join('');
 }
+
+/* Повторная запись «как в прошлый раз» — сразу открывает форму записи к тому же мастеру
+   с той же услугой, минуя повторный выбор города/специализации. */
+function repeatBooking(masterId, serviceId){
+  state.view = 'catalog';
+  state.selectedMasterId = masterId;
+  state.masterDetailTab = 'book';
+  state.booking = {serviceId, date:null, time:null};
+  render();
+}
+window.repeatBooking = repeatBooking;
+
+function goToReview(masterId){
+  state.view = 'catalog';
+  state.selectedMasterId = masterId;
+  state.masterDetailTab = 'reviews';
+  render();
+}
+window.goToReview = goToReview;
 
 async function clientCancelBooking(masterId, bookingId){
   const sure = window.confirm('Отменить эту запись? Мастер получит уведомление.');
@@ -1093,6 +1733,24 @@ async function clientCancelBooking(masterId, bookingId){
   await saveBookings(masterId, bookings);
   showToast('Запись отменена');
   fillMyBookings();
+
+  // Мгновенное уведомление мастеру (в чат приложения + от бота в Telegram).
+  try{
+    const m = await loadMaster(masterId);
+    const chat = await loadChat(masterId);
+    chat.push({
+      id: uid(), from:'owner',
+      text: `❌ Клиент отменил запись.\n${bk.serviceName} · ${fmtDate(bk.date)} в ${bk.time}\nКлиент: ${bk.clientName}`,
+      createdAt: Date.now(), readByOwner:true, readByMaster:false
+    });
+    await saveChat(masterId, chat);
+    await addChatToIndex(masterId);
+    if(m && m.telegramId){
+      await notifyTelegram(m.telegramId,
+        `❌ Клиент отменил запись.\n\nУслуга: ${bk.serviceName}\nКогда была: ${fmtDate(bk.date)} в ${bk.time}\nКлиент: ${bk.clientName}\n\nЭтот слот теперь снова свободен.`);
+    }
+  }catch(e){ console.warn('cancel notify failed:', e); }
+  notifyWaitlist(masterId); // слот освободился — сообщим тем, кто в листе ожидания
 }
 window.clientCancelBooking = clientCancelBooking;
 
@@ -1153,7 +1811,8 @@ function demoMasterObject(){
     services:[{id:'d1',name:'Маникюр',price:1500,duration:60},{id:'d2',name:'Педикюр',price:2000,duration:90}],
     portfolio:[{id:'p1',url:'https://picsum.photos/seed/demo1/400/300'},{id:'p2',url:'https://picsum.photos/seed/demo2/400/300'}],
     slots:{[todayISO(0)]:['10:00','13:00','16:00']},
-    subscriptionActive:false, subscriptionUntil:null, ratingSum:0, ratingCount:0, isDemo:true
+    subscriptionActive:false, subscriptionUntil:null, ratingSum:0, ratingCount:0, isDemo:true,
+    avatarUrl:null
   };
 }
 function enterDemo(){ state.demoMode=true; state.masterTab='profile'; render(); }
@@ -1161,20 +1820,50 @@ function exitDemo(){ state.demoMode=false; render(); }
 window.enterDemo=enterDemo; window.exitDemo=exitDemo;
 
 function startRegistration(){
+  trackFunnelStart(); // не блокируем экран ожиданием записи
   document.getElementById('content').innerHTML = `
   <div class="backbar"><button class="backbtn" onclick="fillMasterArea()">←</button><div style="font-weight:700">Регистрация мастера</div></div>
+  <div class="pillnote" style="margin:0 18px 14px;">⏱️ Занимает 2 минуты. Достаточно имени, специализации и города — остальное можно дозаполнить позже, пока анкету проверяет модератор.</div>
   <div class="card">
     <div class="field"><label>Имя</label><input id="regName" placeholder="Как вас видят клиенты"></div>
     <div class="field"><label>Специализация</label><select id="regSpec">${Object.entries(SPECS).map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join('')}</select></div>
     <div class="row2">
       <div class="field"><label>Город</label><input id="regCity" placeholder="Москва"></div>
-      <div class="field"><label>Адрес приёма</label><input id="regAddress" placeholder="ул. Пример, 1"></div>
+      <div class="field"><label>Адрес приёма (необязательно)</label><input id="regAddress" placeholder="ул. Пример, 1"></div>
     </div>
-    <div class="field"><label>О себе</label><textarea id="regBio" placeholder="Опыт, специализация, материалы…"></textarea></div>
+    <div class="field"><label>О себе (необязательно)</label><textarea id="regBio" placeholder="Опыт, специализация, материалы… можно добавить позже"></textarea></div>
     <button class="btn primary" onclick="finishRegistration()">Создать профиль</button>
   </div>`;
 }
 window.startRegistration=startRegistration;
+
+/* Воронка регистрации мастеров: фиксируем сам факт открытия формы, чтобы владелец видел
+   не только успешные регистрации, но и тех, кто начал и не дошёл до конца (потенциальные лиды). */
+async function trackFunnelStart(){
+  try{
+    const key = ownerId();
+    const existing = await sget('funnel:'+key, true);
+    if(existing && existing.completed) return; // уже зарегистрировался раньше — не переписываем
+    await sset('funnel:'+key, {
+      key, startedAt: (existing&&existing.startedAt) || Date.now(),
+      completed:false, tgName: state.tgUser ? [state.tgUser.first_name,state.tgUser.last_name].filter(Boolean).join(' ') : null,
+      telegramId: state.tgUser ? String(state.tgUser.id) : null
+    }, true);
+    const idx = await sget('funnel-index', true) || [];
+    if(!idx.includes(key)){ idx.push(key); await sset('funnel-index', idx, true); }
+  }catch(e){ console.warn('trackFunnelStart failed:', e); }
+}
+
+async function trackFunnelComplete(masterId){
+  try{
+    const key = ownerId();
+    const existing = await sget('funnel:'+key, true) || { key, startedAt: Date.now() };
+    existing.completed = true;
+    existing.completedAt = Date.now();
+    existing.masterId = masterId;
+    await sset('funnel:'+key, existing, true);
+  }catch(e){ console.warn('trackFunnelComplete failed:', e); }
+}
 
 async function finishRegistration(){
   const name = document.getElementById('regName').value.trim();
@@ -1184,12 +1873,17 @@ async function finishRegistration(){
   const bio = document.getElementById('regBio').value.trim();
   if(!name || !city){ showToast('Укажите как минимум имя и город'); return; }
   const id = uid();
+  // Автоматически подтягиваем аватарку из Telegram-профиля мастера (если разрешено его настройками приватности).
+  const avatarUrl = (state.tgUser && state.tgUser.photo_url) ? state.tgUser.photo_url : null;
+  const referredByMasterId = await sget('my-referred-by-master', false) || null;
   const master = {
     id, specialization:spec, name, city, address, bio,
     services:[], portfolio:[], slots:{},
     subscriptionActive:false, subscriptionUntil:null,
     ratingSum:0, ratingCount:0, createdAt:Date.now(), isDemo:false, disabledByAdmin:false,
     telegramId: (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : null,
+    avatarUrl,
+    referredByMasterId, referralBonusGranted: false,
     paymentClaimStatus: null, paymentClaimMethod: null, paymentClaimAt: null,
     moderationStatus: 'pending', // pending | approved | rejected
     moderationReason: null,
@@ -1198,10 +1892,17 @@ async function finishRegistration(){
   };
   await saveMaster(master);
   await addMasterToIndex(id);
+  await trackFunnelComplete(id);
+  if(referredByMasterId){
+    const refs = await sget('master-referrals:'+referredByMasterId, true) || [];
+    if(!refs.includes(id)){ refs.push(id); await sset('master-referrals:'+referredByMasterId, refs, true); }
+  }
   await saveBookings(id, []);
   await saveReviews(id, []);
   await sset('my-master-id', id, false);
   state.myMasterId = id; state.myMaster = master;
+  state.userRole = 'master';
+  await sset('my-role', 'master', false);
   showToast('Профиль создан! Он отправлен на проверку модератору.');
   fillMasterArea();
 }
@@ -1219,16 +1920,35 @@ async function renderMasterDashboard(m, isDemo){
   }
   const bookings = isDemo? [] : await loadBookings(m.id);
   const pending = bookings.filter(b=>b.status==='pending').length;
-  state._pendingCount = pending;
+
+  // Отмечаем «был онлайн» — не чаще раза в час, чтобы не плодить лишние записи в базе.
+  // Используется владельцем для алерта об оттоке (платящий мастер, который давно не заходил).
+  if(!isDemo && (!m.lastSeenAt || Date.now()-m.lastSeenAt > 3600000)){
+    m.lastSeenAt = Date.now();
+    saveMaster(m); // не блокируем рендер ожиданием сохранения
+  }
+
+  let chat = [];
+  if(!isDemo){
+    chat = await loadChat(m.id);
+    if(state.masterTab==='chat'){
+      // Открыл вкладку «Чат» — помечаем сообщения владельца прочитанными
+      let changed = false;
+      chat.forEach(msg=>{ if(msg.from==='owner' && !msg.readByMaster){ msg.readByMaster = true; changed = true; } });
+      if(changed) await saveChat(m.id, chat);
+    }
+  }
+  const chatUnread = chat.filter(msg=>msg.from==='owner' && !msg.readByMaster).length;
+  state._pendingCount = pending + chatUnread;
 
   const demoBanner = isDemo? `<div class="pillnote" style="background:#E4DCF3;border-color:#D6C6EE;color:#4B3B7A;">Вы в демо-режиме. Изменения не сохраняются. <button class="link-btn" style="margin-left:4px" onclick="exitDemo()">Выйти из демо</button></div>` : '';
 
   let subInfo = '';
   if(!isDemo){
     if(!SUBSCRIPTION_ENABLED){
-      subInfo = `<div class="card" style="background:#FCE1EE;border:1px solid #F5C7E0;">
-        <div style="font-weight:800;font-size:13.5px;color:#8B3EF0;">🎉 Бесплатный доступ</div>
-        <div style="font-size:12px;color:#8B3EF0;margin-top:2px;">Сейчас акция — размещение в каталоге бесплатно, платить не нужно.</div>
+      subInfo = `<div class="card" style="background:var(--pink-tint);border:1px solid #F5C7E0;">
+        <div style="font-weight:800;font-size:13.5px;color:var(--rose-deep);">🎉 Бесплатный доступ</div>
+        <div style="font-size:12px;color:var(--rose-deep);margin-top:2px;">Сейчас акция — размещение в каталоге бесплатно, платить не нужно.</div>
       </div>`;
     } else if(m.isTrial && m.trialEndsAt){
       const msLeft = m.trialEndsAt - Date.now();
@@ -1250,39 +1970,94 @@ async function renderMasterDashboard(m, isDemo){
     }
   }
 
-  const backHeader = (title)=>`<div class="backbar"><button class="backbtn" onclick="setMTab('hub')">←</button><div style="font-weight:700">${title}</div></div>`;
+  const tabs = `<div class="subnav">
+    <button class="${state.masterTab==='profile'?'active':''}" onclick="setMTab('profile')">Профиль</button>
+    <button class="${state.masterTab==='services'?'active':''}" onclick="setMTab('services')">Услуги</button>
+    <button class="${state.masterTab==='portfolio'?'active':''}" onclick="setMTab('portfolio')">Работы</button>
+    <button class="${state.masterTab==='schedule'?'active':''}" onclick="setMTab('schedule')">Расписание</button>
+    <button class="${state.masterTab==='bookings'?'active':''}" onclick="setMTab('bookings')">Записи${pending?` (${pending})`:''}</button>
+    <button class="${state.masterTab==='clients'?'active':''}" onclick="setMTab('clients')">👥 Клиенты</button>
+    <button class="${state.masterTab==='chat'?'active':''}" onclick="setMTab('chat')">💬 Чат${chatUnread?` (${chatUnread})`:''}</button>
+  </div>`;
 
   let body='';
-  if(state.masterTab==='hub'){
-    const avg = ratingOf(m);
-    body = `
-    <div class="statgrid">
-      <div class="statcard"><div class="n">${avg?('★ '+avg.toFixed(1)):'—'}</div><div class="l">Рейтинг · ${m.ratingCount||0} отзыв.</div></div>
-      <div class="statcard"><div class="n">${pending}</div><div class="l">Новые заявки</div></div>
-    </div>
-    <div class="card" style="padding:6px 18px;">
-      <div class="linkrow" onclick="setMTab('profile')"><div class="linkic">👤</div><div class="linkbody"><div class="linkname">Профиль</div><div class="linkmeta">Имя, город, адрес, о себе</div></div><div class="linkarrow">›</div></div>
-      <div class="linkrow" onclick="setMTab('services')"><div class="linkic">💅</div><div class="linkbody"><div class="linkname">Услуги и цены</div><div class="linkmeta">${(m.services||[]).length} услуг добавлено</div></div><div class="linkarrow">›</div></div>
-      <div class="linkrow" onclick="setMTab('portfolio')"><div class="linkic">🖼️</div><div class="linkbody"><div class="linkname">Работы</div><div class="linkmeta">${(m.portfolio||[]).length} фото в портфолио</div></div><div class="linkarrow">›</div></div>
-      <div class="linkrow" onclick="setMTab('schedule')"><div class="linkic">📅</div><div class="linkbody"><div class="linkname">Расписание</div><div class="linkmeta">Свободное время для записи</div></div><div class="linkarrow">›</div></div>
-      <div class="linkrow" onclick="setMTab('bookings')" style="border-bottom:none;"><div class="linkic">🔔</div><div class="linkbody"><div class="linkname">Записи</div><div class="linkmeta">Заявки клиентов</div></div>${pending?`<div class="countdot">${pending}</div>`:`<div class="linkarrow">›</div>`}</div>
-    </div>
-    ${!isDemo ? `<div class="card">
-      <h3>Ссылка на ваш профиль</h3>
-      <div class="pinkfield"><div class="v" id="masterShareLink">https://t.me/BeautyHubs_bot?start=master_${m.id}</div><button class="btn ghost small" style="background:#fff;flex:0 0 auto;" onclick="copyText('https://t.me/BeautyHubs_bot?start=master_${m.id}')">Скопировать</button></div>
-      <div style="font-size:12px;color:var(--ink-soft);margin-top:8px;">Отправьте клиентам напрямую — по ссылке сразу откроется ваш профиль в BeautyHub.</div>
-    </div>` : ''}`;
-  }
-  else if(state.masterTab==='profile') body = backHeader('Профиль') + renderMProfile(m, isDemo);
-  else if(state.masterTab==='services') body = backHeader('Услуги и цены') + renderMServices(m, isDemo);
-  else if(state.masterTab==='portfolio') body = backHeader('Работы') + renderMPortfolio(m, isDemo);
-  else if(state.masterTab==='schedule') body = backHeader('Расписание') + renderMSchedule(m, isDemo);
-  else if(state.masterTab==='bookings') body = backHeader('Записи') + renderMBookings(m, bookings, isDemo);
+  if(state.masterTab==='profile') body = await renderMProfile(m, isDemo, bookings);
+  else if(state.masterTab==='services') body = renderMServices(m, isDemo);
+  else if(state.masterTab==='portfolio') body = renderMPortfolio(m, isDemo);
+  else if(state.masterTab==='schedule') body = renderMSchedule(m, isDemo);
+  else if(state.masterTab==='bookings') body = renderMBookings(m, bookings, isDemo);
+  else if(state.masterTab==='clients') body = await renderMClients(m, isDemo, bookings);
+  else if(state.masterTab==='chat') body = renderMChat(m, isDemo, chat);
 
-  document.getElementById('content').innerHTML = `<div class="hero" style="padding-top:20px;padding-bottom:0"><h1 style="font-size:22px;">${state.masterTab==='hub' ? `Привет, ${escapeHtml(m.name)} 👋` : `${SPECS[m.specialization].icon} ${escapeHtml(m.name)}`}</h1></div>` + demoBanner + subInfo + body;
+  const dashHeader = `<div class="hero" style="padding-top:20px;padding-bottom:0;display:flex;align-items:center;gap:12px;">
+    <div class="avatar" style="width:44px;height:44px;font-size:20px;border-radius:14px;${avatarStyle(m)}">${avatarInner(m,SPECS[m.specialization])}</div>
+    <h1 style="font-size:22px;margin:0;">${escapeHtml(m.name)}</h1>
+  </div>`;
+  const ownerBannersHtml = isDemo ? '' : renderBannersHtml(await getActiveBanners('masters'));
+  const placeAdLink = isDemo ? '' : `<div class="section-pad" style="padding-top:${ownerBannersHtml?'0':'14px'};padding-bottom:0;text-align:center;">
+    <button class="link-btn" onclick="openAnnouncementChat()">📣 Разместить объявление →</button>
+  </div>`;
+  document.getElementById('content').innerHTML = dashHeader + ownerBannersHtml + placeAdLink + demoBanner + subInfo + tabs + body;
 }
 function setMTab(t){ state.masterTab=t; fillMasterArea(); }
 window.setMTab = setMTab;
+
+/* ============ MASTER ↔ OWNER CHAT (master side) ============ */
+function renderMChat(m, isDemo, chat){
+  if(isDemo){
+    return `<div class="card"><div class="empty" style="padding:20px 0">💬 Чат с владельцем платформы доступен после создания настоящего профиля — в демо-режиме он отключён.</div></div>`;
+  }
+  const prefill = state._adPrefill ? 'Здравствуйте! Хочу разместить объявление/баннер в приложении — подскажите, пожалуйста, условия и как это оформить.' : '';
+  state._adPrefill = false;
+  const bubbles = (chat && chat.length) ? chat.map(msg=>`
+    <div class="chat-msg ${msg.from==='master'?'out':'in'}">
+      <div class="chat-bubble">${escapeHtml(msg.text)}</div>
+      <div class="chat-time">${new Date(msg.createdAt).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+    </div>`).join('') : `<div class="empty" style="padding:30px 10px;">💬 Напишите владельцу платформы — например, попросите помочь доработать профиль, задайте вопрос по подписке или предложите идею.</div>`;
+  return `
+  <div class="card" style="padding:12px;">
+    <div class="chat-wrap" id="chatScroll">${bubbles}</div>
+  </div>
+  <div class="section-pad" style="display:flex;gap:8px;align-items:flex-end;">
+    <textarea id="chatInput" placeholder="Напишите сообщение владельцу…" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;min-height:44px;max-height:120px;">${escapeHtml(prefill)}</textarea>
+    <button class="btn primary" style="width:auto;padding:0 18px;height:44px;" onclick="sendChatFromMaster()">➤</button>
+  </div>
+  <div class="pillnote">Сообщение сохранится в приложении и сразу откроет чат с владельцем платформы в Telegram с готовым текстом — нажмите там «отправить», чтобы он получил уведомление мгновенно.</div>`;
+}
+async function sendChatFromMaster(){
+  const input = document.getElementById('chatInput');
+  const text = (input && input.value || '').trim();
+  if(!text){ showToast('Введите текст сообщения'); return; }
+  const m = await loadMaster(state.myMasterId);
+  if(!m) return;
+  const chat = await loadChat(m.id);
+  chat.push({ id:uid(), from:'master', text, createdAt:Date.now(), readByMaster:true, readByOwner:false });
+  await saveChat(m.id, chat);
+  await addChatToIndex(m.id);
+
+  const tgText = `💬 Сообщение от мастера «${m.name}» (BeautyHub):\n${text}`;
+
+  // 1) Пробуем автоматическое уведомление через бота (если настроена Edge Function notify-telegram).
+  let sentAuto = false;
+  for(const ownerId of OWNER_TELEGRAM_IDS){
+    const ok = await notifyTelegram(ownerId, tgText);
+    sentAuto = sentAuto || ok;
+  }
+
+  // 2) Если автоматическая отправка не сработала (функция ещё не задеплоена) — резервный способ:
+  //    открыть чат с владельцем в Telegram с готовым текстом.
+  if(!sentAuto){
+    const link = 'https://t.me/' + OWNER_TELEGRAM_USERNAME + '?text=' + encodeURIComponent(tgText);
+    if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink){
+      window.Telegram.WebApp.openTelegramLink(link);
+    } else {
+      window.open(link, '_blank');
+    }
+  }
+  showToast(sentAuto ? 'Сообщение отправлено владельцу в Telegram' : 'Сообщение сохранено, чат с владельцем открыт в Telegram');
+  fillMasterArea();
+}
+window.sendChatFromMaster = sendChatFromMaster;
 
 const PAYMENT_METHODS = {
   sbp: {
@@ -1345,6 +2120,7 @@ function renderPaywall(m){
   const method = state.paywallMethod;
   const claim = m.paymentClaimStatus; // null | 'pending' | 'confirmed'
   const duringTrial = !!(m.isTrial && m.subscriptionActive);
+  const trialJustExpired = !duringTrial && !!m.trialExpiredNotifiedAt && !m.subscriptionActive;
 
   const backDuringTrial = duringTrial ? `<div class="backbar"><button class="backbtn" onclick="state.forcePaywall=false; fillMasterArea();">←</button><div style="font-weight:700">Оплата подписки</div></div>` : '';
 
@@ -1357,16 +2133,16 @@ function renderPaywall(m){
   if(method){
     const pm = PAYMENT_METHODS[method];
     requisites = `<div class="card">
-      <div style="font-weight:800;font-size:13.5px;margin-bottom:10px;">${pm.icon} ${pm.label}</div>
+      <div style="font-weight:700;font-size:13.5px;margin-bottom:10px;">${pm.icon} ${pm.label}</div>
       ${pm.lines.map(l=>`
-        <div style="margin-bottom:10px;">
-          <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:6px;">${escapeHtml(l.title)}</div>
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--pink-tint);border-radius:14px;padding:12px 14px;">
-            <div style="font-weight:800;font-size:15.5px;letter-spacing:.3px;color:var(--rose-deep);">${escapeHtml(l.display)}</div>
-            <button class="btn ghost small" style="background:#fff;flex:0 0 auto;" onclick="copyText('${l.value}')">Скопировать</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);">
+          <div>
+            <div style="font-size:11.5px;color:var(--ink-soft);">${escapeHtml(l.title)}</div>
+            <div style="font-weight:700;font-size:15.5px;letter-spacing:.3px;">${escapeHtml(l.display)}</div>
           </div>
+          <button class="btn ghost small" onclick="copyText('${l.value}')">Скопировать</button>
         </div>`).join('')}
-      <div style="font-size:12.5px;color:var(--ink-soft);margin-top:6px;line-height:1.5;">Переведите <b>490₽</b> на указанные реквизиты. В комментарии к переводу укажите ваше имя — так платёж быстрее найдут.</div>
+      <div style="font-size:12.5px;color:var(--ink-soft);margin-top:10px;line-height:1.5;">Переведите <b>490₽</b> на указанные реквизиты. В комментарии к переводу укажите ваше имя — так платёж быстрее найдут.</div>
     </div>`;
   }
 
@@ -1381,23 +2157,65 @@ function renderPaywall(m){
     }
   }
 
+  const onlinePayBlock = `<div class="section-pad">
+    <button class="btn primary" id="ykPayBtn" onclick="payViaYookassa('${m.id}')">💳 Оплатить онлайн — 490₽</button>
+    <div class="pillnote" style="margin-top:10px;">Картой или через СБП прямо в браузере, без переписки и ожидания — подписка активируется автоматически сразу после оплаты.</div>
+  </div>
+  <div class="section-pad" style="text-align:center;padding-top:0;">
+    <button class="link-btn" onclick="toggleManualPayment()">Или переведите вручную (без комиссии сервиса)</button>
+  </div>`;
+
   document.getElementById('content').innerHTML = `
   ${backDuringTrial}
-  <div class="hero" style="${duringTrial?'padding-top:6px;':''}"><h1>${duringTrial?'Оплатить подписку заранее':'Активируйте профиль'}</h1><p>${duringTrial?'Профиль уже виден клиентам благодаря пробному доступу. Оплатите сейчас, чтобы размещение продлилось на месяц без перерыва.':'Ваш профиль сохранён, но пока не виден клиентам. Оформите ежемесячную подписку, чтобы клиенты могли находить вас и записываться.'}</p></div>
+  <div class="hero" style="${duringTrial?'padding-top:6px;':''}"><h1>${duringTrial?'Оплатить подписку заранее':(trialJustExpired?'Пробный период закончился':'Активируйте профиль')}</h1><p>${duringTrial?'Профиль уже виден клиентам благодаря пробному доступу. Оплатите сейчас, чтобы размещение продлилось на месяц без перерыва.':(trialJustExpired?'Бесплатный доступ закончился, и профиль временно скрыт из каталога. Оплатите подписку — и клиенты снова смогут вас найти.':'Ваш профиль сохранён, но пока не виден клиентам. Оформите ежемесячную подписку, чтобы клиенты могли находить вас и записываться.')}</p></div>
   <div class="card" style="text-align:center;">
     <div style="font-family:'Inter',sans-serif;font-size:30px;font-weight:600;">490₽<span style="font-size:14px;color:var(--ink-soft);font-weight:500;"> / месяц</span></div>
     <div style="font-size:13px;color:var(--ink-soft);margin-top:6px;">Без ограничений по записям и услугам</div>
   </div>
-  <div style="padding:0 18px 8px;font-weight:700;font-size:13.5px;">Выберите способ оплаты</div>
-  ${methodPicker}
-  <div style="height:14px"></div>
-  ${requisites}
-  ${claimBlock}
+  ${onlinePayBlock}
+  <div id="manualPaymentBlock" style="display:none;">
+    <div style="padding:14px 18px 8px;font-weight:700;font-size:13.5px;">Выберите способ перевода</div>
+    ${methodPicker}
+    <div style="height:14px"></div>
+    ${requisites}
+    ${claimBlock}
+  </div>
   <div class="section-pad" style="margin-top:6px;">
     ${duringTrial ? `<button class="btn ghost" onclick="state.forcePaywall=false; fillMasterArea();">Вернуться в кабинет</button>` : `<button class="btn ghost" onclick="editWhileInactive()">Настроить профиль без подписки</button>`}
+    <div style="height:8px"></div>
+    <button class="btn ghost" onclick="fillMasterArea()">🔄 Обновить статус оплаты</button>
   </div>`;
 }
 window.renderPaywall = renderPaywall;
+
+function toggleManualPayment(){
+  const el = document.getElementById('manualPaymentBlock');
+  if(el) el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+window.toggleManualPayment = toggleManualPayment;
+
+async function payViaYookassa(masterId){
+  const btn = document.getElementById('ykPayBtn');
+  const originalText = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = 'Готовим оплату…'; }
+  try{
+    const { data, error } = await sb.functions.invoke('create-payment', { body: { masterId } });
+    if(error) throw new Error(error.message || 'Функция оплаты недоступна');
+    if(!data || !data.ok || !data.confirmationUrl) throw new Error((data && data.error) || 'Не удалось создать платёж');
+    const url = data.confirmationUrl;
+    if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink){
+      window.Telegram.WebApp.openLink(url);
+    } else {
+      window.open(url, '_blank');
+    }
+    showToast('Открыли страницу оплаты — после оплаты вернитесь в приложение и нажмите «Обновить статус оплаты»');
+  }catch(e){
+    console.error('payViaYookassa failed', e);
+    showToast('Не удалось открыть онлайн-оплату. Попробуйте ещё раз или переведите вручную ниже.');
+  }
+  if(btn){ btn.disabled = false; btn.textContent = originalText; }
+}
+window.payViaYookassa = payViaYookassa;
 
 function pickPaymentMethod(method){
   state.paywallMethod = method;
@@ -1447,6 +2265,7 @@ window.submitPaymentClaim = submitPaymentClaim;
 function editWhileInactive(){ state.masterTab='profile'; state._forceEdit=true; fillMasterAreaEditMode(); }
 async function fillMasterAreaEditMode(){
   const m = await loadMaster(state.myMasterId);
+  const bookings = await loadBookings(m.id);
   const tabs = `<div class="subnav">
     <button class="${state.masterTab==='profile'?'active':''}" onclick="setMTabEdit('profile')">Профиль</button>
     <button class="${state.masterTab==='services'?'active':''}" onclick="setMTabEdit('services')">Услуги</button>
@@ -1454,7 +2273,7 @@ async function fillMasterAreaEditMode(){
     <button class="${state.masterTab==='schedule'?'active':''}" onclick="setMTabEdit('schedule')">Расписание</button>
   </div>`;
   let body='';
-  if(state.masterTab==='profile') body = renderMProfile(m,false);
+  if(state.masterTab==='profile') body = await renderMProfile(m, false, bookings);
   else if(state.masterTab==='services') body = renderMServices(m,false);
   else if(state.masterTab==='portfolio') body = renderMPortfolio(m,false);
   else if(state.masterTab==='schedule') body = renderMSchedule(m,false);
@@ -1463,7 +2282,67 @@ async function fillMasterAreaEditMode(){
 function setMTabEdit(t){ state.masterTab=t; fillMasterAreaEditMode(); }
 window.editWhileInactive=editWhileInactive; window.setMTabEdit=setMTabEdit;
 
-function renderMProfile(m, isDemo){
+async function renderMProfile(m, isDemo, bookings){
+  const views = isDemo ? 0 : (await sget('profile-views:'+m.id, true) || 0);
+  const requests = (bookings||[]).length;
+  const conversion = views ? Math.round((requests/views)*100) : 0;
+  const analyticsCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:10px;">📊 Мини-аналитика</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div style="text-align:center;"><div style="font-size:20px;font-weight:700;font-family:'Inter',sans-serif;">${views}</div><div style="font-size:10.5px;color:var(--ink-soft);">просмотров профиля</div></div>
+      <div style="text-align:center;"><div style="font-size:20px;font-weight:700;font-family:'Inter',sans-serif;color:var(--teal)">${requests}</div><div style="font-size:10.5px;color:var(--ink-soft);">заявок получено</div></div>
+      <div style="text-align:center;"><div style="font-size:20px;font-weight:700;font-family:'Inter',sans-serif;color:var(--rose-deep)">${conversion}%</div><div style="font-size:10.5px;color:var(--ink-soft);">конверсия в заявку</div></div>
+    </div>
+  </div>`;
+
+  const masterRefLink = `https://t.me/${BOT_USERNAME}?startapp=mref_${m.id}`;
+  const masterRefs = isDemo ? [] : (await sget('master-referrals:'+m.id, true) || []);
+  const masterRefCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">👥 Пригласите коллегу-мастера</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Коллега зарегистрируется по вашей ссылке — вы оба получите +3 дня бонусного доступа, как только модератор одобрит его анкету.${masterRefs.length?` Уже приглашено: ${masterRefs.length}.`:''}</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input readonly value="${masterRefLink}" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:12px;color:var(--ink-soft);" onclick="this.select()">
+      <button class="btn primary small" style="width:auto;padding:0 16px;white-space:nowrap;" onclick="copyText('${masterRefLink}')">Скопировать</button>
+    </div>
+  </div>`;
+
+  const linkCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🔗 Ваша ссылка для клиентов</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Отправьте эту ссылку клиентам в директ, сторис или на сайт — она откроет ваш профиль в приложении сразу на странице записи.</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input id="myBookingLink" readonly value="${masterBookingLink(m.id)}" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:12.5px;color:var(--ink-soft);" onclick="this.select()">
+      <button class="btn primary small" style="width:auto;padding:0 16px;white-space:nowrap;" onclick="copyText(masterBookingLink('${m.id}'))">Скопировать</button>
+    </div>
+    <button class="btn ghost small" style="margin-top:10px;" onclick="toggleQr()">🔳 Показать QR-код</button>
+    <div id="qrBox" style="display:none;text-align:center;margin-top:12px;">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(masterBookingLink(m.id))}" alt="QR-код ссылки для записи" style="width:200px;height:200px;border-radius:14px;border:1px solid var(--line);">
+      <div style="font-size:11.5px;color:var(--ink-soft);margin-top:8px;">Сохраните картинку (зажмите/ПКМ) и добавьте в сторис или на визитку.</div>
+    </div>
+    ${BOT_USERNAME==='YOUR_BOT_USERNAME' ? `<div class="pillnote" style="margin:10px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:#B23A48;">⚠️ Ссылка ещё не работает — владельцу платформы нужно указать username Telegram-бота в настройках приложения (константа BOT_USERNAME).</div>` : ''}
+  </div>`;
+
+  const depositCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">💰 Предоплата за запись</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Если включено, клиент при записи увидит ваши реквизиты и переведёт предоплату <b>вам напрямую</b> — платформа деньги не принимает и не удерживает. Вы сами подтверждаете получение перевода в заявке.</div>
+    <div class="field"><label>Сумма предоплаты, ₽</label><input id="pfDeposit" type="number" min="0" step="50" placeholder="0 — предоплата не требуется" value="${m.depositRequired||''}"></div>
+    <div class="field"><label>Телефон для СБП (необязательно)</label><input id="pfDepositPhone" placeholder="+7 900 000-00-00" value="${escapeHtml(m.depositPhone||'')}"></div>
+    <div class="field"><label>Номер карты (необязательно)</label><input id="pfDepositCard" placeholder="0000 0000 0000 0000" value="${escapeHtml(m.depositCard||'')}"></div>
+    <button class="btn ghost small" onclick="saveDepositSetting('${m.id}')">Сохранить</button>
+  </div>`;
+
+  const onVacation = m.vacationUntil && m.vacationUntil >= todayISO(0);
+  const vacationCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🌴 Отпуск / перерыв</div>
+    ${onVacation
+      ? `<div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:10px;">Профиль скрыт из каталога до ${fmtDate(m.vacationUntil)}. Клиенты не смогут вас найти и записаться.</div>
+         <button class="btn teal small" onclick="endVacation()">Я вернулся — показать профиль снова</button>`
+      : `<div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:10px;">Уезжаете или берёте перерыв? Скройте профиль из каталога на нужные даты, не теряя рейтинг, отзывы и расписание.</div>
+         <div style="display:flex;gap:8px;align-items:center;">
+           <input id="vacDate" type="date" min="${todayISO(1)}" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:13px;">
+           <button class="btn ghost small" style="width:auto;padding:0 16px;white-space:nowrap;" onclick="startVacation()">Уйти в отпуск</button>
+         </div>`}
+  </div>`;
+
   return `<div class="card">
     <div class="field"><label>Имя</label><input id="pfName" value="${escapeHtml(m.name)}" ${isDemo?'disabled':''}></div>
     <div class="field"><label>Специализация</label><select id="pfSpec" ${isDemo?'disabled':''}>${Object.entries(SPECS).map(([k,v])=>`<option value="${k}" ${m.specialization===k?'selected':''}>${v.icon} ${v.label}</option>`).join('')}</select></div>
@@ -1473,8 +2352,58 @@ function renderMProfile(m, isDemo){
     </div>
     <div class="field"><label>О себе</label><textarea id="pfBio" ${isDemo?'disabled':''}>${escapeHtml(m.bio||'')}</textarea></div>
     ${isDemo? '<div class="pillnote" style="margin:0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">В демо-режиме изменения не сохраняются.</div>' : `<button class="btn primary" onclick="saveProfileEdits()">Сохранить</button>`}
-  </div>`;
+  </div>
+  ${analyticsCard}
+  ${linkCard}
+  ${masterRefCard}
+  ${depositCard}
+  ${vacationCard}`;
 }
+async function saveDepositSetting(masterId){
+  const el = document.getElementById('pfDeposit');
+  const phoneEl = document.getElementById('pfDepositPhone');
+  const cardEl = document.getElementById('pfDepositCard');
+  const val = el ? Number(el.value) : 0;
+  const phone = phoneEl ? phoneEl.value.trim() : '';
+  const card = cardEl ? cardEl.value.trim() : '';
+  const m = await loadMaster(masterId);
+  m.depositRequired = (val && val>0) ? val : null;
+  m.depositPhone = phone || null;
+  m.depositCard = card || null;
+  if(m.depositRequired && !phone && !card){
+    showToast('Укажите телефон для СБП или номер карты — иначе клиенту некуда будет перевести предоплату');
+    return;
+  }
+  await saveMaster(m);
+  showToast(m.depositRequired ? `Предоплата ${m.depositRequired}₽ включена` : 'Предоплата отключена');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.saveDepositSetting = saveDepositSetting;
+
+function toggleQr(){
+  const el = document.getElementById('qrBox');
+  if(el) el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+window.toggleQr = toggleQr;
+async function startVacation(){
+  const dateEl = document.getElementById('vacDate');
+  const d = dateEl && dateEl.value;
+  if(!d){ showToast('Укажите дату возвращения'); return; }
+  const m = await loadMaster(state.myMasterId);
+  m.vacationUntil = d;
+  await saveMaster(m);
+  showToast('Профиль скрыт из каталога до вашего возвращения');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.startVacation = startVacation;
+async function endVacation(){
+  const m = await loadMaster(state.myMasterId);
+  m.vacationUntil = null;
+  await saveMaster(m);
+  showToast('С возвращением! Профиль снова виден клиентам');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.endVacation = endVacation;
 async function saveProfileEdits(){
   const m = await loadMaster(state.myMasterId);
   m.name = document.getElementById('pfName').value.trim() || m.name;
@@ -1614,10 +2543,12 @@ async function toggleSlot(t){
   m.slots = m.slots || {};
   const d = state.masterScheduleDate;
   m.slots[d] = m.slots[d] || [];
-  if(m.slots[d].includes(t)) m.slots[d] = m.slots[d].filter(x=>x!==t);
+  const wasOpen = m.slots[d].includes(t);
+  if(wasOpen) m.slots[d] = m.slots[d].filter(x=>x!==t);
   else m.slots[d].push(t);
   await saveMaster(m);
   (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+  if(!wasOpen) notifyWaitlist(m.id); // открыли новое время — сообщим листу ожидания
 }
 window.toggleSlot = toggleSlot;
 
@@ -1640,6 +2571,7 @@ async function applyScheduleTemplate(kind){
   await saveMaster(m);
   showToast('Расписание применено на месяц вперёд');
   (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+  notifyWaitlist(m.id); // открылось много нового времени — сообщим листу ожидания
 }
 window.applyScheduleTemplate = applyScheduleTemplate;
 
@@ -1657,28 +2589,303 @@ function renderMBookings(m, bookings, isDemo){
   if(isDemo){
     return `<div class="card"><div class="empty" style="padding:10px 0">В демо-режиме заявки клиентов будут отображаться здесь: с именем, услугой, датой и кнопками подтверждения.</div></div>`;
   }
+  state._myBookingsCache = bookings; // для экспорта CSV без повторной загрузки
+
+  // --- Финансовый отчёт: выручка за последние 30 дней, топ услуг, самый загруженный день недели ---
+  const came = bookings.filter(b=>b.status==='confirmed' && isBookingPast(b) && b.attendance!=='no-show');
+  const since30 = todayISO(-30);
+  const revenue30 = came.filter(b=>b.date>=since30).reduce((sum,b)=>sum+(b.price||0),0);
+  const byService = {};
+  came.forEach(b=>{ byService[b.serviceName] = (byService[b.serviceName]||0) + (b.price||0); });
+  const topService = Object.entries(byService).sort((a,b)=>b[1]-a[1])[0];
+  const byWeekday = [0,0,0,0,0,0,0];
+  came.forEach(b=>{ const d = new Date(b.date+'T00:00:00'); byWeekday[d.getDay()]++; });
+  const wdNames = ['вс','пн','вт','ср','чт','пт','сб'];
+  const busiestIdx = byWeekday.indexOf(Math.max(...byWeekday));
+  const financeCard = came.length ? `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:10px;">💰 Финансовый отчёт</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div><div style="font-size:19px;font-weight:700;font-family:'Inter',sans-serif;">${revenue30}₽</div><div style="font-size:10.5px;color:var(--ink-soft);">выручка за 30 дней</div></div>
+      <div><div style="font-size:19px;font-weight:700;font-family:'Inter',sans-serif;">${came.length}</div><div style="font-size:10.5px;color:var(--ink-soft);">визитов состоялось</div></div>
+    </div>
+    ${topService?`<div style="font-size:12px;color:var(--ink-soft);margin-top:10px;">🏆 Больше всего приносит: <b style="color:var(--ink);">${escapeHtml(topService[0])}</b> (${topService[1]}₽)</div>`:''}
+    ${Math.max(...byWeekday)>0?`<div style="font-size:12px;color:var(--ink-soft);margin-top:4px;">📅 Самый загруженный день: <b style="color:var(--ink);">${wdNames[busiestIdx]}</b></div>`:''}
+  </div>` : '';
+
+  const exportBtn = bookings.length ? `<div class="section-pad"><button class="btn ghost small" onclick="exportMyBookingsCSV()">📤 Экспорт записей в CSV</button></div>` : '';
+
   if(!bookings.length) return `<div class="card"><div class="empty" style="padding:10px 0">Пока нет заявок на запись</div></div>`;
   const sorted = bookings.slice().sort((a,b)=>b.createdAt-a.createdAt);
-  return sorted.map(b=>`<div class="card">
+  const rows = sorted.map(b=>{
+    const past = isBookingPast(b);
+    const isCompleted = b.status==='confirmed' && past;
+    const noShow = isCompleted && b.attendance==='no-show';
+    const cameConfirmed = isCompleted && b.attendance==='came';
+    const statusLabel = noShow ? 'Не пришёл(ла)' : cameConfirmed ? 'Пришёл(ла)' : isCompleted ? 'Состоялась' : (b.status==='pending'?'Ожидает':b.status==='confirmed'?'Подтверждена':'Отменена');
+    const statusClass = noShow ? 'cancelled' : cameConfirmed ? 'confirmed' : isCompleted ? 'completed' : b.status;
+    return `<div class="card">
     <div class="mcard-top">
       <div>
         <div class="mcard-name" style="font-size:14.5px;">${escapeHtml(b.clientName)}</div>
         <div class="mcard-city">${escapeHtml(b.serviceName)} · ${b.price}₽</div>
       </div>
-      <span class="badge ${b.status}">${b.status==='pending'?'Ожидает':b.status==='confirmed'?'Подтверждена':'Отменена'}</span>
+      <span class="badge ${statusClass}">${statusLabel}</span>
     </div>
     <div class="divider"></div>
     <div style="font-size:13px;color:var(--ink-soft);">📅 ${fmtDate(b.date)} в ${b.time}</div>
     <div style="font-size:13px;color:var(--ink-soft);margin-top:2px;">📞 ${escapeHtml(b.clientContact)}</div>
-    ${b.status==='pending'?`<div style="display:flex;gap:8px;margin-top:10px;">
+    ${b.depositAmount?`<div style="font-size:12.5px;margin-top:4px;color:${b.depositStatus==='confirmed'?'var(--teal)':'var(--gold)'};">${b.depositStatus==='confirmed'?'✅':'⏳'} Предоплата ${b.depositAmount}₽ — ${b.depositStatus==='confirmed'?'получена':'ожидает вашего подтверждения'}</div>`:''}
+    ${(b.depositAmount && b.depositStatus==='awaiting_confirmation')?`<div style="margin-top:10px;">
+      <button class="btn teal small" onclick="confirmDepositReceived('${b.id}')">✅ Деньги получены</button>
+    </div>`:''}
+    ${(b.status==='pending' && !past)?`<div style="display:flex;gap:8px;margin-top:10px;">
       <button class="btn teal small" style="flex:1" onclick="setBookingStatus('${b.id}','confirmed')">Подтвердить</button>
       <button class="btn danger small" style="flex:1" onclick="setBookingStatus('${b.id}','cancelled')">Отклонить</button>
     </div>`:''}
-    ${b.status==='confirmed'?`<div style="margin-top:10px;">
+    ${(b.status==='confirmed' && !past)?`<div style="margin-top:10px;">
       <button class="btn danger small" onclick="setBookingStatus('${b.id}','cancelled')">Отменить запись</button>
     </div>`:''}
-  </div>`).join('');
+    ${(isCompleted && !b.attendance)?`<div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="btn teal small" style="flex:1" onclick="markAttendance('${b.id}','came')">✅ Пришёл(ла)</button>
+      <button class="btn danger small" style="flex:1" onclick="markAttendance('${b.id}','no-show')">❌ Не пришёл(ла)</button>
+    </div>`:''}
+  </div>`;
+  }).join('');
+  return financeCard + exportBtn + rows;
 }
+
+async function confirmDepositReceived(bookingId){
+  const bookings = await loadBookings(state.myMasterId);
+  const b = bookings.find(x=>x.id===bookingId);
+  if(!b) return;
+  b.depositStatus = 'confirmed';
+  await saveBookings(state.myMasterId, bookings);
+  showToast('Отмечено: предоплата получена');
+  if(b.clientTelegramId){
+    notifyTelegram(b.clientTelegramId, `✅ Мастер подтвердил получение предоплаты ${b.depositAmount}₽.\n${b.serviceName} · ${fmtDate(b.date)} в ${b.time}`);
+  }
+  fillMasterArea();
+}
+window.confirmDepositReceived = confirmDepositReceived;
+
+async function markAttendance(bookingId, attendance){
+  const bookings = await loadBookings(state.myMasterId);
+  const b = bookings.find(x=>x.id===bookingId);
+  if(!b) return;
+  b.attendance = attendance;
+  await saveBookings(state.myMasterId, bookings);
+  showToast(attendance==='came' ? 'Отмечено: клиент пришёл' : 'Отмечено: клиент не пришёл');
+  fillMasterArea();
+}
+window.markAttendance = markAttendance;
+
+function exportMyBookingsCSV(){
+  const bookings = state._myBookingsCache || [];
+  if(!bookings.length){ showToast('Нет записей для экспорта'); return; }
+  const headers = ['Клиент','Контакт','Услуга','Цена','Дата','Время','Статус','Явка'];
+  const rows = bookings.map(b=>[
+    b.clientName, b.clientContact, b.serviceName, b.price, b.date, b.time,
+    b.status==='pending'?'Ожидает':b.status==='confirmed'?'Подтверждена':'Отменена',
+    b.attendance==='came'?'Пришёл':b.attendance==='no-show'?'Не пришёл':''
+  ]);
+  const csv = [headers, ...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `beautyhub-bookings-${todayISO(0)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+}
+window.exportMyBookingsCSV = exportMyBookingsCSV;
+
+/* ============ МИНИ-CRM: КЛИЕНТЫ + РАССЫЛКА ============ */
+async function renderMClients(m, isDemo, bookings){
+  if(isDemo){
+    return `<div class="card"><div class="empty" style="padding:20px 0">👥 Здесь появится список ваших клиентов: кто и когда записывался, заметки и рассылка — доступно после создания настоящего профиля.</div></div>`;
+  }
+  const notesRaw = await sget('client-notes:'+m.id, true) || {};
+  const priorityClients = await sget('priority-clients', true) || [];
+  const map = new Map();
+  bookings.forEach(b=>{
+    const key = b.clientTelegramId || b.clientContact;
+    if(!key) return;
+    if(!map.has(key)) map.set(key, {key, name:b.clientName, contact:b.clientContact, telegramId:b.clientTelegramId, visits:0, firstDate:null, lastDate:null, spent:0});
+    const c = map.get(key);
+    c.visits++;
+    if(!c.firstDate || b.date<c.firstDate) c.firstDate = b.date;
+    if(!c.lastDate || b.date>c.lastDate) c.lastDate = b.date;
+    if(b.status==='confirmed' && isBookingPast(b)) c.spent += (b.price||0);
+  });
+  const imported = await sget('imported-clients:'+m.id, true) || [];
+  imported.forEach(ic=>{
+    if(!ic.contact || map.has(ic.contact)) return;
+    map.set(ic.contact, {key:ic.contact, name:ic.name, contact:ic.contact, telegramId:null, visits:0, firstDate:null, lastDate:null, spent:0, imported:true});
+  });
+  const list = Array.from(map.values()).sort((a,b)=>(b.lastDate||'').localeCompare(a.lastDate||''));
+  const todayD = new Date(todayISO(0)+'T00:00:00');
+  list.forEach(c=>{
+    // Обратная совместимость: раньше client-notes хранил просто строку, теперь {note, tags}
+    const raw = notesRaw[c.key];
+    if(typeof raw === 'string'){ c.note = raw; c.tags = []; }
+    else { c.note = (raw && raw.note) || ''; c.tags = (raw && raw.tags) || []; }
+
+    // «Давно не был» — если визитов ≥2, сравниваем с обычным интервалом между визитами;
+    // если визит один — простой порог в 60 дней.
+    c.winBack = false;
+    if(c.lastDate){
+      const daysSince = Math.floor((todayD - new Date(c.lastDate+'T00:00:00')) / 86400000);
+      if(c.visits>=2 && c.firstDate!==c.lastDate){
+        const avgGap = (new Date(c.lastDate+'T00:00:00') - new Date(c.firstDate+'T00:00:00')) / 86400000 / (c.visits-1);
+        if(avgGap>0 && daysSince > avgGap*1.5 && daysSince>14) c.winBack = true;
+      } else if(c.visits===1 && daysSince>60){
+        c.winBack = true;
+      }
+    }
+  });
+  state._clientList = list; // для доступа по индексу из onclick без экранирования спецсимволов в ключах
+
+  const allTags = Array.from(new Set(list.flatMap(c=>c.tags))).sort();
+  const winBackCount = list.filter(c=>c.winBack).length;
+
+  const withTelegram = list.filter(c=>c.telegramId).length;
+  const broadcastCard = `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">📢 Написать всем клиентам</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Сообщение придёт от бота всем клиентам, у которых есть Telegram (сейчас это ${withTelegram} из ${list.length}). Удобно для «освободилось время завтра» или «у меня новая услуга».</div>
+    <textarea id="broadcastText" placeholder="Например: Привет! Завтра в 14:00 освободилось окошко, если нужно — записывайтесь 🙂" style="min-height:70px;"></textarea>
+    <button class="btn primary small" style="margin-top:8px;" onclick="broadcastToClients('${m.id}')" ${withTelegram?'':'disabled'}>Отправить всем (${withTelegram})</button>
+  </div>`;
+
+  const winBackCard = winBackCount ? `<div class="card" style="background:#FBEFD6;border:1px solid #F3DFA8;">
+    <div style="font-weight:700;font-size:13.5px;color:#8A5A1F;margin-bottom:4px;">⏰ Давно не были (${winBackCount})</div>
+    <div style="font-size:12px;color:#8A5A1F;line-height:1.5;">Обычно приходят чаще — возможно, стоит написать и напомнить о себе. Ищите бейдж «⏰ давно не был(а)» в списке ниже.</div>
+  </div>` : '';
+
+  const importCard = `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">📥 Импортировать базу клиентов</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Переносите базу из блокнота или другого сервиса — по одному клиенту на строке, формат «Имя, телефон или @username». Так вы сразу увидите их здесь.</div>
+    <textarea id="importClientsText" placeholder="Анна, +79001234567&#10;Мария, @maria_beauty" style="min-height:80px;"></textarea>
+    <button class="btn ghost small" style="margin-top:8px;" onclick="importClients('${m.id}')">Импортировать</button>
+  </div>`;
+
+  const exportCard = list.length ? `<div class="section-pad"><button class="btn ghost small" onclick="exportMyClientsCSV()">📤 Экспорт клиентов в CSV</button></div>` : '';
+
+  const tagFilterBar = allTags.length ? `<div class="chiprow" style="padding-top:0;">
+    <button class="chip" onclick="filterClientsByTag('')">Все</button>
+    ${allTags.map(t=>`<button class="chip" onclick="filterClientsByTag('${escapeHtml(t).replace(/'/g,"\\'")}')">${escapeHtml(t)}</button>`).join('')}
+  </div>` : '';
+
+  if(!list.length){
+    return broadcastCard + importCard + `<div class="card"><div class="empty" style="padding:10px 0">Пока нет клиентов — они появятся здесь после первых записей или импорта.</div></div>`;
+  }
+
+  const rows = list.map((c,i)=>`<div class="card" data-tags="${escapeHtml(c.tags.join(',').toLowerCase())}">
+    <div class="mcard-top">
+      <div>
+        <div class="mcard-name" style="font-size:14.5px;">${escapeHtml(c.name)} ${priorityClients.includes(c.key)?'<span class="badge active" style="margin-left:4px;">⭐ приоритетный</span>':''}${c.imported?'<span class="badge demo" style="margin-left:4px;">импорт</span>':''}${c.winBack?'<span class="badge pending" style="margin-left:4px;">⏰ давно не был(а)</span>':''}</div>
+        <div class="mcard-city">📞 ${escapeHtml(c.contact)}</div>
+      </div>
+      ${c.telegramId?`<button class="btn ghost small" style="width:auto;padding:0 12px;" onclick="messageOneClient(${i})">✉️</button>`:''}
+    </div>
+    <div style="font-size:12.5px;color:var(--ink-soft);margin-top:6px;">🗓️ ${c.visits} визит${c.visits===1?'':c.visits<5?'а':'ов'}${c.lastDate?` · последний ${fmtDate(c.lastDate)}`:''}${c.spent?` · ${c.spent}₽ потрачено`:''}</div>
+    ${c.tags.length?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${c.tags.map(t=>`<span class="tag" style="background:var(--bg);color:var(--ink-soft);font-size:10.5px;">${escapeHtml(t)}</span>`).join('')}</div>`:''}
+    <div class="divider"></div>
+    <textarea id="clientNote_${i}" placeholder="Заметка (например: аллергия на такой-то состав, любит крепкий кофе...)" style="min-height:44px;font-size:12.5px;" onblur="saveClientNote('${m.id}', ${i})">${escapeHtml(c.note)}</textarea>
+    <input id="clientTags_${i}" placeholder="Теги через запятую (VIP, чувствительная кожа...)" value="${escapeHtml(c.tags.join(', '))}" style="margin-top:8px;width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:12px;" onblur="saveClientNote('${m.id}', ${i})">
+  </div>`).join('');
+
+  return broadcastCard + winBackCard + importCard + exportCard + tagFilterBar + `<div id="clientListRows">${rows}</div>`;
+}
+window.renderMClients = renderMClients;
+
+function filterClientsByTag(tag){
+  const q = tag.trim().toLowerCase();
+  document.querySelectorAll('#clientListRows [data-tags]').forEach(el=>{
+    const tags = (el.dataset.tags||'').split(',').map(t=>t.trim());
+    el.style.display = (!q || tags.includes(q)) ? '' : 'none';
+  });
+}
+window.filterClientsByTag = filterClientsByTag;
+
+function exportMyClientsCSV(){
+  const list = state._clientList || [];
+  if(!list.length){ showToast('Нет клиентов для экспорта'); return; }
+  const headers = ['Имя','Контакт','Визитов','Последний визит','Потрачено','Теги','Заметка'];
+  const rows = list.map(c=>[c.name, c.contact, c.visits, c.lastDate||'', c.spent, c.tags.join('; '), c.note]);
+  const csv = [headers, ...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `beautyhub-clients-${todayISO(0)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+}
+window.exportMyClientsCSV = exportMyClientsCSV;
+
+async function importClients(masterId){
+  const el = document.getElementById('importClientsText');
+  const raw = (el && el.value || '').trim();
+  if(!raw){ showToast('Вставьте список клиентов, по одному на строке'); return; }
+  const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  const existing = await sget('imported-clients:'+masterId, true) || [];
+  const existingContacts = new Set(existing.map(c=>c.contact));
+  let added = 0;
+  for(const line of lines){
+    const parts = line.split(',').map(p=>p.trim());
+    const name = parts[0] || 'Клиент';
+    const contact = parts[1] || '';
+    if(!contact || existingContacts.has(contact)) continue;
+    existing.push({name, contact, importedAt:Date.now()});
+    existingContacts.add(contact);
+    added++;
+  }
+  await sset('imported-clients:'+masterId, existing, true);
+  showToast(added ? `Импортировано клиентов: ${added}` : 'Ничего нового не добавлено (возможно, уже есть в базе)');
+  if(el) el.value='';
+  fillMasterArea();
+}
+window.importClients = importClients;
+
+async function saveClientNote(masterId, i){
+  const c = (state._clientList||[])[i];
+  if(!c) return;
+  const noteEl = document.getElementById('clientNote_'+i);
+  const tagsEl = document.getElementById('clientTags_'+i);
+  const text = noteEl ? noteEl.value.trim() : '';
+  const tags = tagsEl ? tagsEl.value.split(',').map(t=>t.trim()).filter(Boolean) : [];
+  const notes = await sget('client-notes:'+masterId, true) || {};
+  notes[c.key] = { note:text, tags };
+  await sset('client-notes:'+masterId, notes, true);
+}
+window.saveClientNote = saveClientNote;
+
+function messageOneClient(i){
+  const c = (state._clientList||[])[i];
+  if(!c || !c.telegramId) return;
+  const text = window.prompt(`Сообщение для ${c.name}:`, '');
+  if(!text || !text.trim()) return;
+  notifyTelegram(c.telegramId, text.trim());
+  showToast('Сообщение отправлено');
+}
+window.messageOneClient = messageOneClient;
+
+async function broadcastToClients(masterId){
+  const el = document.getElementById('broadcastText');
+  const text = (el && el.value || '').trim();
+  if(!text){ showToast('Введите текст сообщения'); return; }
+  const list = state._clientList || [];
+  const targets = list.filter(c=>c.telegramId);
+  if(!targets.length){ showToast('Нет клиентов с Telegram для рассылки'); return; }
+  const m = await loadMaster(masterId);
+  let sent = 0;
+  for(const c of targets){
+    const ok = await notifyTelegram(c.telegramId, `💌 Сообщение от мастера «${m.name}»:\n${text}`);
+    if(ok) sent++;
+  }
+  showToast(`Отправлено ${sent} из ${targets.length}`);
+  if(el) el.value = '';
+}
+window.broadcastToClients = broadcastToClients;
+
 async function setBookingStatus(bookingId, status){
   const bookings = await loadBookings(state.myMasterId);
   const b = bookings.find(x=>x.id===bookingId);
@@ -1688,6 +2895,17 @@ async function setBookingStatus(bookingId, status){
   await saveBookings(state.myMasterId, bookings);
   showToast(status==='confirmed' ? 'Запись подтверждена — клиент увидит статус в «Моих записях»' : 'Запись отменена, клиент будет уведомлён');
   fillMasterArea();
+
+  // Мгновенное уведомление клиенту в Telegram (если у него сохранён telegramId).
+  if(b.clientTelegramId){
+    const m = await loadMaster(state.myMasterId);
+    const masterName = m ? m.name : 'мастер';
+    const text = status==='confirmed'
+      ? `✅ Ваша запись подтверждена!\n${b.serviceName} · ${fmtDate(b.date)} в ${b.time}\nМастер: ${masterName}`
+      : `❌ Мастер отменил вашу запись.\n${b.serviceName} · ${fmtDate(b.date)} в ${b.time}\nМастер: ${masterName}\n\nВы можете выбрать другое время в приложении.`;
+    notifyTelegram(b.clientTelegramId, text);
+  }
+  if(status==='cancelled') notifyWaitlist(state.myMasterId); // слот освободился — сообщим листу ожидания
 }
 window.setBookingStatus = setBookingStatus;
 
@@ -1698,11 +2916,35 @@ async function fillAdmin(){
   if(state.isTelegramContext){
     // Real Telegram session: identity already verified by Telegram ID, no password needed.
     if(!state.isOwner) return renderAdminDenied();
+    if(state.adminScreen==='trends') return renderAdminTrends();
+    if(state.adminScreen==='broadcast') return renderAdminBroadcast();
+    if(state.adminScreen==='reviewsShowcase') return renderAdminReviewsShowcase();
+    if(state.adminScreen==='funnel') return renderAdminFunnel();
+    if(state.adminScreen==='auditlog') return renderAdminAuditLog();
+    if(state.adminScreen==='admins') return renderAdminAdmins();
+    if(state.adminScreen==='banners') return renderAdminBanners();
+    if(state.adminScreen==='adrequests') return renderAdminAdRequests();
+    if(state.adminScreen==='adrequest' && state.adminAdRequestKey) return renderAdminAdRequestThread(state.adminAdRequestKey);
+    if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
+    if(state.adminScreen==='chatlist') return renderAdminChatList();
+    if(state.adminScreen==='chat' && state.adminChatMasterId) return renderAdminChatThread(state.adminChatMasterId);
     if(state.adminEditingId) return renderAdminEdit(state.adminEditingId);
     return renderAdminDashboard();
   }
   // Opened outside Telegram (e.g. testing in a browser) — fall back to demo password.
   if(!state.adminAuthed) return renderAdminLogin();
+  if(state.adminScreen==='trends') return renderAdminTrends();
+  if(state.adminScreen==='broadcast') return renderAdminBroadcast();
+  if(state.adminScreen==='reviewsShowcase') return renderAdminReviewsShowcase();
+  if(state.adminScreen==='funnel') return renderAdminFunnel();
+  if(state.adminScreen==='auditlog') return renderAdminAuditLog();
+  if(state.adminScreen==='admins') return renderAdminAdmins();
+  if(state.adminScreen==='banners') return renderAdminBanners();
+  if(state.adminScreen==='adrequests') return renderAdminAdRequests();
+  if(state.adminScreen==='adrequest' && state.adminAdRequestKey) return renderAdminAdRequestThread(state.adminAdRequestKey);
+  if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
+  if(state.adminScreen==='chatlist') return renderAdminChatList();
+  if(state.adminScreen==='chat' && state.adminChatMasterId) return renderAdminChatThread(state.adminChatMasterId);
   if(state.adminEditingId) return renderAdminEdit(state.adminEditingId);
   return renderAdminDashboard();
 }
@@ -1728,7 +2970,7 @@ function tryAdminLogin(){
   else { showToast('Неверный пароль'); }
 }
 window.tryAdminLogin = tryAdminLogin;
-function adminLogout(){ state.adminAuthed=false; state.adminEditingId=null; goto('catalog'); }
+function adminLogout(){ state.adminAuthed=false; state.adminEditingId=null; state.adminScreen='dashboard'; state.adminChatMasterId=null; goto('catalog'); }
 window.adminLogout = adminLogout;
 
 async function renderAdminDashboard(){
@@ -1739,17 +2981,47 @@ async function renderAdminDashboard(){
   const disabled = masters.filter(m=>m.disabledByAdmin);
   const pendingModeration = masters.filter(m=>m.moderationStatus==='pending');
 
-  let totalBookings=0, totalReviews=0;
+  let totalBookings=0, totalReviews=0, totalChatUnread=0;
   const bookingsByMaster = {};
   for(const m of masters){
     const bk = await loadBookings(m.id);
     bookingsByMaster[m.id]=bk;
     totalBookings += bk.length;
     totalReviews += (m.ratingCount||0);
+    const chat = await loadChat(m.id);
+    totalChatUnread += chat.filter(msg=>msg.from==='master' && !msg.readByOwner).length;
   }
+  state._ownerAlertCount = pendingModeration.length + totalChatUnread;
   const mrr = paidActive.length * 490;
 
-  const freeModeBanner = !SUBSCRIPTION_ENABLED ? `<div class="pillnote" style="margin:0 18px 14px;background:#FCE1EE;border-color:#F5C7E0;color:#8B3EF0;">🎉 Акция: подписка временно бесплатна для всех мастеров — так проще быстро набрать первую базу. Включить оплату обратно можно в любой момент одной настройкой.</div>` : '';
+  // Алерт про отток: платящий мастер (не на пробном), который давно не открывал приложение —
+  // возможный кандидат на неоплату следующего цикла, стоит написать заранее.
+  const churnRisk = paidActive.filter(m => !m.lastSeenAt || (Date.now() - m.lastSeenAt) > 14*24*3600*1000);
+  state._adminMastersCache = masters; // для экспорта в CSV без повторной загрузки
+
+  // Снимок статистики на сегодня — источник данных для экрана «Динамика».
+  // Пишется один раз в день (если владелец вообще не откроет кабинет в какой-то день — точка
+  // просто не появится; для полностью автоматических ежедневных снимков см. DAILY_DIGEST_SETUP.md).
+  try{
+    const todayKey = 'stats-daily:' + todayISO(0);
+    const existing = await sget(todayKey, true);
+    if(!existing){
+      await sset(todayKey, {
+        date: todayISO(0),
+        totalMasters: masters.length,
+        paidActive: paidActive.length,
+        onTrial: onTrial.length,
+        inactive: inactive.length,
+        pendingModeration: pendingModeration.length,
+        mrr,
+        totalBookings,
+        chatUnreadTotal: totalChatUnread,
+        capturedAt: Date.now()
+      }, true);
+    }
+  }catch(e){ console.warn('daily snapshot capture failed:', e); }
+
+  const freeModeBanner = !SUBSCRIPTION_ENABLED ? `<div class="pillnote" style="margin:0 18px 14px;background:var(--pink-tint);border-color:#F5C7E0;color:var(--rose-deep);">🎉 Акция: подписка временно бесплатна для всех мастеров — так проще быстро набрать первую базу. Включить оплату обратно можно в любой момент одной настройкой (флаг SUBSCRIPTION_ENABLED в коде).</div>` : '';
 
   const overview = `<div class="card">
     <div style="font-weight:700;font-size:14px;margin-bottom:10px;">Общий дашборд</div>
@@ -1767,6 +3039,17 @@ async function renderAdminDashboard(){
       <div class="card" style="margin:0;padding:12px;"><div style="font-size:22px;font-weight:700;font-family:'Inter',sans-serif;">${totalBookings}</div><div style="font-size:11.5px;color:var(--ink-soft)">Всего записей</div></div>
     </div>
   </div>`;
+
+  const churnAlert = churnRisk.length ? `<div class="card" style="background:#FBEFD6;border:1px solid #F3DFA8;">
+    <div style="font-weight:700;font-size:13.5px;color:#8A5A1F;margin-bottom:6px;">⚠️ Риск оттока (${churnRisk.length})</div>
+    <div style="font-size:12px;color:#8A5A1F;line-height:1.5;">Платят подписку, но не заходили в приложение 14+ дней — стоит написать и узнать, всё ли в порядке:</div>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+      ${churnRisk.map(m=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:#8A5A1F;">
+        <span>${escapeHtml(m.name)} — ${m.lastSeenAt ? Math.floor((Date.now()-m.lastSeenAt)/86400000)+' дн. назад' : 'ни разу не заходил(а)'}</span>
+        ${m.telegramId?`<button class="link-btn" style="font-size:12px;" onclick="openAdminChat('${m.id}')">Написать</button>`:''}
+      </div>`).join('')}
+    </div>
+  </div>` : '';
 
   const moderationQueue = pendingModeration.length ? `
     <div style="padding:0 18px 8px;font-weight:700;font-size:13.5px;">🕓 Ждут проверки (${pendingModeration.length})</div>
@@ -1787,6 +3070,7 @@ async function renderAdminDashboard(){
     <div class="divider" style="margin:4px 18px 14px;"></div>
   ` : '';
 
+  const isOwnerRole = state.adminRole==='owner' || !state.isTelegramContext; // вне Telegram (тест-режим) считаем полным доступом
   const list = masters.filter(m=>m.moderationStatus!=='pending').slice().sort((a,b)=>{
     // Мастера с ожидающей проверки квитанцией — в начало списка, чтобы их не пропустить
     const aPending = a.paymentClaimStatus==='pending' ? 1 : 0;
@@ -1801,27 +3085,36 @@ async function renderAdminDashboard(){
       ? (m.subscriptionActive ? `<span class="badge active">🎉 Бесплатный доступ</span>` : `<span class="badge inactive">Не одобрен</span>`)
       : (m.isTrial && m.subscriptionActive)
         ? `<span class="badge pending">🎁 Пробный период, ~${trialHoursLeft}ч</span>`
-        : (m.subscriptionActive ? `<span class="badge active">Оплачено до ${fmtDate(m.subscriptionUntil)}</span>` : `<span class="badge inactive">Не оплачено</span>`);
+        : (m.subscriptionActive
+            ? `<span class="badge active">Оплачено до ${fmtDate(m.subscriptionUntil)}</span>`
+            : (m.trialExpiredNotifiedAt ? `<span class="badge inactive">⏳ Пробный истёк, не оплачено</span>` : `<span class="badge inactive">Не оплачено</span>`));
     const visBadge = m.disabledByAdmin ? `<span class="badge cancelled">Скрыт админом</span>` : '';
+    const featuredBadge = m.featured ? `<span class="badge active" style="background:#F3E3B8;color:#8A5A1F;">⭐ Мастер месяца</span>` : '';
     const claimBadge = (m.paymentClaimStatus==='pending' && !m.subscriptionActive)
       ? `<span class="badge pending">💌 Прислал(а) квитанцию — ${m.paymentClaimMethod==='sbp'?'СБП':'карта'}</span>` : '';
     const confirmBtn = (m.paymentClaimStatus==='pending' && !m.subscriptionActive)
       ? `<button class="btn teal small" onclick="adminConfirmPayment('${m.id}')">Оплата поступила — активировать</button>` : '';
-    return `<div class="card">
+    const tagsHtml = (m.tags&&m.tags.length) ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${m.tags.map(t=>`<span class="tag" style="background:var(--bg);color:var(--ink-soft);font-size:10.5px;">${escapeHtml(t)}</span>`).join('')}</div>` : '';
+    return `<div class="card" data-search="${escapeHtml((m.name+' '+m.city+' '+spec.label+' '+(m.tags||[]).join(' ')).toLowerCase())}" data-tags="${escapeHtml((m.tags||[]).join(',').toLowerCase())}">
       <div class="mcard-top">
         <div>
           <div class="mcard-name" style="font-size:15px;">${spec.icon} ${escapeHtml(m.name)}</div>
           <div class="mcard-city">📍 ${escapeHtml(m.city)} · ${spec.label}</div>
         </div>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${subBadge}${visBadge}${claimBadge}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${subBadge}${visBadge}${featuredBadge}${claimBadge}</div>
+      ${tagsHtml}
       <div style="font-size:12.5px;color:var(--ink-soft);margin-top:8px;">⭐ ${ratingOf(m)?ratingOf(m).toFixed(1):'—'} (${m.ratingCount||0}) · 🗓️ ${bk.length} записей</div>
       <div class="divider"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        ${confirmBtn}
         <button class="btn ghost small" onclick="adminEditMaster('${m.id}')">Редактировать</button>
+        <button class="btn ghost small" onclick="previewAsClient('${m.id}')">👁 Как клиент</button>
+        ${isOwnerRole ? `
+        ${confirmBtn}
+        <button class="btn teal small" onclick="adminExtendSubscription('${m.id}', 30)">➕ +30 дней вручную</button>
+        <button class="btn ${m.featured?'teal':'ghost'} small" onclick="adminToggleFeatured('${m.id}')">${m.featured?'Убрать из «Мастер месяца»':'⭐ Сделать «Мастер месяца»'}</button>
         <button class="btn ${m.disabledByAdmin?'teal':'ghost'} small" onclick="adminToggleDisabled('${m.id}')">${m.disabledByAdmin?'Включить в каталог':'Отключить от каталога'}</button>
-        <button class="btn danger small" onclick="adminDeleteMaster('${m.id}')">Удалить</button>
+        <button class="btn danger small" onclick="adminDeleteMaster('${m.id}')">Удалить</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1830,6 +3123,63 @@ async function renderAdminDashboard(){
     ? `<div class="pillnote" style="margin:0 18px 14px;">Вход подтверждён по Telegram ID ${state.tgUser?state.tgUser.id:''}.</div>`
     : `<div class="section-pad"><button class="btn ghost small" onclick="adminLogout()">Выйти из кабинета владельца</button></div>`;
 
+  const chatEntry = `<div class="section-pad" style="display:flex;gap:10px;">
+    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='chatlist'; fillAdmin();">
+      💬 Чаты${totalChatUnread?` · ${totalChatUnread} нов.`:''}
+    </button>
+    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='trends'; fillAdmin();">
+      📈 Динамика
+    </button>
+  </div>
+  ${isOwnerRole ? `<div class="section-pad" style="display:flex;gap:10px;">
+    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='broadcast'; fillAdmin();">
+      📢 Всем мастерам
+    </button>
+    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="exportMastersCSV()">
+      📤 Экспорт CSV
+    </button>
+  </div>
+  <div class="section-pad" style="display:flex;gap:10px;">
+    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='funnel'; fillAdmin();">
+      🚪 Воронка регистрации
+    </button>
+    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='auditlog'; fillAdmin();">
+      📋 Журнал действий
+    </button>
+  </div>
+  <div class="section-pad" style="display:flex;gap:10px;">
+    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='admins'; fillAdmin();">
+      👤 Администраторы
+    </button>
+    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reviewsShowcase'; fillAdmin();">
+      🌟 Витрина отзывов
+    </button>
+  </div>
+  <div class="section-pad">
+    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='banners'; fillAdmin();">
+      📣 Баннеры / объявления
+    </button>
+  </div>
+  <div class="section-pad">
+    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='adrequests'; fillAdmin();">
+      🗣️ Заявки на объявления
+    </button>
+  </div>` : `<div class="section-pad">
+    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reviewsShowcase'; fillAdmin();">
+      🌟 Витрина отзывов для канала
+    </button>
+  </div>
+  <div class="pillnote" style="margin:0 18px 14px;">Вы вошли как саппорт-администратор — доступны чаты и просмотр статистики; финансовые и деструктивные действия видит только владелец.</div>`}
+  <div class="section-pad">
+    <input placeholder="🔍 Поиск по имени, городу, специализации…" oninput="filterAdminMasterList(this.value)" style="width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;">
+  </div>`;
+
+  const allMasterTags = Array.from(new Set(masters.flatMap(m=>m.tags||[]))).sort();
+  const tagChipsRow = allMasterTags.length ? `<div class="chiprow" style="padding-top:0;">
+    <button class="chip" onclick="filterAdminMasterTag('')">Все</button>
+    ${allMasterTags.map(t=>`<button class="chip" onclick="filterAdminMasterTag('${escapeHtml(t).replace(/'/g,"\\'")}')">${escapeHtml(t)}</button>`).join('')}
+  </div>` : '';
+
   document.getElementById('content').innerHTML = `
     <div class="hero" style="padding-top:20px;display:flex;justify-content:space-between;align-items:flex-start;">
       <div><h1 style="font-size:22px;">Владелец платформы</h1><p>Управление мастерами и подписками</p></div>
@@ -1837,17 +3187,744 @@ async function renderAdminDashboard(){
     ${identityLine}
     ${freeModeBanner}
     ${overview}
+    ${churnAlert}
+    ${chatEntry}
     ${moderationQueue}
-    ${masters.length? list : `<div class="empty"><div class="big">🗂️</div>Пока нет ни одного мастера на платформе.</div>`}
+    ${tagChipsRow}
+    <div id="adminMasterList">${masters.length? list : `<div class="empty"><div class="big">🗂️</div>Пока нет ни одного мастера на платформе.</div>`}</div>
   `;
 }
 window.adminEditMaster = (id)=>{ state.adminEditingId=id; fillAdmin(); };
+
+function filterAdminMasterTag(tag){
+  const q = tag.trim().toLowerCase();
+  document.querySelectorAll('#adminMasterList [data-tags]').forEach(el=>{
+    const tags = (el.dataset.tags||'').split(',').map(t=>t.trim());
+    el.style.display = (!q || tags.includes(q)) ? '' : 'none';
+  });
+}
+window.filterAdminMasterTag = filterAdminMasterTag;
+
+function filterAdminMasterList(q){
+  const query = q.trim().toLowerCase();
+  document.querySelectorAll('#adminMasterList [data-search]').forEach(el=>{
+    el.style.display = (!query || el.dataset.search.includes(query)) ? '' : 'none';
+  });
+}
+window.filterAdminMasterList = filterAdminMasterList;
+
+function exportMastersCSV(){
+  const masters = state._adminMastersCache || [];
+  if(!masters.length){ showToast('Нет данных для экспорта'); return; }
+  const headers = ['Имя','Город','Специализация','Статус подписки','Дата регистрации','Telegram ID','Рейтинг','Отзывов'];
+  const rows = masters.map(m=>[
+    m.name, m.city, (SPECS[m.specialization]&&SPECS[m.specialization].label)||m.specialization,
+    m.subscriptionActive ? (m.isTrial?'Пробный период':'Оплачено') : 'Не оплачено',
+    new Date(m.createdAt).toLocaleDateString('ru-RU'),
+    m.telegramId||'', ratingOf(m).toFixed(1), m.ratingCount||0
+  ]);
+  const csv = [headers, ...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `beautyhub-masters-${todayISO(0)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+  showToast('Файл готов — проверьте загрузки браузера');
+}
+window.exportMastersCSV = exportMastersCSV;
+
+/* Владелец смотрит профиль мастера ровно так, как его видит клиент — для проверки при спорах/модерации. */
+function previewAsClient(masterId){
+  state._adminPreviewReturn = true;
+  state.view = 'catalog';
+  state.selectedMasterId = masterId;
+  state.masterDetailTab = 'about';
+  render();
+}
+window.previewAsClient = previewAsClient;
+
+async function renderAdminBroadcast(){
+  const masters = (await loadAllMasters()).filter(m=>m.telegramId);
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Написать всем мастерам</div></div>
+  <div class="card">
+    <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Сообщение от бота придёт всем мастерам с привязанным Telegram (сейчас ${masters.length}). Подходит для «Завтра техработы» или «Вышла новая функция».</div>
+    <textarea id="ownerBroadcastText" placeholder="Текст сообщения всем мастерам..." style="min-height:90px;"></textarea>
+    <button class="btn primary" style="margin-top:10px;" onclick="sendOwnerBroadcast()" ${masters.length?'':'disabled'}>Отправить всем (${masters.length})</button>
+  </div>`;
+}
+window.renderAdminBroadcast = renderAdminBroadcast;
+
+/* ============ ВИТРИНА ОТЗЫВОВ (для репоста в канал) ============ */
+async function renderAdminReviewsShowcase(){
+  const masterIds = await sget('masters-index', true) || [];
+  const items = [];
+  for(const id of masterIds){
+    const m = await sget('master:'+id, true);
+    if(!m) continue;
+    const reviews = await loadReviews(id);
+    reviews.forEach(r=>{
+      if(r.rating>=4) items.push({...r, masterName:m.name, masterSpec:m.specialization});
+    });
+  }
+  // Сначала с фото и высоким рейтингом — такие лучше всего заходят в канале.
+  items.sort((a,b)=> (b.photoUrl?1:0)-(a.photoUrl?1:0) || b.rating-a.rating || b.createdAt-a.createdAt);
+  state._reviewShowcase = items;
+
+  const rows = items.length ? items.slice(0,30).map((r,i)=>`<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="mcard-name" style="font-size:13.5px;">${SPECS[r.masterSpec]?SPECS[r.masterSpec].icon:''} ${escapeHtml(r.masterName)}</div>
+      <span class="stars">${starsStr(r.rating)}</span>
+    </div>
+    <div style="font-size:13px;color:var(--ink-soft);margin-top:6px;">«${escapeHtml(r.comment)}»</div>
+    ${r.photoUrl?`<img src="${r.photoUrl}" style="width:100%;max-width:200px;border-radius:10px;margin-top:8px;display:block;">`:''}
+    <div class="divider"></div>
+    <button class="btn ghost small" onclick="copyReviewForPost(${i})">📋 Скопировать текст для поста</button>
+  </div>`).join('') : `<div class="empty"><div class="big">🌟</div>Пока нет отзывов с оценкой 4+ для витрины.</div>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Витрина отзывов</div></div>
+  <div class="pillnote" style="margin:0 18px 14px;">Лучшие отзывы (оценка 4+, приоритет — с фото) готовы для репоста в ваш Telegram-канал. Текст форматируется автоматически, фото сохраните отдельно и приложите к посту.</div>
+  ${rows}`;
+}
+window.renderAdminReviewsShowcase = renderAdminReviewsShowcase;
+
+function copyReviewForPost(i){
+  const r = (state._reviewShowcase||[])[i];
+  if(!r) return;
+  const spec = SPECS[r.masterSpec];
+  const text = `${starsStr(r.rating)}\n«${r.comment}»\n\n— отзыв о мастере ${spec?spec.label.toLowerCase():''} ${r.masterName} на BeautyHub${r.photoUrl?'\n\n📸 Фото прикреплено':''}`;
+  copyText(text);
+}
+window.copyReviewForPost = copyReviewForPost;
+
+/* ============ ВОРОНКА РЕГИСТРАЦИИ МАСТЕРОВ ============ */
+async function renderAdminFunnel(){
+  const keys = await sget('funnel-index', true) || [];
+  const entries = [];
+  for(const k of keys){
+    const e = await sget('funnel:'+k, true);
+    if(e) entries.push(e);
+  }
+  entries.sort((a,b)=>b.startedAt-a.startedAt);
+  const total = entries.length;
+  const completed = entries.filter(e=>e.completed).length;
+  const abandoned = entries.filter(e=>!e.completed);
+  const rate = total ? Math.round((completed/total)*100) : 0;
+
+  const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Воронка регистрации</div></div>`;
+  const summary = `<div class="card" style="text-align:center;">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div><div style="font-size:20px;font-weight:700;font-family:'Inter',sans-serif;">${total}</div><div style="font-size:10.5px;color:var(--ink-soft);">начали регистрацию</div></div>
+      <div><div style="font-size:20px;font-weight:700;font-family:'Inter',sans-serif;color:var(--teal)">${completed}</div><div style="font-size:10.5px;color:var(--ink-soft);">завершили</div></div>
+      <div><div style="font-size:20px;font-weight:700;font-family:'Inter',sans-serif;color:var(--rose-deep)">${rate}%</div><div style="font-size:10.5px;color:var(--ink-soft);">конверсия</div></div>
+    </div>
+  </div>`;
+
+  const abandonedRows = abandoned.slice(0,50).map(e=>{
+    const contactBtn = e.telegramId
+      ? `<button class="link-btn" style="font-size:12px;" onclick="notifyTelegram('${e.telegramId}','Здравствуйте! Заметили, что вы начали регистрацию мастера на BeautyHub, но не закончили — если остались вопросы, с радостью помогу 🙂'); showToast('Сообщение отправлено');">Написать</button>`
+      : '';
+    return `<div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <div class="mcard-name" style="font-size:13.5px;">${escapeHtml(e.tgName||'Без имени')}</div>
+      <div style="font-size:11.5px;color:var(--ink-soft);">начал(а) ${new Date(e.startedAt).toLocaleDateString('ru-RU')}</div>
+    </div>
+    ${contactBtn}
+  </div>`;
+  }).join('');
+
+  const abandonedList = abandoned.length ? `
+  <div style="padding:14px 18px 8px;font-weight:700;font-size:13.5px;">Начали, но не закончили (${abandoned.length})</div>
+  ${abandonedRows}` : `<div class="empty"><div class="big">🎉</div>Все, кто начинал регистрацию, довели её до конца.</div>`;
+
+  document.getElementById('content').innerHTML = back + summary + abandonedList;
+}
+window.renderAdminFunnel = renderAdminFunnel;
+
+/* ============ ЖУРНАЛ ДЕЙСТВИЙ ============ */
+async function renderAdminAuditLog(){
+  const log = (await sget('audit-log', true) || []).slice().reverse().slice(0,100);
+  const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Журнал действий</div></div>`;
+  const labels = {
+    approve_master:'✅ Одобрил мастера', reject_master:'❌ Отклонил мастера', delete_master:'🗑️ Удалил мастера',
+    confirm_payment:'💳 Подтвердил оплату', extend_subscription:'➕ Продлил подписку вручную',
+    disable_master:'🚫 Скрыл из каталога', enable_master:'✅ Вернул в каталог',
+    set_featured:'⭐ Отметил «Мастер месяца»', unset_featured:'⭐ Убрал «Мастер месяца»',
+    add_admin:'👤 Добавил администратора', remove_admin:'👤 Убрал администратора',
+    create_banner:'📣 Опубликовал баннер',
+  };
+  const rows = log.length ? log.map(e=>`<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="mcard-name" style="font-size:13px;">${labels[e.action]||e.action}</div>
+      <div style="font-size:11px;color:var(--ink-soft);">${new Date(e.at).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+    </div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-top:4px;">${escapeHtml(e.details||'')}</div>
+    <div style="font-size:10.5px;color:var(--ink-soft);margin-top:4px;">— ${escapeHtml(e.actorName||e.actorId)}</div>
+  </div>`).join('') : `<div class="empty"><div class="big">📋</div>Пока ничего не записано.</div>`;
+  document.getElementById('content').innerHTML = back + rows;
+}
+window.renderAdminAuditLog = renderAdminAuditLog;
+
+/* ============ АДМИНИСТРАТОРЫ (несколько ролей) ============ */
+async function renderAdminAdmins(){
+  const roles = await sget('admin-roles', true) || {};
+  const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Администраторы</div></div>`;
+  const intro = `<div class="pillnote" style="margin:0 18px 14px;">Владелец (по Telegram ID ${OWNER_TELEGRAM_IDS.join(', ')}) видит и может всё. Саппорт-администраторы видят чаты, статистику и витрину отзывов, но не финансовые и деструктивные действия.</div>`;
+  const addForm = `<div class="card">
+    <div class="field"><label>Telegram ID нового администратора</label><input id="newAdminId" placeholder="Например, 123456789"></div>
+    <button class="btn primary small" onclick="addSupportAdmin()">Добавить как саппорт</button>
+  </div>`;
+  const entries = Object.entries(roles);
+  const list = entries.length ? entries.map(([id,role])=>`<div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+    <div><div class="mcard-name" style="font-size:13.5px;">Telegram ID ${escapeHtml(id)}</div><div style="font-size:11.5px;color:var(--ink-soft);">Роль: ${role==='support'?'саппорт':escapeHtml(role)}</div></div>
+    <button class="btn danger small" onclick="removeSupportAdmin('${escapeHtml(id)}')">Убрать</button>
+  </div>`).join('') : `<div class="empty"><div class="big">👤</div>Дополнительных администраторов пока нет.</div>`;
+  document.getElementById('content').innerHTML = back + intro + addForm + list;
+}
+window.renderAdminAdmins = renderAdminAdmins;
+
+async function addSupportAdmin(){
+  const el = document.getElementById('newAdminId');
+  const id = (el && el.value || '').trim();
+  if(!id || !/^\d+$/.test(id)){ showToast('Введите числовой Telegram ID'); return; }
+  const roles = await sget('admin-roles', true) || {};
+  roles[id] = 'support';
+  await sset('admin-roles', roles, true);
+  showToast('Администратор добавлен');
+  logAdminAction('add_admin', 'Telegram ID '+id);
+  renderAdminAdmins();
+}
+window.addSupportAdmin = addSupportAdmin;
+
+async function removeSupportAdmin(id){
+  const roles = await sget('admin-roles', true) || {};
+  delete roles[id];
+  await sset('admin-roles', roles, true);
+  showToast('Администратор удалён');
+  logAdminAction('remove_admin', 'Telegram ID '+id);
+  renderAdminAdmins();
+}
+window.removeSupportAdmin = removeSupportAdmin;
+
+/* ============ БАННЕРЫ / ОБЪЯВЛЕНИЯ ============ */
+async function renderAdminBanners(){
+  const banners = (await loadBanners()).slice().sort((a,b)=>b.createdAt-a.createdAt);
+  const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Баннеры / объявления</div></div>`;
+  const intro = `<div class="pillnote" style="margin:0 18px 14px;">Баннер показывается на главном экране клиентов и/или в кабинете мастеров, пока не закрыт крестиком (у каждого человека — своё «закрыто», повторно не всплывёт). Удобно для акций, техработ, анонсов новых функций.</div>`;
+
+  const form = `<div class="card">
+    <div class="field"><label>Текст объявления</label><textarea id="bnText" placeholder="Например: С 1 по 5 августа скидка 20% на первую запись!" style="min-height:60px;"></textarea></div>
+    <div class="row2">
+      <div class="field"><label>Эмодзи</label><input id="bnEmoji" placeholder="📣" maxlength="4" value="📣"></div>
+      <div class="field"><label>Кому показывать</label><select id="bnAudience">
+        <option value="all">Всем</option>
+        <option value="clients">Только клиентам</option>
+        <option value="masters">Только мастерам</option>
+      </select></div>
+    </div>
+    <div class="field"><label>Ссылка «Подробнее» (необязательно)</label><input id="bnLink" placeholder="https://..."></div>
+    <div class="row2">
+      <div class="field"><label>Показывать с (необязательно)</label><input id="bnStart" type="date"></div>
+      <div class="field"><label>Показывать по (необязательно)</label><input id="bnEnd" type="date"></div>
+    </div>
+    <div class="field"><label>Цвет</label><select id="bnStyle">
+      <option value="rose">Розовый (по умолчанию)</option>
+      <option value="gold">Жёлтый (акция/важное)</option>
+      <option value="teal">Зелёный (нейтральная новость)</option>
+    </select></div>
+    <button class="btn primary" onclick="createBanner()">Опубликовать баннер</button>
+  </div>`;
+
+  const list = banners.length ? banners.map(b=>`<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+      <div style="flex:1;">
+        <div style="font-weight:700;font-size:13px;">${escapeHtml(b.emoji||'📣')} ${escapeHtml(b.text)}</div>
+        <div style="font-size:11px;color:var(--ink-soft);margin-top:4px;">
+          ${b.audience==='all'?'Всем':b.audience==='clients'?'Клиентам':'Мастерам'}
+          ${b.startDate?` · с ${fmtDate(b.startDate)}`:''}${b.endDate?` · по ${fmtDate(b.endDate)}`:''}
+          ${b.active===false?' · <span style="color:var(--danger);">выключен</span>':''}
+        </div>
+      </div>
+      <span class="badge ${b.active===false?'cancelled':'active'}">${b.active===false?'Скрыт':'Активен'}</span>
+    </div>
+    <div class="divider"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn ghost small" onclick="toggleBannerActive('${b.id}')">${b.active===false?'Включить':'Выключить'}</button>
+      <button class="btn danger small" onclick="deleteBanner('${b.id}')">Удалить</button>
+    </div>
+  </div>`).join('') : `<div class="empty"><div class="big">📣</div>Пока нет баннеров.</div>`;
+
+  document.getElementById('content').innerHTML = back + intro + form + `<div style="padding:14px 18px 8px;font-weight:700;font-size:13.5px;">Все баннеры</div>` + list;
+}
+window.renderAdminBanners = renderAdminBanners;
+
+async function createBanner(){
+  const text = document.getElementById('bnText').value.trim();
+  if(!text){ showToast('Введите текст объявления'); return; }
+  const banners = await loadBanners();
+  banners.push({
+    id: uid(),
+    text,
+    emoji: document.getElementById('bnEmoji').value.trim() || '📣',
+    audience: document.getElementById('bnAudience').value,
+    link: document.getElementById('bnLink').value.trim() || null,
+    startDate: document.getElementById('bnStart').value || null,
+    endDate: document.getElementById('bnEnd').value || null,
+    style: document.getElementById('bnStyle').value,
+    active: true,
+    createdAt: Date.now()
+  });
+  await saveBanners(banners);
+  showToast('Баннер опубликован');
+  logAdminAction('create_banner', text.slice(0,60));
+  renderAdminBanners();
+}
+window.createBanner = createBanner;
+
+async function toggleBannerActive(id){
+  const banners = await loadBanners();
+  const b = banners.find(x=>x.id===id);
+  if(!b) return;
+  b.active = b.active===false ? true : false;
+  await saveBanners(banners);
+  renderAdminBanners();
+}
+window.toggleBannerActive = toggleBannerActive;
+
+async function deleteBanner(id){
+  const sure = window.confirm('Удалить этот баннер?');
+  if(!sure) return;
+  const banners = (await loadBanners()).filter(b=>b.id!==id);
+  await saveBanners(banners);
+  showToast('Баннер удалён');
+  renderAdminBanners();
+}
+window.deleteBanner = deleteBanner;
+
+/* ============ ЗАЯВКИ НА РАЗМЕЩЕНИЕ ОБЪЯВЛЕНИЙ (от любого посетителя) ============ */
+async function renderAdminAdRequests(){
+  const keys = await sget('visitor-chat-index', true) || [];
+  const rows = [];
+  for(const key of keys){
+    const chat = await loadVisitorChat(key);
+    if(!chat.length) continue;
+    const unread = chat.filter(msg=>msg.from==='visitor' && !msg.readByOwner).length;
+    const last = chat[chat.length-1];
+    const lastVisitorMsg = chat.slice().reverse().find(msg=>msg.from==='visitor');
+    rows.push({ key, unread, last, name: lastVisitorMsg?lastVisitorMsg.visitorName:'Гость', role: lastVisitorMsg?lastVisitorMsg.visitorRole:null });
+  }
+  rows.sort((a,b)=>(b.last?b.last.createdAt:0)-(a.last?a.last.createdAt:0));
+
+  const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Заявки на объявления</div></div>`;
+  const listHtml = rows.length ? rows.map(r=>{
+    const preview = r.last ? escapeHtml(r.last.text.length>70 ? r.last.text.slice(0,70)+'…' : r.last.text) : '';
+    const fromLabel = r.last && r.last.from==='owner' ? 'Вы: ' : '';
+    return `<div class="card" style="cursor:pointer;" onclick="state.adminScreen='adrequest'; state.adminAdRequestKey='${r.key}'; fillAdmin();">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div class="mcard-name" style="font-size:14px;">${escapeHtml(r.name)} ${r.role?`<span class="badge demo" style="margin-left:4px;">${r.role==='master'?'мастер':'клиент'}</span>`:''}</div>
+        ${r.unread?`<span class="badge cancelled">${r.unread}</span>`:''}
+      </div>
+      <div style="font-size:12.5px;color:var(--ink-soft);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fromLabel}${preview}</div>
+    </div>`;
+  }).join('') : `<div class="empty"><div class="big">🗣️</div>Пока никто не обращался по поводу объявлений.</div>`;
+
+  document.getElementById('content').innerHTML = back + listHtml;
+}
+window.renderAdminAdRequests = renderAdminAdRequests;
+
+async function renderAdminAdRequestThread(key){
+  const chat = await loadVisitorChat(key);
+  let changed = false;
+  chat.forEach(msg=>{ if(msg.from==='visitor' && !msg.readByOwner){ msg.readByOwner = true; changed = true; } });
+  if(changed) await saveVisitorChat(key, chat);
+
+  const lastVisitorMsg = chat.slice().reverse().find(msg=>msg.from==='visitor');
+  const name = lastVisitorMsg ? lastVisitorMsg.visitorName : 'Гость';
+
+  const bubbles = chat.length ? chat.map(msg=>`
+    <div class="chat-msg ${msg.from==='owner'?'out':'in'}">
+      <div class="chat-bubble">${escapeHtml(msg.text)}</div>
+      <div class="chat-time">${new Date(msg.createdAt).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+    </div>`).join('') : `<div class="empty" style="padding:30px 10px;">Переписки пока нет.</div>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="state.adminScreen='adrequests'; fillAdmin();">←</button><div style="font-weight:700">${escapeHtml(name)}</div></div>
+  <div class="card" style="padding:12px;">
+    <div class="chat-wrap">${bubbles}</div>
+  </div>
+  <div class="section-pad" style="display:flex;gap:8px;align-items:flex-end;">
+    <textarea id="adReqInput" placeholder="Ответить…" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;min-height:44px;max-height:120px;"></textarea>
+    <button class="btn primary" style="width:auto;padding:0 18px;height:44px;" onclick="sendAdRequestReply('${key}')">➤</button>
+  </div>`;
+}
+window.renderAdminAdRequestThread = renderAdminAdRequestThread;
+
+async function sendAdRequestReply(key){
+  const input = document.getElementById('adReqInput');
+  const text = (input && input.value || '').trim();
+  if(!text){ showToast('Введите текст ответа'); return; }
+  const chat = await loadVisitorChat(key);
+  chat.push({ id:uid(), from:'owner', text, createdAt:Date.now(), readByOwner:true, readByVisitor:false });
+  await saveVisitorChat(key, chat);
+
+  const lastVisitorMsg = chat.slice().reverse().find(msg=>msg.from==='visitor');
+  if(lastVisitorMsg && lastVisitorMsg.visitorTelegramId){
+    notifyTelegram(lastVisitorMsg.visitorTelegramId, `💬 Ответ от владельца платформы BeautyHub:\n${text}`);
+  }
+  showToast('Ответ отправлен');
+  renderAdminAdRequestThread(key);
+}
+window.sendAdRequestReply = sendAdRequestReply;
+
+async function sendOwnerBroadcast(){
+  const el = document.getElementById('ownerBroadcastText');
+  const text = (el && el.value || '').trim();
+  if(!text){ showToast('Введите текст сообщения'); return; }
+  const masters = (await loadAllMasters()).filter(m=>m.telegramId);
+  let sent = 0;
+  for(const m of masters){
+    const ok = await notifyTelegram(m.telegramId, `📢 Сообщение от BeautyHub:\n${text}`);
+    if(ok) sent++;
+  }
+  showToast(`Отправлено ${sent} из ${masters.length}`);
+  if(el) el.value = '';
+}
+window.sendOwnerBroadcast = sendOwnerBroadcast;
+
+/* ============ MASTER ↔ OWNER CHAT (owner side) ============ */
+function openAdminChat(masterId){
+  state.adminScreen = 'chat';
+  state.adminChatMasterId = masterId;
+  fillAdmin();
+}
+window.openAdminChat = openAdminChat;
+
+async function renderAdminChatList(){
+  const ids = await sget('chat-index', true) || [];
+  const statuses = await sget('chat-statuses', true) || {};
+  const rows = [];
+  for(const id of ids){
+    const m = await loadMaster(id);
+    if(!m) continue;
+    const chat = await loadChat(id);
+    if(!chat.length) continue;
+    const unread = chat.filter(msg=>msg.from==='master' && !msg.readByOwner).length;
+    rows.push({ m, unread, last: chat[chat.length-1], status: statuses[id]||'open' });
+  }
+  rows.sort((a,b)=>(b.last?b.last.createdAt:0)-(a.last?a.last.createdAt:0));
+  const openRows = rows.filter(r=>r.status!=='resolved' || r.unread>0);
+  const resolvedCount = rows.length - openRows.length;
+
+  const listHtml = openRows.length ? openRows.map(r=>{
+    const sp = SPECS[r.m.specialization];
+    const preview = r.last ? escapeHtml(r.last.text.length>70 ? r.last.text.slice(0,70)+'…' : r.last.text) : '';
+    const fromLabel = r.last && r.last.from==='owner' ? 'Вы: ' : '';
+    return `<div class="card" style="cursor:pointer;display:flex;gap:12px;align-items:center;" onclick="openAdminChat('${r.m.id}')">
+      <div class="avatar" style="width:46px;height:46px;font-size:20px;${avatarStyle(r.m)}">${avatarInner(r.m,sp)}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <div class="mcard-name" style="font-size:14.5px;">${escapeHtml(r.m.name)}</div>
+          ${r.unread?`<span class="badge cancelled">${r.unread}</span>`:''}
+        </div>
+        <div style="font-size:12.5px;color:var(--ink-soft);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fromLabel}${preview}</div>
+      </div>
+    </div>`;
+  }).join('') : `<div class="empty"><div class="big">💬</div>Открытых диалогов нет.<br>Нажмите «Написать первым», чтобы начать диалог с любым мастером.</div>`;
+
+  const resolvedNote = resolvedCount ? `<div class="pillnote" style="margin:0 18px 14px;">${resolvedCount} диалог(ов) отмечены решёнными и скрыты из списка.</div>` : '';
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Чаты с мастерами</div></div>
+  <div class="section-pad"><button class="btn primary" onclick="state.adminScreen='chatpicker'; fillAdmin();">✍️ Написать первым</button></div>
+  ${resolvedNote}
+  ${listHtml}`;
+}
+window.renderAdminChatList = renderAdminChatList;
+
+/* ============ DASHBOARD С ДИНАМИКОЙ ============ */
+function pluralDays(n){
+  const mod10 = n%10, mod100 = n%100;
+  if(mod10===1 && mod100!==11) return 'день';
+  if([2,3,4].includes(mod10) && ![12,13,14].includes(mod100)) return 'дня';
+  return 'дней';
+}
+/* Простой бар-чарт на чистом SVG — без сторонних библиотек, чтобы не тянуть зависимости
+   в отдающийся клиенту index.html. Один снимок статистики = один столбик. */
+function renderTrendChart(snapshots, key, color){
+  const w = 320, h = 84, pad = 3;
+  const values = snapshots.map(s => Number(s[key]) || 0);
+  const max = Math.max(1, ...values);
+  const n = values.length;
+  const barW = (w - pad*2) / n;
+  const bars = values.map((v,i)=>{
+    const bh = Math.max(2, (v/max) * (h - pad*2));
+    const x = pad + i*barW;
+    const y = h - pad - bh;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(1,barW-2).toFixed(1)}" height="${bh.toFixed(1)}" rx="2" style="fill:${color};"></rect>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block;">${bars}</svg>`;
+}
+async function renderAdminTrends(){
+  const keys = await slist('stats-daily:', true); // ['stats-daily:2026-07-01', ...]
+  const dates = keys.map(k=>k.slice('stats-daily:'.length)).sort();
+  const recentDates = dates.slice(-30);
+  const snapshots = [];
+  for(const d of recentDates){
+    const s = await sget('stats-daily:'+d, true);
+    if(s) snapshots.push(s);
+  }
+
+  // --- Когортный анализ удержания: по месяцу регистрации — сколько заплатили хотя бы раз,
+  //     и сколько из них дошли до второй оплаты (реальное продление подписки). ---
+  const allMasters = await loadAllMasters();
+  const cohorts = {};
+  allMasters.forEach(m=>{
+    if(!m.createdAt) return;
+    const month = new Date(m.createdAt).toISOString().slice(0,7); // YYYY-MM
+    if(!cohorts[month]) cohorts[month] = { month, total:0, paid:0, renewed:0 };
+    const c = cohorts[month];
+    c.total++;
+    const payCount = (m.paymentHistory||[]).length;
+    if(payCount>=1) c.paid++;
+    if(payCount>=2) c.renewed++;
+  });
+  const cohortMonths = Object.keys(cohorts).sort().slice(-6); // последние 6 месяцев
+  const cohortRows = cohortMonths.map(mo=>{
+    const c = cohorts[mo];
+    const rate = c.paid ? Math.round((c.renewed/c.paid)*100) : null;
+    const monthLabel = new Date(mo+'-01').toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:12.5px;">
+      <span style="text-transform:capitalize;">${monthLabel}</span>
+      <span style="color:var(--ink-soft);">${c.total} рег. · ${c.paid} оплат.${rate!==null?` · <b style="color:${rate>=50?'var(--teal)':'var(--danger)'};">${rate}% продлили</b>`:''}</span>
+    </div>`;
+  }).join('');
+  const cohortCard = cohortMonths.length ? `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🔁 Удержание по когортам регистрации</div>
+    <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:8px;">% продлили — доля тех, кто заплатил хотя бы раз, среди них заплатил ещё раз (реальное продление подписки).</div>
+    ${cohortRows}
+  </div>` : '';
+
+  const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Динамика</div></div>`;
+
+  if(!snapshots.length){
+    document.getElementById('content').innerHTML = back + cohortCard + `<div class="empty"><div class="big">📈</div>Пока нет данных для графика.<br>Первый снимок статистики уже сохранён сегодня — откройте кабинет владельца завтра, и здесь появится вторая точка.</div>`;
+    return;
+  }
+
+  const last = snapshots[snapshots.length-1];
+  const first = snapshots[0];
+  const deltaMasters = last.totalMasters - first.totalMasters;
+  const deltaMrr = last.mrr - first.mrr;
+  const summary = snapshots.length>1
+    ? `<div class="pillnote" style="margin:0 18px 14px;">За последние ${snapshots.length} ${pluralDays(snapshots.length)}: мастеров ${deltaMasters>=0?'+':''}${deltaMasters}, MRR ${deltaMrr>=0?'+':''}${deltaMrr}₽.</div>`
+    : `<div class="pillnote" style="margin:0 18px 14px;">Пока сохранён только один снимок — график начнёт складываться со второго дня.</div>`;
+
+  document.getElementById('content').innerHTML = back + summary + cohortCard + `
+  <div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:6px;">💰 MRR, оценка (₽/мес)</div>
+    ${renderTrendChart(snapshots, 'mrr', 'var(--rose-deep)')}
+    <div style="font-size:12px;color:var(--ink-soft);margin-top:6px;">Сейчас: ${last.mrr}₽</div>
+  </div>
+  <div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:6px;">👥 Всего мастеров</div>
+    ${renderTrendChart(snapshots, 'totalMasters', 'var(--rose)')}
+    <div style="font-size:12px;color:var(--ink-soft);margin-top:6px;">Сейчас: ${last.totalMasters}</div>
+  </div>
+  <div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:6px;">🆓 На пробном периоде</div>
+    ${renderTrendChart(snapshots, 'onTrial', '#C9A15A')}
+    <div style="font-size:12px;color:var(--ink-soft);margin-top:6px;">Сейчас: ${last.onTrial}</div>
+  </div>
+  <div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:6px;">🔴 Ожидают оплаты (churn-риск)</div>
+    ${renderTrendChart(snapshots, 'inactive', 'var(--danger)')}
+    <div style="font-size:12px;color:var(--ink-soft);margin-top:6px;">Сейчас: ${last.inactive}</div>
+  </div>
+  <div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:6px;">⏳ На модерации</div>
+    ${renderTrendChart(snapshots, 'pendingModeration', '#8C6BB1')}
+    <div style="font-size:12px;color:var(--ink-soft);margin-top:6px;">Сейчас: ${last.pendingModeration}</div>
+  </div>
+  <div class="section-pad" style="font-size:11.5px;color:var(--ink-soft);">Один столбик = один день. Данные копятся начиная с ${fmtDate(first.date)}. Снимок сохраняется автоматически при открытии этого кабинета — для полностью автономного сбора данных (даже если вы не заходите в приложение) настройте DAILY_DIGEST_SETUP.md.</div>`;
+}
+window.renderAdminTrends = renderAdminTrends;
+
+async function renderAdminChatPicker(){
+  const masters = (await loadAllMasters()).slice().sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+  const q = (state._chatPickerQuery || '').trim().toLowerCase();
+  const filtered = q ? masters.filter(m=>
+    m.name.toLowerCase().includes(q) || (m.city||'').toLowerCase().includes(q)
+  ) : masters;
+
+  const rows = filtered.length ? filtered.map(m=>{
+    const sp = SPECS[m.specialization];
+    const statusBadge = m.moderationStatus==='pending'
+      ? `<span class="badge pending">на модерации</span>`
+      : (!m.subscriptionActive ? `<span class="badge inactive">не оплачено</span>` : '');
+    return `<div class="card" style="cursor:pointer;display:flex;gap:12px;align-items:center;" onclick="openAdminChat('${m.id}')">
+      <div class="avatar" style="width:44px;height:44px;font-size:19px;${avatarStyle(m)}">${avatarInner(m,sp)}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="mcard-name" style="font-size:14px;">${sp.icon} ${escapeHtml(m.name)}</div>
+        <div class="mcard-city">📍 ${escapeHtml(m.city)} ${statusBadge}</div>
+      </div>
+    </div>`;
+  }).join('') : `<div class="empty"><div class="big">🔍</div>Никого не нашлось.</div>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="state.adminScreen='chatlist'; fillAdmin();">←</button><div style="font-weight:700">Написать мастеру</div></div>
+  <div class="section-pad">
+    <input id="chatPickerSearch" placeholder="Поиск по имени или городу…" value="${escapeHtml(state._chatPickerQuery||'')}"
+      oninput="state._chatPickerQuery=this.value; filterAdminChatPicker();"
+      style="width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;">
+  </div>
+  <div id="chatPickerResults">${rows}</div>`;
+}
+window.renderAdminChatPicker = renderAdminChatPicker;
+
+let _chatPickerDebounce = null;
+function filterAdminChatPicker(){
+  clearTimeout(_chatPickerDebounce);
+  _chatPickerDebounce = setTimeout(async ()=>{
+    // Перерисовываем только список результатов, чтобы не терять фокус в поле поиска
+    const masters = (await loadAllMasters()).slice().sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+    const q = (state._chatPickerQuery || '').trim().toLowerCase();
+    const filtered = q ? masters.filter(m=>
+      m.name.toLowerCase().includes(q) || (m.city||'').toLowerCase().includes(q)
+    ) : masters;
+    const rows = filtered.length ? filtered.map(m=>{
+      const sp = SPECS[m.specialization];
+      const statusBadge = m.moderationStatus==='pending'
+        ? `<span class="badge pending">на модерации</span>`
+        : (!m.subscriptionActive ? `<span class="badge inactive">не оплачено</span>` : '');
+      return `<div class="card" style="cursor:pointer;display:flex;gap:12px;align-items:center;" onclick="openAdminChat('${m.id}')">
+        <div class="avatar" style="width:44px;height:44px;font-size:19px;${avatarStyle(m)}">${avatarInner(m,sp)}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="mcard-name" style="font-size:14px;">${sp.icon} ${escapeHtml(m.name)}</div>
+          <div class="mcard-city">📍 ${escapeHtml(m.city)} ${statusBadge}</div>
+        </div>
+      </div>`;
+    }).join('') : `<div class="empty"><div class="big">🔍</div>Никого не нашлось.</div>`;
+    const el = document.getElementById('chatPickerResults');
+    if(el) el.innerHTML = rows;
+  }, 200);
+}
+window.filterAdminChatPicker = filterAdminChatPicker;
+
+async function renderAdminChatThread(masterId){
+  const m = await loadMaster(masterId);
+  if(!m){
+    document.getElementById('content').innerHTML = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='chatlist'; fillAdmin();">←</button></div><div class="empty">Мастер не найден</div>`;
+    return;
+  }
+  const chat = await loadChat(masterId);
+  let changed = false;
+  chat.forEach(msg=>{ if(msg.from==='master' && !msg.readByOwner){ msg.readByOwner = true; changed = true; } });
+  if(changed) await saveChat(masterId, chat);
+
+  const statuses = await sget('chat-statuses', true) || {};
+  const status = statuses[masterId] || 'open';
+
+  const spec = SPECS[m.specialization];
+  const bubbles = chat.length ? chat.map(msg=>`
+    <div class="chat-msg ${msg.from==='owner'?'out':'in'}">
+      <div class="chat-bubble">${escapeHtml(msg.text)}</div>
+      <div class="chat-time">${new Date(msg.createdAt).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+    </div>`).join('') : `<div class="empty" style="padding:30px 10px;">Переписки пока нет.</div>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="state.adminScreen='chatlist'; fillAdmin();">←</button><div style="font-weight:700">${spec.icon} ${escapeHtml(m.name)}</div></div>
+  <div class="section-pad" style="padding-top:0;">
+    <button class="btn ${status==='resolved'?'ghost':'teal'} small" onclick="toggleChatStatus('${masterId}')">${status==='resolved'?'↩️ Открыть диалог снова':'✅ Отметить решённым'}</button>
+  </div>
+  <div class="card" style="padding:12px;">
+    <div class="chat-wrap">${bubbles}</div>
+  </div>
+  <div class="section-pad" style="display:flex;gap:8px;align-items:flex-end;">
+    <textarea id="ownerChatInput" placeholder="Ответить мастеру…" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;min-height:44px;max-height:120px;"></textarea>
+    <button class="btn primary" style="width:auto;padding:0 18px;height:44px;" onclick="sendChatFromOwner('${masterId}')">➤</button>
+  </div>
+  <div class="pillnote">Ответ сохранится в приложении — мастер увидит его во вкладке «Мастеру → Чат» и заметит бейдж с количеством новых сообщений при следующем открытии.</div>`;
+}
+window.renderAdminChatThread = renderAdminChatThread;
+
+async function toggleChatStatus(masterId){
+  const statuses = await sget('chat-statuses', true) || {};
+  statuses[masterId] = (statuses[masterId]==='resolved') ? 'open' : 'resolved';
+  await sset('chat-statuses', statuses, true);
+  renderAdminChatThread(masterId);
+}
+window.toggleChatStatus = toggleChatStatus;
+
+async function sendChatFromOwner(masterId){
+  const input = document.getElementById('ownerChatInput');
+  const text = (input && input.value || '').trim();
+  if(!text){ showToast('Введите текст ответа'); return; }
+  const chat = await loadChat(masterId);
+  chat.push({ id:uid(), from:'owner', text, createdAt:Date.now(), readByOwner:true, readByMaster:false });
+  await saveChat(masterId, chat);
+  await addChatToIndex(masterId);
+
+  // Автоматическое уведомление мастеру в Telegram (нужна задеплоенная Edge Function notify-telegram).
+  // У владельца нет прямой t.me-ссылки на мастера, поэтому без бота ответ мастер увидит только при следующем входе в приложение.
+  const m = await loadMaster(masterId);
+  let sentAuto = false;
+  if(m && m.telegramId){
+    sentAuto = await notifyTelegram(m.telegramId, `💬 Ответ от владельца платформы BeautyHub:\n${text}`);
+  }
+  showToast(sentAuto
+    ? 'Ответ отправлен мастеру в Telegram'
+    : 'Ответ сохранён. Мастер увидит его в приложении (для мгновенной отправки в Telegram настройте бот-уведомления — см. TELEGRAM_BOT_SETUP.md)');
+  renderAdminChatThread(masterId);
+}
+window.sendChatFromOwner = sendChatFromOwner;
+
+/* Ручное продление подписки владельцем — работает независимо от того, как мастер платил
+   (онлайн через ЮKassa, вручную переводом или вообще никак). Нужно как страховка на случай
+   сбоя автоматики (например, вебхук ЮKassa не дошёл) и для любых договорённостей вручную. */
+async function adminExtendSubscription(masterId, days){
+  const m = await loadMaster(masterId);
+  if(!m) return;
+  const base = (m.subscriptionActive && m.subscriptionUntil && !m.isTrial)
+    ? new Date(m.subscriptionUntil+'T00:00:00')
+    : new Date();
+  base.setDate(base.getDate() + days);
+  m.subscriptionUntil = base.toISOString().slice(0,10);
+  m.subscriptionActive = true;
+  m.isTrial = false;
+  m.trialEndsAt = null;
+  m.trialExpiredNotifiedAt = null;
+  m.subscriptionReminderForUntil = null;
+  m.paymentClaimStatus = null;
+  m.paymentHistory = m.paymentHistory || [];
+  m.paymentHistory.push({ method:'manual-admin', amount:null, confirmedAt:Date.now(), subscriptionUntil:m.subscriptionUntil });
+  await saveMaster(m);
+  showToast(`Подписка продлена вручную до ${m.subscriptionUntil}`);
+  logAdminAction('extend_subscription', `${m.name} — +${days} дн. вручную, до ${m.subscriptionUntil}`);
+  if(m.telegramId){
+    notifyTelegram(m.telegramId, `✅ Владелец платформы вручную активировал вашу подписку BeautyHub до ${m.subscriptionUntil}.`);
+  }
+  fillAdmin();
+}
+window.adminExtendSubscription = adminExtendSubscription;
+
+async function adminToggleFeatured(id){
+  const m = await loadMaster(id);
+  m.featured = !m.featured;
+  await saveMaster(m);
+  showToast(m.featured ? 'Отмечен «Мастер месяца» — будет выделен в каталоге' : 'Убран из «Мастер месяца»');
+  logAdminAction(m.featured?'set_featured':'unset_featured', m.name);
+  fillAdmin();
+}
+window.adminToggleFeatured = adminToggleFeatured;
 
 async function adminToggleDisabled(id){
   const m = await loadMaster(id);
   m.disabledByAdmin = !m.disabledByAdmin;
   await saveMaster(m);
   showToast(m.disabledByAdmin ? 'Мастер скрыт из каталога' : 'Мастер снова виден в каталоге');
+  logAdminAction(m.disabledByAdmin?'disable_master':'enable_master', m.name);
   fillAdmin();
 }
 window.adminToggleDisabled = adminToggleDisabled;
@@ -1859,10 +3936,12 @@ async function adminConfirmPayment(id){
   m.paymentClaimStatus = 'confirmed';
   m.isTrial = false;
   m.trialEndsAt = null;
+  m.trialExpiredNotifiedAt = null;
   m.paymentHistory = m.paymentHistory || [];
   m.paymentHistory.push({ method: m.paymentClaimMethod, confirmedAt: Date.now(), subscriptionUntil: m.subscriptionUntil });
   await saveMaster(m);
   showToast('Оплата подтверждена — профиль активирован');
+  logAdminAction('confirm_payment', `${m.name} — до ${m.subscriptionUntil}`);
   fillAdmin();
 }
 window.adminConfirmPayment = adminConfirmPayment;
@@ -1875,19 +3954,71 @@ async function adminApproveMaster(id){
   if(SUBSCRIPTION_ENABLED){
     // Пробный доступ на 24 часа: сразу появляется в каталоге, оплата потребуется по истечении
     m.isTrial = true;
-    m.trialEndsAt = Date.now() + 24*60*60*1000;
+    const REFERRAL_BONUS_HOURS = 72; // +3 дня обоим за приглашение коллеги
+    const bonusHours = (m.referredByMasterId && !m.referralBonusGranted) ? REFERRAL_BONUS_HOURS : 0;
+    m.trialEndsAt = Date.now() + (24 + bonusHours) * 3600000;
     m.subscriptionUntil = null;
+    m.trialExpiredNotifiedAt = null;
+    if(bonusHours){
+      m.referralBonusGranted = true;
+      await grantMasterReferralBonus(m.referredByMasterId, REFERRAL_BONUS_HOURS);
+    }
+    await saveMaster(m);
+    showToast(bonusHours ? 'Мастер одобрен — пробный доступ 24ч + 3 дня бонус за приглашение коллеги' : 'Мастер одобрен — включён пробный доступ на 24 часа');
   } else {
     // Подписка временно отключена — доступ бесплатный и бессрочный, пока не включим оплату обратно
     m.isTrial = false;
     m.trialEndsAt = null;
     m.subscriptionUntil = null;
+    m.trialExpiredNotifiedAt = null;
+    await saveMaster(m);
+    showToast('Мастер одобрен — доступ бесплатный, сразу виден в каталоге');
   }
-  await saveMaster(m);
-  showToast(SUBSCRIPTION_ENABLED ? 'Мастер одобрен — включён пробный доступ на 24 часа' : 'Мастер одобрен — доступ бесплатный, сразу виден в каталоге');
+  logAdminAction('approve_master', m.name);
   fillAdmin();
 }
 window.adminApproveMaster = adminApproveMaster;
+
+/* Начисляет мастеру-пригласившему бонусные часы доступа — продлевает пробный период
+   либо оплаченную подписку, а если доступ уже неактивен, выдаёт короткий бонусный пробный период. */
+/* Журнал действий владельца/админов — кто и что сделал (одобрил, удалил, продлил вручную и т.п.).
+   Полезно, когда с кабинетом работает не один человек. Храним последние 500 записей. */
+async function logAdminAction(action, details){
+  try{
+    const log = await sget('audit-log', true) || [];
+    log.push({
+      at: Date.now(),
+      actorId: state.tgUser ? String(state.tgUser.id) : 'browser-admin',
+      actorName: state.tgUser ? [state.tgUser.first_name,state.tgUser.last_name].filter(Boolean).join(' ') : 'Тестовый вход',
+      action, details
+    });
+    while(log.length > 500) log.shift();
+    await sset('audit-log', log, true);
+  }catch(e){ console.warn('logAdminAction failed:', e); }
+}
+
+async function grantMasterReferralBonus(masterId, hours){
+  try{
+    const m = await loadMaster(masterId);
+    if(!m) return;
+    if(m.isTrial && m.trialEndsAt){
+      m.trialEndsAt += hours*3600000;
+    } else if(m.subscriptionActive && m.subscriptionUntil){
+      const d = new Date(m.subscriptionUntil+'T00:00:00');
+      d.setDate(d.getDate() + Math.ceil(hours/24));
+      m.subscriptionUntil = d.toISOString().slice(0,10);
+    } else {
+      m.subscriptionActive = true;
+      m.isTrial = true;
+      m.trialEndsAt = Date.now() + hours*3600000;
+      m.trialExpiredNotifiedAt = null;
+    }
+    await saveMaster(m);
+    if(m.telegramId){
+      await notifyTelegram(m.telegramId, `🎁 Вам начислен бонус +${Math.round(hours/24)} дн. доступа — коллега зарегистрировался по вашей приглашительной ссылке на BeautyHub!`);
+    }
+  }catch(e){ console.warn('grantMasterReferralBonus failed:', e); }
+}
 
 async function adminRejectMaster(id){
   const reason = window.prompt('Укажите причину отклонения (мастер её увидит):', '');
@@ -1897,6 +4028,7 @@ async function adminRejectMaster(id){
   m.moderationReason = reason || 'Причина не указана';
   await saveMaster(m);
   showToast('Мастер отклонён');
+  logAdminAction('reject_master', `${m.name} — ${m.moderationReason}`);
   fillAdmin();
 }
 window.adminRejectMaster = adminRejectMaster;
@@ -1910,6 +4042,7 @@ async function adminDeleteMaster(id){
   await sdelete('bookings:'+id, true);
   await sdelete('reviews:'+id, true);
   showToast('Мастер удалён');
+  logAdminAction('delete_master', m?m.name:id);
   fillAdmin();
 }
 window.adminDeleteMaster = adminDeleteMaster;
@@ -1922,7 +4055,7 @@ async function renderAdminEdit(id){
     <div style="font-weight:700;font-size:13.5px;margin-bottom:8px;">История платежей</div>
     ${history.length ? history.map(h=>`
       <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px;">
-        <span>${h.method==='sbp'?'📱 СБП':'💳 Карта'} · ${new Date(h.confirmedAt).toLocaleDateString('ru-RU')}</span>
+        <span>${h.method==='sbp'?'📱 СБП':h.method==='yookassa'?'💳 ЮKassa (онлайн)':'💳 Карта'} · ${new Date(h.confirmedAt).toLocaleDateString('ru-RU')}</span>
         <span style="color:var(--ink-soft)">до ${fmtDate(h.subscriptionUntil)}</span>
       </div>`).join('') : `<div style="font-size:12.5px;color:var(--ink-soft)">Платежей ещё не было</div>`}
   </div>`;
@@ -1949,6 +4082,7 @@ async function renderAdminEdit(id){
         <option value="rejected" ${m.moderationStatus==='rejected'?'selected':''}>Отклонён</option>
       </select>
     </div>
+    <div class="field"><label>Теги / сегмент (через запятую)</label><input id="admTags" placeholder="перспективный, нужно дожать..." value="${escapeHtml((m.tags||[]).join(', '))}"></div>
     <button class="btn primary" onclick="adminSaveEdit('${id}')">Сохранить</button>
   </div>
   ${historyBlock}`;
@@ -1971,6 +4105,7 @@ async function adminSaveEdit(id){
     m.trialEndsAt = null;
   }
   m.moderationStatus = document.getElementById('admModeration').value;
+  m.tags = document.getElementById('admTags').value.split(',').map(t=>t.trim()).filter(Boolean);
   await saveMaster(m);
   state.adminEditingId=null;
   showToast('Изменения сохранены');
