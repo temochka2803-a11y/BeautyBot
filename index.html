@@ -288,6 +288,38 @@ input,select,textarea{font-family:inherit;}
 .countdot{background:var(--accent-grad);color:#fff;font-size:11px;font-weight:800;border-radius:100px;padding:3px 9px;flex:0 0 auto;}
 .pinkfield{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--pink-tint);border-radius:14px;padding:12px 14px;}
 .pinkfield .v{font-size:12.5px;font-weight:700;color:var(--rose-deep);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* Чекбокс-переключатель (единый стиль на случай настроек вида "показывать/не показывать") */
+.checkrow{display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer;}
+.checkrow input[type="checkbox"]{
+  appearance:none;-webkit-appearance:none;width:22px;height:22px;flex:0 0 22px;
+  border:1.5px solid var(--line);border-radius:7px;background:var(--surface);
+  display:flex;align-items:center;justify-content:center;position:relative;transition:.15s;
+}
+.checkrow input[type="checkbox"]:checked{background:var(--accent-grad);border-color:transparent;}
+.checkrow input[type="checkbox"]:checked::after{
+  content:'';position:absolute;left:6px;top:2px;width:6px;height:11px;
+  border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg);
+}
+.checkrow label{font-size:14.5px;font-weight:600;color:var(--ink);cursor:pointer;}
+
+/* Сегментированный переключатель периода (пилюли, активная — градиент) */
+.segctrl{display:flex;gap:8px;overflow-x:auto;padding:2px 18px 14px;}
+.segctrl button{
+  flex:0 0 auto;padding:10px 16px;border-radius:100px;font-size:13px;font-weight:700;
+  background:var(--surface);color:var(--ink-soft);border:1px solid var(--line);white-space:nowrap;
+}
+.segctrl button.active{background:var(--accent-grad);color:#fff;border-color:transparent;}
+
+/* Крупная статистика по центру карточки (например "Чистая прибыль") */
+.bigstat{text-align:center;padding:8px 0;}
+.bigstat .n{font-size:34px;font-weight:800;font-family:'Inter',sans-serif;}
+.bigstat .l{font-size:13px;color:var(--ink-soft);margin-bottom:4px;}
+.bigstat .sub{font-size:12.5px;color:var(--ink-soft);margin-top:8px;}
+.statrow{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid var(--line);font-size:14.5px;}
+.statrow:last-child{border-bottom:none;}
+.statrow .v{font-weight:700;}
+.statrow .v.neg{color:var(--danger);}
 </style>
 </head>
 <body>
@@ -1660,9 +1692,9 @@ async function fillMyBookings(){
   const referralCard = `<div class="card">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">👯 Пригласите подругу</div>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Отправьте эту ссылку — когда подруга откроет приложение по ней, вы обе станете приоритетными клиентами у мастеров (это отметка для мастера, помогает при прочих равных).${referrals.length?` Уже приглашено: ${referrals.length}.`:''}</div>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <input readonly value="${refLink}" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:12px;color:var(--ink-soft);" onclick="this.select()">
-      <button class="btn primary small" style="width:auto;padding:0 16px;white-space:nowrap;" onclick="copyText('${refLink}')">Скопировать</button>
+    <div class="pinkfield">
+      <span class="v">${refLink}</span>
+      <button class="btn ghost small" style="width:auto;padding:9px 16px;white-space:nowrap;flex:0 0 auto;" onclick="copyText('${refLink}')">Скопировать</button>
     </div>
   </div>`;
 
@@ -2300,18 +2332,18 @@ async function renderMProfile(m, isDemo, bookings){
   const masterRefCard = isDemo ? '' : `<div class="card">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">👥 Пригласите коллегу-мастера</div>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Коллега зарегистрируется по вашей ссылке — вы оба получите +3 дня бонусного доступа, как только модератор одобрит его анкету.${masterRefs.length?` Уже приглашено: ${masterRefs.length}.`:''}</div>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <input readonly value="${masterRefLink}" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:12px;color:var(--ink-soft);" onclick="this.select()">
-      <button class="btn primary small" style="width:auto;padding:0 16px;white-space:nowrap;" onclick="copyText('${masterRefLink}')">Скопировать</button>
+    <div class="pinkfield">
+      <span class="v">${masterRefLink}</span>
+      <button class="btn ghost small" style="width:auto;padding:9px 16px;white-space:nowrap;flex:0 0 auto;" onclick="copyText('${masterRefLink}')">Скопировать</button>
     </div>
   </div>`;
 
   const linkCard = isDemo ? '' : `<div class="card">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🔗 Ваша ссылка для клиентов</div>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Отправьте эту ссылку клиентам в директ, сторис или на сайт — она откроет ваш профиль в приложении сразу на странице записи.</div>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <input id="myBookingLink" readonly value="${masterBookingLink(m.id)}" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:12.5px;color:var(--ink-soft);" onclick="this.select()">
-      <button class="btn primary small" style="width:auto;padding:0 16px;white-space:nowrap;" onclick="copyText(masterBookingLink('${m.id}'))">Скопировать</button>
+    <div class="pinkfield">
+      <span class="v" id="myBookingLinkText">${masterBookingLink(m.id)}</span>
+      <button class="btn ghost small" style="width:auto;padding:9px 16px;white-space:nowrap;flex:0 0 auto;" onclick="copyText(masterBookingLink('${m.id}'))">Скопировать</button>
     </div>
     <button class="btn ghost small" style="margin-top:10px;" onclick="toggleQr()">🔳 Показать QR-код</button>
     <div id="qrBox" style="display:none;text-align:center;margin-top:12px;">
