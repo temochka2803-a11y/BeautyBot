@@ -325,6 +325,8 @@ input,select,textarea{font-family:inherit;}
 <body>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <div id="frame"><div id="app"></div></div>
 
 <script>
@@ -351,6 +353,26 @@ const SPECS = {
   lashes:{label:'Ресницы', icon:'👁️'},
 };
 const TIMES = ['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'];
+
+// Быстрые шаблоны ответов для чатов мастера — экономят время на типовых фразах
+const QUICK_REPLIES = [
+  'Здравствуйте! 🙂',
+  'Уточните, пожалуйста, дату и время',
+  'Да, это время свободно',
+  'К сожалению, это время уже занято',
+  'Спасибо, жду вас!',
+  'Напомните, пожалуйста, за пару часов до визита, если планы изменятся',
+];
+function quickReplyChips(targetInputId){
+  return `<div class="chiprow" style="padding:0 0 10px;">${QUICK_REPLIES.map(t=>`<span class="chip" onclick="insertQuickReply('${targetInputId}', '${t.replace(/'/g,"\\'")}')">${escapeHtml(t)}</span>`).join('')}</div>`;
+}
+function insertQuickReply(inputId, text){
+  const el = document.getElementById(inputId);
+  if(!el) return;
+  el.value = el.value ? (el.value.replace(/\s+$/,'') + ' ' + text) : text;
+  el.focus();
+}
+window.insertQuickReply = insertQuickReply;
 
 /* ============ SUPABASE CONFIG ============
    Замените на данные вашего проекта (Supabase Dashboard → Project Settings → API).
@@ -420,8 +442,8 @@ function fmtDate(iso){
 function ratingOf(m){ return m.ratingCount ? (m.ratingSum/m.ratingCount) : 0; }
 /* Сколько последовательных часовых ячеек сетки (TIMES) занимает запись, исходя из длительности
    услуги — грубое, но полезное приближение поверх фиксированной часовой сетки времени. */
-function occupiedTimesForBooking(bk){
-  const need = Math.max(1, Math.ceil((bk.duration||60)/60));
+function occupiedTimesForBooking(bk, bufferMinutes){
+  const need = Math.max(1, Math.ceil(((bk.duration||60) + (bufferMinutes||0))/60));
   const idx = TIMES.indexOf(bk.time);
   if(idx===-1) return [bk.time];
   return TIMES.slice(idx, idx+need);
@@ -625,6 +647,121 @@ async function loadWaitlist(masterId){ return await sget('waitlist:'+masterId, t
    идёт к ownerId() (тот же идентификатор, что используется для личных данных клиента),
    а не к masterId. */
 async function loadVisitorChat(key){ return await sget('visitor-chat:'+key, true) || []; }
+
+/* ============ ПРЯМОЙ ЧАТ КЛИЕНТ ↔ МАСТЕР (до записи и после) ============
+   Отдельно от чата клиента с владельцем (visitor-chat) и мастера с владельцем (chat:<masterId>).
+   Ключ треда — masterId + clientKey (telegramId клиента), чтобы у каждой пары мастер/клиент
+   была своя переписка. */
+async function loadClientMasterChat(masterId, clientKey){ return await sget('cm-chat:'+masterId+':'+clientKey, true) || []; }
+async function saveClientMasterChat(masterId, clientKey, arr){ await sset('cm-chat:'+masterId+':'+clientKey, arr, true); }
+async function addClientMasterChatToIndex(masterId, clientKey){
+  const ids = await sget('cm-chat-index:'+masterId, true) || [];
+  if(!ids.includes(clientKey)){ ids.push(clientKey); await sset('cm-chat-index:'+masterId, ids, true); }
+}
+
+async function renderClientMasterChat(m){
+  if(!state.tgUser){
+    return `<div class="card"><div class="empty" style="padding:20px 0">💬 Чат доступен при открытии приложения через Telegram.</div></div>`;
+  }
+  const clientKey = String(state.tgUser.id);
+  const chat = await loadClientMasterChat(m.id, clientKey);
+  let changed = false;
+  chat.forEach(msg=>{ if(msg.from==='master' && !msg.readByClient){ msg.readByClient = true; changed = true; } });
+  if(changed) await saveClientMasterChat(m.id, clientKey, chat);
+
+  const bubbles = chat.length ? chat.map(msg=>`
+    <div class="chat-msg ${msg.from==='client'?'out':'in'}">
+      <div class="chat-bubble">${escapeHtml(msg.text)}</div>
+      <div class="chat-time">${new Date(msg.createdAt).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+    </div>`).join('') : `<div class="empty" style="padding:30px 10px;">💬 Есть вопрос до записи — например, про свободное время или материалы? Напишите мастеру напрямую.</div>`;
+
+  return `
+  <div class="card" style="padding:12px;">
+    <div class="chat-wrap">${bubbles}</div>
+  </div>
+  <div class="section-pad" style="display:flex;gap:8px;align-items:flex-end;">
+    <textarea id="cmChatInput" placeholder="Написать мастеру…" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;min-height:44px;max-height:120px;"></textarea>
+    <button class="btn primary" style="width:auto;padding:0 18px;height:44px;" onclick="sendClientMasterChat('${m.id}')">➤</button>
+  </div>`;
+}
+window.renderClientMasterChat = renderClientMasterChat;
+
+async function sendClientMasterChat(masterId){
+  const input = document.getElementById('cmChatInput');
+  const text = (input && input.value || '').trim();
+  if(!text){ showToast('Введите сообщение'); return; }
+  if(!state.tgUser){ showToast('Чат доступен только через Telegram'); return; }
+  const clientKey = String(state.tgUser.id);
+  const chat = await loadClientMasterChat(masterId, clientKey);
+  chat.push({
+    id: uid(), from:'client', text, createdAt:Date.now(), readByClient:true, readByMaster:false,
+    clientName: state.clientName || [state.tgUser.first_name,state.tgUser.last_name].filter(Boolean).join(' ') || 'Клиент'
+  });
+  await saveClientMasterChat(masterId, clientKey, chat);
+  await addClientMasterChatToIndex(masterId, clientKey);
+
+  const m = await loadMaster(masterId);
+  if(m && m.telegramId){
+    const who = chat[chat.length-1].clientName;
+    await notifyTelegram(m.telegramId, `💬 Сообщение от клиента ${who}:\n${text}\n\nОтветить можно во вкладке «Мастеру → Клиенты».`);
+  }
+  showToast('Сообщение отправлено');
+  fillMasterDetail();
+}
+window.sendClientMasterChat = sendClientMasterChat;
+
+/* ============ Мастер видит и отвечает на прямые чаты с клиентами ============ */
+function openMasterClientChat(masterId, clientKey){
+  state.masterTab = 'clientchat';
+  state.masterChatClientKey = clientKey;
+  fillMasterArea();
+}
+window.openMasterClientChat = openMasterClientChat;
+
+async function renderMasterClientChatThread(m){
+  const clientKey = state.masterChatClientKey;
+  const chat = await loadClientMasterChat(m.id, clientKey);
+  let changed = false;
+  chat.forEach(msg=>{ if(msg.from==='client' && !msg.readByMaster){ msg.readByMaster = true; changed = true; } });
+  if(changed) await saveClientMasterChat(m.id, clientKey, chat);
+
+  const clientMsg = chat.slice().reverse().find(msg=>msg.from==='client');
+  const clientName = clientMsg ? clientMsg.clientName : 'Клиент';
+
+  const bubbles = chat.length ? chat.map(msg=>`
+    <div class="chat-msg ${msg.from==='master'?'out':'in'}">
+      <div class="chat-bubble">${escapeHtml(msg.text)}</div>
+      <div class="chat-time">${new Date(msg.createdAt).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+    </div>`).join('') : `<div class="empty" style="padding:30px 10px;">Переписки пока нет.</div>`;
+
+  return `
+  <div class="backbar"><button class="backbtn" onclick="state.masterTab='clients'; fillMasterArea();">←</button><div style="font-weight:700">${escapeHtml(clientName)}</div></div>
+  <div class="card" style="padding:12px;">
+    <div class="chat-wrap">${bubbles}</div>
+  </div>
+  ${quickReplyChips('masterClientChatInput')}
+  <div class="section-pad" style="display:flex;gap:8px;align-items:flex-end;padding-top:0;">
+    <textarea id="masterClientChatInput" placeholder="Ответить клиенту…" style="flex:1;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;min-height:44px;max-height:120px;"></textarea>
+    <button class="btn primary" style="width:auto;padding:0 18px;height:44px;" onclick="sendMasterClientChatReply('${m.id}')">➤</button>
+  </div>`;
+}
+window.renderMasterClientChatThread = renderMasterClientChatThread;
+
+async function sendMasterClientChatReply(masterId){
+  const input = document.getElementById('masterClientChatInput');
+  const text = (input && input.value || '').trim();
+  if(!text){ showToast('Введите сообщение'); return; }
+  const clientKey = state.masterChatClientKey;
+  const chat = await loadClientMasterChat(masterId, clientKey);
+  chat.push({ id:uid(), from:'master', text, createdAt:Date.now(), readByMaster:true, readByClient:false });
+  await saveClientMasterChat(masterId, clientKey, chat);
+  if(clientKey){
+    await notifyTelegram(clientKey, `💬 Ответ от мастера:\n${text}`);
+  }
+  showToast('Ответ отправлен');
+  fillMasterArea();
+}
+window.sendMasterClientChatReply = sendMasterClientChatReply;
 async function saveVisitorChat(key, arr){ await sset('visitor-chat:'+key, arr, true); }
 async function addVisitorChatToIndex(key){
   const ids = await sget('visitor-chat-index', true) || [];
@@ -745,6 +882,16 @@ async function trackProfileView(m){
     const key = 'profile-views:'+m.id;
     const cur = await sget(key, true) || 0;
     await sset(key, cur+1, true);
+
+    // Источник перехода — по какой ссылке клиент попал в приложение в этой сессии
+    const sp = state._startParam || '';
+    const source = sp.startsWith('book_'+m.id) ? 'link'
+      : (sp.startsWith('ref_') || sp.startsWith('mref_')) ? 'referral'
+      : 'catalog';
+    const srcKey = 'profile-views-sources:'+m.id;
+    const sources = await sget(srcKey, true) || {};
+    sources[source] = (sources[source]||0) + 1;
+    await sset(srcKey, sources, true);
   }catch(e){ /* тихо игнорируем — счётчик не критичен для работы приложения */ }
 }
 async function saveWaitlist(masterId, arr){ await sset('waitlist:'+masterId, arr, true); }
@@ -1336,7 +1483,48 @@ function renderListStep(masters){
     }).join('');
   }
 
-  document.getElementById('content').innerHTML = cityBar + chips + filterbar + filterbar2 + cardsHtml;
+  const withCoords = list.filter(m=>m.lat && m.lng);
+  const mapToggle = `<div class="section-pad" style="display:flex;gap:8px;">
+    <button class="btn ${state.catalogView!=='map'?'primary':'ghost'} small" style="flex:1" onclick="setCatalogView('list')">☰ Список</button>
+    <button class="btn ${state.catalogView==='map'?'primary':'ghost'} small" style="flex:1" onclick="setCatalogView('map')">🗺️ Карта${withCoords.length?` (${withCoords.length})`:''}</button>
+  </div>`;
+
+  if(state.catalogView==='map'){
+    document.getElementById('content').innerHTML = cityBar + chips + mapToggle +
+      (withCoords.length ? `<div class="section-pad"><div id="mastersMap" style="height:52vh;border-radius:16px;overflow:hidden;box-shadow:var(--shadow);"></div></div>`
+        : `<div class="empty"><div class="big">🗺️</div>Пока никто из мастеров этой категории не указал координаты.</div>`);
+    if(withCoords.length) setTimeout(()=>renderMastersMap(withCoords), 50);
+    return;
+  }
+
+  document.getElementById('content').innerHTML = cityBar + chips + mapToggle + filterbar + filterbar2 + cardsHtml;
+}
+function setCatalogView(v){ state.catalogView = v; fillCatalog(); }
+window.setCatalogView = setCatalogView;
+
+let _mastersMapInstance = null;
+function renderMastersMap(masters){
+  const el = document.getElementById('mastersMap');
+  if(!el || typeof L === 'undefined') return;
+  if(_mastersMapInstance){ _mastersMapInstance.remove(); _mastersMapInstance = null; }
+  const center = [masters[0].lat, masters[0].lng];
+  const map = L.map('mastersMap').setView(center, 12);
+  _mastersMapInstance = map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 19
+  }).addTo(map);
+  masters.forEach(m=>{
+    const spec = SPECS[m.specialization];
+    const marker = L.marker([m.lat, m.lng]).addTo(map);
+    const pf = priceFrom(m);
+    const avgR = ratingOf(m);
+    marker.bindPopup(`<b>${spec?spec.icon:''} ${escapeHtml(m.name)}</b><br>${avgR?avgR.toFixed(1)+' ★':'нет оценок'}${pf!=null?' · от '+pf+'₽':''}<br><a href="#" onclick="openMaster('${m.id}');return false;">Открыть профиль →</a>`);
+  });
+  if(masters.length>1){
+    const bounds = L.latLngBounds(masters.map(m=>[m.lat,m.lng]));
+    map.fitBounds(bounds, {padding:[30,30]});
+  }
 }
 function hasSlotsSoon(m){
   const d0 = todayISO(0), d1 = todayISO(1);
@@ -1426,6 +1614,7 @@ async function fillMasterDetail(){
     <button class="${state.masterDetailTab==='services'?'active':''}" onclick="setDTab('services')">Услуги</button>
     <button class="${state.masterDetailTab==='portfolio'?'active':''}" onclick="setDTab('portfolio')">Работы</button>
     <button class="${state.masterDetailTab==='reviews'?'active':''}" onclick="setDTab('reviews')">Отзывы (${reviews.length})</button>
+    <button class="${state.masterDetailTab==='chat'?'active':''}" onclick="setDTab('chat')">💬 Чат</button>
     <button class="${state.masterDetailTab==='book'?'active':''}" onclick="setDTab('book')">Записаться</button>
   </div>`;
 
@@ -1449,6 +1638,14 @@ async function fillMasterDetail(){
       ${eligible.length>1 ? `<div class="field"><label>Какая запись</label><select id="rvBookingId">${eligible.map(b=>`<option value="${b.id}">${fmtDate(b.date)} — ${escapeHtml(b.serviceName)}</option>`).join('')}</select></div>` : `<input type="hidden" id="rvBookingId" value="${eligible[0].id}">`}
       <div class="field"><label>Ваше имя</label><input id="rvName" value="${escapeHtml(state.clientName)}" placeholder="Имя"></div>
       <div class="field"><label>Оценка</label><div class="starpick" id="rvStars">${[1,2,3,4,5].map(i=>`<span data-i="${i}" onclick="pickStar(${i})">★</span>`).join('')}</div></div>
+      <div class="field">
+        <label>По критериям (необязательно)</label>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:13px;color:var(--ink-soft);">Качество работы</span><div class="starpick" id="rvQuality" style="font-size:19px;">${[1,2,3,4,5].map(i=>`<span data-i="${i}" onclick="pickSubStar('rvQuality',${i})">★</span>`).join('')}</div></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:13px;color:var(--ink-soft);">Пунктуальность</span><div class="starpick" id="rvPunctuality" style="font-size:19px;">${[1,2,3,4,5].map(i=>`<span data-i="${i}" onclick="pickSubStar('rvPunctuality',${i})">★</span>`).join('')}</div></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:13px;color:var(--ink-soft);">Атмосфера</span><div class="starpick" id="rvAtmosphere" style="font-size:19px;">${[1,2,3,4,5].map(i=>`<span data-i="${i}" onclick="pickSubStar('rvAtmosphere',${i})">★</span>`).join('')}</div></div>
+        </div>
+      </div>
       <div class="field"><label>Отзыв</label><textarea id="rvText" placeholder="Расскажите, как всё прошло"></textarea></div>
       <div class="field">
         <label>Фото (необязательно, например «до/после»)</label>
@@ -1461,15 +1658,28 @@ async function fillMasterDetail(){
       <div class="divider"></div>
       <div class="pillnote" style="margin:0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">Оставить отзыв можно только после завершённой (подтверждённой мастером и уже прошедшей) записи. Это защищает мастеров от накрутки отзывов.</div>
     `;
-    body = `<div class="card">
+    const avgOf = (key)=>{ const vals = reviews.map(r=>r[key]).filter(Boolean); return vals.length ? (vals.reduce((s,v)=>s+v,0)/vals.length) : null; };
+    const avgQuality = avgOf('qualityRating'), avgPunctuality = avgOf('punctualityRating'), avgAtmosphere = avgOf('atmosphereRating');
+    const criteriaSummary = (avgQuality||avgPunctuality||avgAtmosphere) ? `<div class="card" style="margin:0 0 12px;">
+      <div style="font-weight:700;font-size:12.5px;margin-bottom:8px;">Оценки по критериям</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${avgQuality?`<div style="display:flex;justify-content:space-between;font-size:12.5px;"><span style="color:var(--ink-soft);">Качество работы</span><span class="stars">${avgQuality.toFixed(1)} ★</span></div>`:''}
+        ${avgPunctuality?`<div style="display:flex;justify-content:space-between;font-size:12.5px;"><span style="color:var(--ink-soft);">Пунктуальность</span><span class="stars">${avgPunctuality.toFixed(1)} ★</span></div>`:''}
+        ${avgAtmosphere?`<div style="display:flex;justify-content:space-between;font-size:12.5px;"><span style="color:var(--ink-soft);">Атмосфера</span><span class="stars">${avgAtmosphere.toFixed(1)} ★</span></div>`:''}
+      </div>
+    </div>` : '';
+    body = `${criteriaSummary}<div class="card">
       ${reviews.length? reviews.slice().sort((a,b)=>b.createdAt-a.createdAt).map(r=>`
         <div class="review">
           <div class="review-top"><span class="review-name">${escapeHtml(r.name)}</span><span class="stars">${starsStr(r.rating)}</span></div>
           <div class="review-text">${escapeHtml(r.comment)}</div>
+          ${(r.qualityRating||r.punctualityRating||r.atmosphereRating)?`<div style="font-size:11px;color:var(--ink-soft);margin-top:5px;">${r.qualityRating?`Качество ${r.qualityRating}★`:''}${r.punctualityRating?` · Пунктуальность ${r.punctualityRating}★`:''}${r.atmosphereRating?` · Атмосфера ${r.atmosphereRating}★`:''}</div>`:''}
           ${r.photoUrl?`<img src="${r.photoUrl}" style="width:100%;max-width:220px;border-radius:12px;margin-top:8px;display:block;">`:''}
         </div>`).join('') : '<div class="empty" style="padding:10px 0 20px">Пока нет отзывов — станьте первым!</div>'}
       ${reviewForm}
     </div>`;
+  } else if(state.masterDetailTab==='chat'){
+    body = await renderClientMasterChat(m);
   } else if(state.masterDetailTab==='book'){
     body = renderBookingForm(m, bookings, waitlist);
   }
@@ -1478,6 +1688,15 @@ async function fillMasterDetail(){
   if(state.masterDetailTab==='reviews' && state._pickedStar){
     document.querySelectorAll('#rvStars span').forEach(el=>{
       if(parseInt(el.dataset.i)<=state._pickedStar) el.classList.add('on');
+    });
+  }
+  if(state.masterDetailTab==='reviews'){
+    ['rvQuality','rvPunctuality','rvAtmosphere'].forEach(key=>{
+      const val = state._pickedSubStars && state._pickedSubStars[key];
+      if(!val) return;
+      document.querySelectorAll('#'+key+' span').forEach(el=>{
+        if(parseInt(el.dataset.i)<=val) el.classList.add('on');
+      });
     });
   }
 }
@@ -1495,6 +1714,12 @@ function setDTab(t){ state.masterDetailTab=t; if(t!=='book') state.booking=null;
 window.setDTab=setDTab;
 function pickStar(i){ state._pickedStar=i; fillMasterDetail(); }
 window.pickStar=pickStar;
+function pickSubStar(key, i){
+  state._pickedSubStars = state._pickedSubStars || {};
+  state._pickedSubStars[key] = i;
+  fillMasterDetail();
+}
+window.pickSubStar=pickSubStar;
 
 async function uploadReviewPhoto(input){
   const file = input.files && input.files[0];
@@ -1530,13 +1755,16 @@ async function submitReview(masterId){
   await sset('my-client-name', name, false);
   state.clientName = name;
   const reviews = await loadReviews(masterId);
-  reviews.push({id:uid(), masterId, name, rating, comment:text, createdAt:Date.now(), bookingId, photoUrl: state._pendingReviewPhoto || null});
+  const subStars = state._pickedSubStars || {};
+  reviews.push({id:uid(), masterId, name, rating, comment:text, createdAt:Date.now(), bookingId, photoUrl: state._pendingReviewPhoto || null,
+    qualityRating: subStars.rvQuality || null, punctualityRating: subStars.rvPunctuality || null, atmosphereRating: subStars.rvAtmosphere || null});
   await saveReviews(masterId, reviews);
   const m = await loadMaster(masterId);
   m.ratingSum = (m.ratingSum||0) + rating;
   m.ratingCount = (m.ratingCount||0) + 1;
   await saveMaster(m);
   state._pickedStar=null;
+  state._pickedSubStars=null;
   state._pendingReviewPhoto=null;
   showToast('Спасибо за отзыв!');
   fillMasterDetail();
@@ -1559,7 +1787,7 @@ function renderBookingForm(m, bookings, waitlist){
   let slotsHtml = '';
   if(b.date){
     const daySlots = (m.slots && m.slots[b.date]) || [];
-    const takenTimes = bookings.filter(bk=>bk.date===b.date && bk.status!=='cancelled').flatMap(occupiedTimesForBooking);
+    const takenTimes = bookings.filter(bk=>bk.date===b.date && bk.status!=='cancelled').flatMap(bk=>occupiedTimesForBooking(bk, m.bufferMinutes));
     slotsHtml = `<div class="slotgrid">${daySlots.map(t=>{
       const taken = takenTimes.includes(t);
       return `<div class="slot ${b.time===t?'on':''} ${taken?'taken':''}" onclick="${taken?'':`pickTime('${t}')`}">${t}</div>`;
@@ -1624,8 +1852,8 @@ async function submitBooking(masterId){
   // Перечитываем самые свежие записи прямо перед сохранением, чтобы минимизировать
   // окно гонки, если кто-то другой записался на этот же слот почти одновременно.
   const bookings = await loadBookings(masterId);
-  const wantTimes = occupiedTimesForBooking({time:state.booking.time, duration:service.duration||60});
-  const alreadyTaken = bookings.some(b=>b.status!=='cancelled' && b.date===state.booking.date && occupiedTimesForBooking(b).some(t=>wantTimes.includes(t)));
+  const wantTimes = occupiedTimesForBooking({time:state.booking.time, duration:service.duration||60}, m.bufferMinutes);
+  const alreadyTaken = bookings.some(b=>b.status!=='cancelled' && b.date===state.booking.date && occupiedTimesForBooking(b, m.bufferMinutes).some(t=>wantTimes.includes(t)));
   if(alreadyTaken){
     showToast('Увы, это время только что заняли. Выберите другое.');
     state.booking.time = null;
@@ -1703,6 +1931,14 @@ async function fillMyBookings(){
     return;
   }
   const rows=[];
+  const visitCounts = {}; // masterId -> число состоявшихся визитов этого клиента (для программы лояльности)
+  for(const entry of mine){
+    const bookings = await loadBookings(entry.masterId);
+    const bk = bookings.find(b=>b.id===entry.bookingId);
+    if(bk && bk.status==='confirmed' && isBookingPast(bk)){
+      visitCounts[entry.masterId] = (visitCounts[entry.masterId]||0) + 1;
+    }
+  }
   for(const entry of mine.slice().reverse()){
     const bookings = await loadBookings(entry.masterId);
     const bk = bookings.find(b=>b.id===entry.bookingId);
@@ -1725,7 +1961,18 @@ async function fillMyBookings(){
       <div class="divider"></div>
       <div style="font-size:13.5px;color:var(--ink-soft)">📅 ${fmtDate(bk.date)} в ${bk.time} · ${bk.price}₽</div>
       ${bk.depositAmount?`<div style="font-size:12.5px;margin-top:4px;color:${bk.depositStatus==='confirmed'?'var(--teal)':'var(--gold)'};">${bk.depositStatus==='confirmed'?'✅ Мастер подтвердил получение предоплаты':'⏳ Мастер ещё не подтвердил получение предоплаты '+bk.depositAmount+'₽'}</div>`:''}
-      ${canCancel ? `<div style="margin-top:10px;"><button class="btn danger small" onclick="clientCancelBooking('${entry.masterId}','${bk.id}')">Отменить запись</button></div>` : ''}
+      ${(isCompleted && m && m.loyaltyEvery && m.loyaltyReward) ? (()=>{
+        const visits = visitCounts[entry.masterId]||0;
+        const rem = visits % m.loyaltyEvery;
+        return rem===0
+          ? `<div style="font-size:12px;font-weight:700;color:var(--teal);margin-top:6px;">🎁 У вас накопился бонус: ${escapeHtml(m.loyaltyReward)} — напомните мастеру при следующем визите</div>`
+          : `<div style="font-size:11.5px;color:var(--ink-soft);margin-top:6px;">🎁 До «${escapeHtml(m.loyaltyReward)}» у этого мастера: ещё ${m.loyaltyEvery-rem} визит(ов)</div>`;
+      })() : ''}
+      ${canCancel ? `<div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="btn ghost small" style="flex:1" onclick="toggleReschedule('${bk.id}')">${state.reschedulingBookingId===bk.id?'Отмена':'🔁 Перенести'}</button>
+        <button class="btn danger small" style="flex:1" onclick="clientCancelBooking('${entry.masterId}','${bk.id}')">Отменить</button>
+      </div>` : ''}
+      ${(canCancel && state.reschedulingBookingId===bk.id && m) ? renderRescheduleWidget(m, bk, bookings) : ''}
       ${isCompleted && m ? `<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <button class="btn ghost small" onclick="repeatBooking('${entry.masterId}','${bk.serviceId}')">🔁 Повторить запись</button>
         <button class="btn ghost small" onclick="goToReview('${entry.masterId}')">⭐ Оставить отзыв</button>
@@ -1785,6 +2032,76 @@ async function clientCancelBooking(masterId, bookingId){
   notifyWaitlist(masterId); // слот освободился — сообщим тем, кто в листе ожидания
 }
 window.clientCancelBooking = clientCancelBooking;
+
+function toggleReschedule(bookingId){
+  state.reschedulingBookingId = state.reschedulingBookingId===bookingId ? null : bookingId;
+  state.rescheduleDate = null;
+  state.rescheduleTime = null;
+  fillMyBookings();
+}
+window.toggleReschedule = toggleReschedule;
+
+function renderRescheduleWidget(m, bk, bookings){
+  const days = [];
+  for(let i=0;i<14;i++) days.push(todayISO(i));
+  const selDate = state.rescheduleDate || bk.date;
+  const dayChips = days.map(d=>{
+    const has = (m.slots && m.slots[d] && m.slots[d].length);
+    return `<button class="chip ${selDate===d?'active':''}" ${has?'':'style="opacity:.35;pointer-events:none;"'} onclick="pickRescheduleDate('${d}')">${fmtDate(d)}</button>`;
+  }).join('');
+  const daySlots = (m.slots && m.slots[selDate]) || [];
+  const takenTimes = bookings.filter(b=>b.id!==bk.id && b.date===selDate && b.status!=='cancelled').flatMap(b=>occupiedTimesForBooking(b, m.bufferMinutes));
+  const slotsHtml = `<div class="slotgrid">${daySlots.map(t=>{
+    const taken = takenTimes.includes(t);
+    return `<div class="slot ${state.rescheduleTime===t?'on':''} ${taken?'taken':''}" onclick="${taken?'':`pickRescheduleTime('${t}')`}">${t}</div>`;
+  }).join('')}</div>`;
+  return `<div class="card" style="margin-top:10px;background:var(--bg);">
+    <div style="font-weight:700;font-size:12.5px;margin-bottom:8px;">Выберите новую дату и время</div>
+    <div class="chiprow" style="padding:0 0 10px;">${dayChips}</div>
+    ${slotsHtml}
+    <button class="btn primary small" style="margin-top:10px;width:100%;" ${(state.rescheduleDate&&state.rescheduleTime)?'':'disabled'} onclick="confirmReschedule('${m.id}','${bk.id}')">Подтвердить перенос</button>
+  </div>`;
+}
+window.renderRescheduleWidget = renderRescheduleWidget;
+
+function pickRescheduleDate(d){ state.rescheduleDate=d; state.rescheduleTime=null; fillMyBookings(); }
+window.pickRescheduleDate = pickRescheduleDate;
+function pickRescheduleTime(t){ state.rescheduleTime=t; fillMyBookings(); }
+window.pickRescheduleTime = pickRescheduleTime;
+
+async function confirmReschedule(masterId, bookingId){
+  const bookings = await loadBookings(masterId);
+  const bk = bookings.find(b=>b.id===bookingId);
+  if(!bk || !state.rescheduleDate || !state.rescheduleTime) return;
+  const oldDate = bk.date, oldTime = bk.time;
+  bk.date = state.rescheduleDate;
+  bk.time = state.rescheduleTime;
+  bk.status = 'pending'; // требует повторного подтверждения мастером
+  bk.attendance = null;
+  await saveBookings(masterId, bookings);
+  state.reschedulingBookingId = null;
+  state.rescheduleDate = null;
+  state.rescheduleTime = null;
+  showToast('Запись перенесена — ждём подтверждения мастера');
+  fillMyBookings();
+
+  try{
+    const m = await loadMaster(masterId);
+    const chat = await loadChat(masterId);
+    chat.push({
+      id: uid(), from:'owner',
+      text: `🔁 Клиент перенёс запись!\n${bk.serviceName}\nБыло: ${fmtDate(oldDate)} в ${oldTime}\nСтало: ${fmtDate(bk.date)} в ${bk.time}\nКлиент: ${bk.clientName}\n\nПодтвердите новое время.`,
+      createdAt: Date.now(), readByOwner:true, readByMaster:false
+    });
+    await saveChat(masterId, chat);
+    await addChatToIndex(masterId);
+    if(m && m.telegramId){
+      await notifyTelegram(m.telegramId, `🔁 Клиент перенёс запись на ${fmtDate(bk.date)} в ${bk.time} (было ${fmtDate(oldDate)} в ${oldTime}). Подтвердите новое время во вкладке «Записи».`);
+    }
+  }catch(e){ console.warn('reschedule notify failed:', e); }
+  notifyWaitlist(masterId); // старый слот освободился
+}
+window.confirmReschedule = confirmReschedule;
 
 /* ============================================================
    MASTER AREA
@@ -2017,9 +2334,11 @@ async function renderMasterDashboard(m, isDemo){
   else if(state.masterTab==='services') body = renderMServices(m, isDemo);
   else if(state.masterTab==='portfolio') body = renderMPortfolio(m, isDemo);
   else if(state.masterTab==='schedule') body = renderMSchedule(m, isDemo);
-  else if(state.masterTab==='bookings') body = renderMBookings(m, bookings, isDemo);
+  else if(state.masterTab==='bookings') body = await renderMBookings(m, bookings, isDemo);
   else if(state.masterTab==='clients') body = await renderMClients(m, isDemo, bookings);
   else if(state.masterTab==='chat') body = renderMChat(m, isDemo, chat);
+  else if(state.masterTab==='clientchat') body = await renderMasterClientChatThread(m);
+  const tabsHtml = state.masterTab==='clientchat' ? '' : tabs;
 
   const dashHeader = `<div class="hero" style="padding-top:20px;padding-bottom:0;display:flex;align-items:center;gap:12px;">
     <div class="avatar" style="width:44px;height:44px;font-size:20px;border-radius:14px;${avatarStyle(m)}">${avatarInner(m,SPECS[m.specialization])}</div>
@@ -2029,7 +2348,7 @@ async function renderMasterDashboard(m, isDemo){
   const placeAdLink = isDemo ? '' : `<div class="section-pad" style="padding-top:${ownerBannersHtml?'0':'14px'};padding-bottom:0;text-align:center;">
     <button class="link-btn" onclick="openAnnouncementChat()">📣 Разместить объявление →</button>
   </div>`;
-  document.getElementById('content').innerHTML = dashHeader + ownerBannersHtml + placeAdLink + demoBanner + subInfo + tabs + body;
+  document.getElementById('content').innerHTML = dashHeader + ownerBannersHtml + placeAdLink + demoBanner + subInfo + tabsHtml + body;
 }
 function setMTab(t){ state.masterTab=t; fillMasterArea(); }
 window.setMTab = setMTab;
@@ -2316,8 +2635,10 @@ window.editWhileInactive=editWhileInactive; window.setMTabEdit=setMTabEdit;
 
 async function renderMProfile(m, isDemo, bookings){
   const views = isDemo ? 0 : (await sget('profile-views:'+m.id, true) || 0);
+  const sources = isDemo ? {} : (await sget('profile-views-sources:'+m.id, true) || {});
   const requests = (bookings||[]).length;
   const conversion = views ? Math.round((requests/views)*100) : 0;
+  const sourcesTotal = (sources.link||0)+(sources.referral||0)+(sources.catalog||0);
   const analyticsCard = isDemo ? '' : `<div class="card">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:10px;">📊 Мини-аналитика</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
@@ -2325,6 +2646,13 @@ async function renderMProfile(m, isDemo, bookings){
       <div style="text-align:center;"><div style="font-size:20px;font-weight:700;font-family:'Inter',sans-serif;color:var(--teal)">${requests}</div><div style="font-size:10.5px;color:var(--ink-soft);">заявок получено</div></div>
       <div style="text-align:center;"><div style="font-size:20px;font-weight:700;font-family:'Inter',sans-serif;color:var(--rose-deep)">${conversion}%</div><div style="font-size:10.5px;color:var(--ink-soft);">конверсия в заявку</div></div>
     </div>
+    ${sourcesTotal ? `<div class="divider"></div>
+    <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:6px;">Откуда приходят просмотры</div>
+    <div style="display:flex;flex-direction:column;gap:5px;">
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;"><span>🔗 По вашей ссылке</span><b>${sources.link||0}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;"><span>👯 По реферальной ссылке</span><b>${sources.referral||0}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;"><span>🔎 Из каталога приложения</span><b>${sources.catalog||0}</b></div>
+    </div>` : ''}
   </div>`;
 
   const masterRefLink = `https://t.me/${BOT_USERNAME}?startapp=mref_${m.id}`;
@@ -2362,6 +2690,45 @@ async function renderMProfile(m, isDemo, bookings){
     <button class="btn ghost small" onclick="saveDepositSetting('${m.id}')">Сохранить</button>
   </div>`;
 
+  const widgetCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🧩 Виджет записи для вашего сайта</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Если у вас есть свой сайт или лендинг — можно встроить туда форму записи, которая ведёт прямо в это же приложение. Скачайте файл <b>widget.html</b> (входит в комплект поставки), загрузите на любой бесплатный хостинг (Netlify, GitHub Pages, Vercel) и вставьте на сайт такой код:</div>
+    <div class="pinkfield" style="align-items:flex-start;">
+      <span class="v" style="white-space:normal;font-family:monospace;font-size:11px;line-height:1.5;" id="widgetEmbedCode">&lt;iframe src="https://ВАШ-ДОМЕН/widget.html?master=${m.id}" width="100%" height="640" frameborder="0"&gt;&lt;/iframe&gt;</span>
+      <button class="btn ghost small" style="width:auto;padding:9px 16px;white-space:nowrap;flex:0 0 auto;" onclick="copyWidgetEmbed('${m.id}')">Скопировать</button>
+    </div>
+  </div>`;
+
+  const mapCoordsCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🗺️ Показать на карте</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Укажите координаты, чтобы клиенты видели вас на карте мастеров. Проще всего: откройте Яндекс.Карты или Google Maps, зажмите нужную точку на карте, скопируйте координаты (два числа через запятую) и вставьте сюда.</div>
+    <div class="field"><label>Координаты (широта, долгота)</label><input id="pfCoords" placeholder="55.751244, 37.618423" value="${m.lat&&m.lng?`${m.lat}, ${m.lng}`:''}"></div>
+    <button class="btn ghost small" onclick="saveMapCoords('${m.id}')">Сохранить</button>
+  </div>`;
+
+  const loyaltyCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🎁 Программа лояльности</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Например, «каждый 6-й визит — бесплатно» или «-20% на 5-й визит». Клиент видит прогресс в своих записях, вы — подсказку в CRM, когда пора выдать бонус.</div>
+    <div class="row2">
+      <div class="field"><label>Каждый N-й визит</label><input id="pfLoyaltyEvery" type="number" min="2" max="20" placeholder="например, 6" value="${m.loyaltyEvery||''}"></div>
+      <div class="field"><label>Награда</label><input id="pfLoyaltyReward" placeholder="Бесплатно / -20%" value="${escapeHtml(m.loyaltyReward||'')}"></div>
+    </div>
+    <button class="btn ghost small" onclick="saveLoyaltySetting('${m.id}')">Сохранить</button>
+  </div>`;
+
+  const bufferCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">⏱️ Буфер между записями</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Добавочное время после каждой услуги — на уборку, подготовку, дорогу. Клиенты не смогут записаться в этот промежуток.</div>
+    <div class="field"><label>Буфер, минут</label><select id="pfBuffer">
+      <option value="0" ${!m.bufferMinutes?'selected':''}>Без буфера</option>
+      <option value="10" ${m.bufferMinutes===10?'selected':''}>10 минут</option>
+      <option value="15" ${m.bufferMinutes===15?'selected':''}>15 минут</option>
+      <option value="20" ${m.bufferMinutes===20?'selected':''}>20 минут</option>
+      <option value="30" ${m.bufferMinutes===30?'selected':''}>30 минут</option>
+    </select></div>
+    <button class="btn ghost small" onclick="saveBufferSetting('${m.id}')">Сохранить</button>
+  </div>`;
+
   const onVacation = m.vacationUntil && m.vacationUntil >= todayISO(0);
   const vacationCard = isDemo ? '' : `<div class="card">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🌴 Отпуск / перерыв</div>
@@ -2389,8 +2756,71 @@ async function renderMProfile(m, isDemo, bookings){
   ${linkCard}
   ${masterRefCard}
   ${depositCard}
+  ${loyaltyCard}
+  ${bufferCard}
+  ${mapCoordsCard}
+  ${widgetCard}
   ${vacationCard}`;
 }
+function copyWidgetEmbed(masterId){
+  const code = `<iframe src="https://ВАШ-ДОМЕН/widget.html?master=${masterId}" width="100%" height="640" frameborder="0"></iframe>`;
+  copyText(code);
+}
+window.copyWidgetEmbed = copyWidgetEmbed;
+
+async function saveMapCoords(masterId){
+  const el = document.getElementById('pfCoords');
+  const raw = el ? el.value.trim() : '';
+  const m = await loadMaster(masterId);
+  if(!raw){
+    m.lat = null; m.lng = null;
+    await saveMaster(m);
+    showToast('Координаты убраны');
+    (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+    return;
+  }
+  const parts = raw.split(',').map(s=>parseFloat(s.trim()));
+  if(parts.length!==2 || parts.some(isNaN) || Math.abs(parts[0])>90 || Math.abs(parts[1])>180){
+    showToast('Не удалось распознать координаты — формат: широта, долгота (например 55.75, 37.61)');
+    return;
+  }
+  m.lat = parts[0]; m.lng = parts[1];
+  await saveMaster(m);
+  showToast('Координаты сохранены — вы появитесь на карте');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.saveMapCoords = saveMapCoords;
+
+async function saveLoyaltySetting(masterId){
+  const everyEl = document.getElementById('pfLoyaltyEvery');
+  const rewardEl = document.getElementById('pfLoyaltyReward');
+  const every = everyEl ? Number(everyEl.value) : 0;
+  const reward = rewardEl ? rewardEl.value.trim() : '';
+  const m = await loadMaster(masterId);
+  if(every>=2 && reward){
+    m.loyaltyEvery = every;
+    m.loyaltyReward = reward;
+  } else {
+    m.loyaltyEvery = null;
+    m.loyaltyReward = null;
+  }
+  await saveMaster(m);
+  showToast(m.loyaltyEvery ? 'Программа лояльности включена' : 'Программа лояльности отключена (заполните оба поля)');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.saveLoyaltySetting = saveLoyaltySetting;
+
+async function saveBufferSetting(masterId){
+  const el = document.getElementById('pfBuffer');
+  const val = el ? Number(el.value) : 0;
+  const m = await loadMaster(masterId);
+  m.bufferMinutes = val || null;
+  await saveMaster(m);
+  showToast(val ? `Буфер ${val} мин. включён` : 'Буфер отключён');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.saveBufferSetting = saveBufferSetting;
+
 async function saveDepositSetting(masterId){
   const el = document.getElementById('pfDeposit');
   const phoneEl = document.getElementById('pfDepositPhone');
@@ -2617,7 +3047,7 @@ async function clearScheduleDay(){
 }
 window.clearScheduleDay = clearScheduleDay;
 
-function renderMBookings(m, bookings, isDemo){
+async function renderMBookings(m, bookings, isDemo){
   if(isDemo){
     return `<div class="card"><div class="empty" style="padding:10px 0">В демо-режиме заявки клиентов будут отображаться здесь: с именем, услугой, датой и кнопками подтверждения.</div></div>`;
   }
@@ -2634,15 +3064,40 @@ function renderMBookings(m, bookings, isDemo){
   came.forEach(b=>{ const d = new Date(b.date+'T00:00:00'); byWeekday[d.getDay()]++; });
   const wdNames = ['вс','пн','вт','ср','чт','пт','сб'];
   const busiestIdx = byWeekday.indexOf(Math.max(...byWeekday));
+
+  // --- Учёт расходников: списания на материалы, чтобы видеть не только выручку, но и маржу ---
+  const expenses = isDemo ? [] : (await sget('expenses:'+m.id, true) || []);
+  const expenses30 = expenses.filter(e=>e.date>=since30).reduce((sum,e)=>sum+(e.amount||0),0);
+  const netProfit30 = revenue30 - expenses30;
+
   const financeCard = came.length ? `<div class="card">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:10px;">💰 Финансовый отчёт</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div><div style="font-size:19px;font-weight:700;font-family:'Inter',sans-serif;">${revenue30}₽</div><div style="font-size:10.5px;color:var(--ink-soft);">выручка за 30 дней</div></div>
       <div><div style="font-size:19px;font-weight:700;font-family:'Inter',sans-serif;">${came.length}</div><div style="font-size:10.5px;color:var(--ink-soft);">визитов состоялось</div></div>
     </div>
+    ${expenses30>0?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
+      <div><div style="font-size:16px;font-weight:700;color:var(--danger);">−${expenses30}₽</div><div style="font-size:10.5px;color:var(--ink-soft);">расходы на материалы</div></div>
+      <div><div style="font-size:16px;font-weight:700;color:var(--teal);">${netProfit30}₽</div><div style="font-size:10.5px;color:var(--ink-soft);">чистая прибыль</div></div>
+    </div>`:''}
     ${topService?`<div style="font-size:12px;color:var(--ink-soft);margin-top:10px;">🏆 Больше всего приносит: <b style="color:var(--ink);">${escapeHtml(topService[0])}</b> (${topService[1]}₽)</div>`:''}
     ${Math.max(...byWeekday)>0?`<div style="font-size:12px;color:var(--ink-soft);margin-top:4px;">📅 Самый загруженный день: <b style="color:var(--ink);">${wdNames[busiestIdx]}</b></div>`:''}
   </div>` : '';
+
+  const expensesCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🧾 Расходы на материалы</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Списывайте по факту оказанной услуги — гель, краска, расходники — чтобы видеть не только доход, но и реальную маржу.</div>
+    <div class="row2">
+      <div class="field"><label>Что купили</label><input id="expName" placeholder="Гель-лак"></div>
+      <div class="field"><label>Сумма, ₽</label><input id="expAmount" type="number" min="0" placeholder="800"></div>
+    </div>
+    <button class="btn ghost small" onclick="addExpense('${m.id}')">Добавить расход</button>
+    ${expenses.length ? `<div class="divider"></div>${expenses.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10).map(e=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;">
+        <div><div style="font-size:13px;font-weight:600;">${escapeHtml(e.name)}</div><div style="font-size:11px;color:var(--ink-soft);">${fmtDate(e.date)}</div></div>
+        <div style="display:flex;align-items:center;gap:8px;"><b style="color:var(--danger);font-size:13px;">−${e.amount}₽</b><button onclick="deleteExpense('${m.id}','${e.id}')" style="background:none;border:none;color:var(--ink-soft);font-size:14px;">✕</button></div>
+      </div>`).join('')}` : ''}
+  </div>`;
 
   const exportBtn = bookings.length ? `<div class="section-pad"><button class="btn ghost small" onclick="exportMyBookingsCSV()">📤 Экспорт записей в CSV</button></div>` : '';
 
@@ -2681,10 +3136,38 @@ function renderMBookings(m, bookings, isDemo){
       <button class="btn teal small" style="flex:1" onclick="markAttendance('${b.id}','came')">✅ Пришёл(ла)</button>
       <button class="btn danger small" style="flex:1" onclick="markAttendance('${b.id}','no-show')">❌ Не пришёл(ла)</button>
     </div>`:''}
+    ${(isCompleted && b.attendance==='came')?`<div style="margin-top:10px;">
+      <button class="btn ghost small" onclick="sendReceipt('${m.id}','${b.id}')">🧾 ${b.receiptSentAt?'Отправить чек ещё раз':'Отправить чек клиенту'}</button>
+      ${b.receiptSentAt?`<div style="font-size:11px;color:var(--ink-soft);margin-top:4px;">Отправлен ${new Date(b.receiptSentAt).toLocaleDateString('ru-RU')}</div>`:''}
+    </div>`:''}
   </div>`;
   }).join('');
-  return financeCard + exportBtn + rows;
+  return financeCard + expensesCard + exportBtn + rows;
 }
+
+async function sendReceipt(masterId, bookingId){
+  const bookings = await loadBookings(masterId);
+  const b = bookings.find(x=>x.id===bookingId);
+  const m = await loadMaster(masterId);
+  if(!b || !m) return;
+  const text = `🧾 Квитанция об оплате\n\n`+
+    `Мастер: ${m.name}\n`+
+    `Услуга: ${b.serviceName}\n`+
+    `Дата: ${fmtDate(b.date)} в ${b.time}\n`+
+    `Сумма: ${b.price}₽\n\n`+
+    `Спасибо, что выбираете нас! 💕`;
+  if(b.clientTelegramId){
+    await notifyTelegram(b.clientTelegramId, text);
+    b.receiptSentAt = Date.now();
+    await saveBookings(masterId, bookings);
+    showToast('Чек отправлен клиенту');
+  } else {
+    copyText(text);
+    showToast('У клиента нет Telegram — текст чека скопирован, отправьте вручную');
+  }
+  fillMasterArea();
+}
+window.sendReceipt = sendReceipt;
 
 async function confirmDepositReceived(bookingId){
   const bookings = await loadBookings(state.myMasterId);
@@ -2730,6 +3213,27 @@ function exportMyBookingsCSV(){
 }
 window.exportMyBookingsCSV = exportMyBookingsCSV;
 
+async function addExpense(masterId){
+  const nameEl = document.getElementById('expName');
+  const amountEl = document.getElementById('expAmount');
+  const name = nameEl ? nameEl.value.trim() : '';
+  const amount = amountEl ? Number(amountEl.value) : 0;
+  if(!name || !amount || amount<=0){ showToast('Укажите название и сумму расхода'); return; }
+  const expenses = await sget('expenses:'+masterId, true) || [];
+  expenses.push({ id:uid(), name, amount, date: todayISO(0) });
+  await sset('expenses:'+masterId, expenses, true);
+  showToast('Расход добавлен');
+  fillMasterArea();
+}
+window.addExpense = addExpense;
+
+async function deleteExpense(masterId, expenseId){
+  const expenses = (await sget('expenses:'+masterId, true) || []).filter(e=>e.id!==expenseId);
+  await sset('expenses:'+masterId, expenses, true);
+  fillMasterArea();
+}
+window.deleteExpense = deleteExpense;
+
 /* ============ МИНИ-CRM: КЛИЕНТЫ + РАССЫЛКА ============ */
 async function renderMClients(m, isDemo, bookings){
   if(isDemo){
@@ -2754,6 +3258,17 @@ async function renderMClients(m, isDemo, bookings){
     map.set(ic.contact, {key:ic.contact, name:ic.name, contact:ic.contact, telegramId:null, visits:0, firstDate:null, lastDate:null, spent:0, imported:true});
   });
   const list = Array.from(map.values()).sort((a,b)=>(b.lastDate||'').localeCompare(a.lastDate||''));
+
+  // Непрочитанные сообщения в прямых чатах клиент↔мастер (для бейджа на кнопке 💬)
+  const clientChatUnread = {};
+  try{
+    const cmIndex = await sget('cm-chat-index:'+m.id, true) || [];
+    for(const clientKey of cmIndex){
+      const thread = await sget('cm-chat:'+m.id+':'+clientKey, true) || [];
+      if(thread.some(msg=>msg.from==='client' && !msg.readByMaster)) clientChatUnread[clientKey] = true;
+    }
+  }catch(e){ console.warn('unread client chat check failed:', e); }
+
   const todayD = new Date(todayISO(0)+'T00:00:00');
   list.forEach(c=>{
     // Обратная совместимость: раньше client-notes хранил просто строку, теперь {note, tags}
@@ -2810,20 +3325,35 @@ async function renderMClients(m, isDemo, bookings){
     return broadcastCard + importCard + `<div class="card"><div class="empty" style="padding:10px 0">Пока нет клиентов — они появятся здесь после первых записей или импорта.</div></div>`;
   }
 
-  const rows = list.map((c,i)=>`<div class="card" data-tags="${escapeHtml(c.tags.join(',').toLowerCase())}">
+  const rows = list.map((c,i)=>{
+    let loyaltyHtml = '';
+    if(m.loyaltyEvery && m.loyaltyReward){
+      const rem = c.visits % m.loyaltyEvery;
+      if(c.visits>0 && rem===0){
+        loyaltyHtml = `<div style="font-size:12px;font-weight:700;color:var(--teal);margin-top:6px;">🎁 Пора выдать бонус: ${escapeHtml(m.loyaltyReward)}</div>`;
+      } else if(c.visits>0){
+        loyaltyHtml = `<div style="font-size:11.5px;color:var(--ink-soft);margin-top:6px;">🎁 До бонуса «${escapeHtml(m.loyaltyReward)}»: ещё ${m.loyaltyEvery-rem} визит(ов)</div>`;
+      }
+    }
+    return `<div class="card" data-tags="${escapeHtml(c.tags.join(',').toLowerCase())}">
     <div class="mcard-top">
       <div>
         <div class="mcard-name" style="font-size:14.5px;">${escapeHtml(c.name)} ${priorityClients.includes(c.key)?'<span class="badge active" style="margin-left:4px;">⭐ приоритетный</span>':''}${c.imported?'<span class="badge demo" style="margin-left:4px;">импорт</span>':''}${c.winBack?'<span class="badge pending" style="margin-left:4px;">⏰ давно не был(а)</span>':''}</div>
         <div class="mcard-city">📞 ${escapeHtml(c.contact)}</div>
       </div>
-      ${c.telegramId?`<button class="btn ghost small" style="width:auto;padding:0 12px;" onclick="messageOneClient(${i})">✉️</button>`:''}
+      ${c.telegramId?`<div style="display:flex;gap:6px;">
+        <button class="btn ghost small" style="width:auto;padding:0 12px;position:relative;" onclick="openMasterClientChat('${m.id}','${c.key}')">💬${clientChatUnread[c.key]?`<span class="navdot" style="top:-2px;right:-2px;"></span>`:''}</button>
+        <button class="btn ghost small" style="width:auto;padding:0 12px;" onclick="messageOneClient(${i})">✉️</button>
+      </div>`:''}
     </div>
     <div style="font-size:12.5px;color:var(--ink-soft);margin-top:6px;">🗓️ ${c.visits} визит${c.visits===1?'':c.visits<5?'а':'ов'}${c.lastDate?` · последний ${fmtDate(c.lastDate)}`:''}${c.spent?` · ${c.spent}₽ потрачено`:''}</div>
+    ${loyaltyHtml}
     ${c.tags.length?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${c.tags.map(t=>`<span class="tag" style="background:var(--bg);color:var(--ink-soft);font-size:10.5px;">${escapeHtml(t)}</span>`).join('')}</div>`:''}
     <div class="divider"></div>
     <textarea id="clientNote_${i}" placeholder="Заметка (например: аллергия на такой-то состав, любит крепкий кофе...)" style="min-height:44px;font-size:12.5px;" onblur="saveClientNote('${m.id}', ${i})">${escapeHtml(c.note)}</textarea>
     <input id="clientTags_${i}" placeholder="Теги через запятую (VIP, чувствительная кожа...)" value="${escapeHtml(c.tags.join(', '))}" style="margin-top:8px;width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:12px;" onblur="saveClientNote('${m.id}', ${i})">
-  </div>`).join('');
+  </div>`;
+  }).join('');
 
   return broadcastCard + winBackCard + importCard + exportCard + tagFilterBar + `<div id="clientListRows">${rows}</div>`;
 }
