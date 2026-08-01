@@ -1356,9 +1356,9 @@ function renderSetupError(message){
   app.innerHTML = `
     <div style="padding:60px 24px;text-align:center;font-family:'Inter',sans-serif;">
       <div style="font-size:40px;margin-bottom:14px;">⚠️</div>
-      <div style="font-family:'Inter',sans-serif;font-weight:600;font-size:19px;color:#34202C;margin-bottom:10px;">Приложение не настроено</div>
-      <div style="font-size:13.5px;color:#7C6670;line-height:1.6;max-width:340px;margin:0 auto;">${escapeHtml(message)}</div>
-      <div style="margin-top:18px;font-size:12px;color:#7C6670;">Откройте index.html и проверьте значения SUPABASE_URL и SUPABASE_ANON_KEY в начале &lt;script&gt;.</div>
+      <div style="font-family:'Inter',sans-serif;font-weight:600;font-size:19px;color:var(--ink);margin-bottom:10px;">Приложение не настроено</div>
+      <div style="font-size:13.5px;color:var(--ink-soft);line-height:1.6;max-width:340px;margin:0 auto;">${escapeHtml(message)}</div>
+      <div style="margin-top:18px;font-size:12px;color:var(--ink-soft);">Откройте index.html и проверьте значения SUPABASE_URL и SUPABASE_ANON_KEY в начале &lt;script&gt;.</div>
     </div>`;
 }
 
@@ -1372,20 +1372,23 @@ function renderRolePicker(){
   </div>
   <div class="section-pad">
     <button class="btn primary" onclick="chooseRole('client')" style="margin-bottom:12px;">🔎 Я ищу мастера</button>
-    <button class="btn ghost" onclick="chooseRole('master')">💼 Я мастер, хочу разместить профиль</button>
+    <button class="btn ghost" onclick="chooseRole('master')" style="margin-bottom:12px;">👤 Я мастер, хочу разместить профиль</button>
+    <button class="btn ghost" onclick="chooseRole('company')">🏢 Я компания / салон</button>
   </div>
-  <div class="pillnote" style="margin-top:16px;">Это можно изменить позже: если вы клиент, но захотите разместить свой профиль мастера — такая возможность будет доступна в каталоге.</div>`;
+  <div class="pillnote" style="margin-top:16px;">Это можно изменить позже: если вы клиент, но захотите разместить свой профиль мастера — такая возможность будет доступна в каталоге. Тип профиля (частный мастер / компания) тоже можно поменять в любой момент в настройках.</div>`;
 }
 async function chooseRole(role){
-  state.userRole = role;
-  await sset('my-role', role, false);
-  state.view = role==='master' ? 'master' : 'catalog';
+  state.userRole = (role==='company') ? 'master' : role;
+  state._preferredAccountType = (role==='company') ? 'company' : 'individual';
+  await sset('my-role', state.userRole, false);
+  state.view = state.userRole==='master' ? 'master' : 'catalog';
   render();
 }
 window.chooseRole = chooseRole;
 
-async function becomeMaster(){
+async function becomeMaster(accountType){
   state.userRole = 'master';
+  state._preferredAccountType = accountType==='company' ? 'company' : 'individual';
   await sset('my-role', 'master', false);
   goto('master');
 }
@@ -1599,7 +1602,13 @@ async function renderCityStep(masters){
     <button class="btn ghost" onclick="chooseCityManual()">Найти мастеров в этом городе</button>
   </div>`;
 
-  const becomeMasterLink = state.userRole==='client' ? `<div class="section-pad" style="text-align:center;padding-bottom:0;"><button class="link-btn" onclick="becomeMaster()">Вы мастер? Разместите свой профиль →</button></div>` : '';
+  const becomeMasterLink = state.userRole==='client' ? `<div class="section-pad" style="text-align:center;padding-bottom:0;">
+    <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:6px;">Хотите разместить свой профиль?</div>
+    <div style="display:flex;gap:16px;justify-content:center;">
+      <button class="link-btn" onclick="becomeMaster('individual')">👤 Я мастер →</button>
+      <button class="link-btn" onclick="becomeMaster('company')">🏢 Я компания →</button>
+    </div>
+  </div>` : '';
   const placeAdLink = `<div class="section-pad" style="text-align:center;"><button class="link-btn" onclick="openAnnouncementChat()">📣 Разместить объявление →</button></div>`;
 
   const newsChannelCard = `<div class="card">
@@ -1863,6 +1872,7 @@ async function fillMasterDetail(){
       <div class="mcard-name" style="font-size:18px;">${escapeHtml(m.name)}${m.accountType==='company'?' <span class="badge demo" style="font-size:10px;vertical-align:middle;">🏢 Компания</span>':''}</div>
       ${m.accountType==='company' && m.contactPerson ? `<div class="mcard-city">Контактное лицо: ${escapeHtml(m.contactPerson)}</div>` : ''}
       <div class="mcard-city">📍 ${escapeHtml(m.city)}${m.address?', '+escapeHtml(m.address):''}</div>
+      ${(m.extraAddresses&&m.extraAddresses.length)?m.extraAddresses.map(a=>`<div class="mcard-city">📍 ${escapeHtml(a)}</div>`).join(''):''}
       <div class="rating-row" style="margin-top:6px;"><span class="stars">${starsStr(avg)}</span> ${avg?avg.toFixed(1):'нет оценок'} ${m.ratingCount?`· ${m.ratingCount} отзыв.`:''}</div>
     </div>
     <button class="link-btn" style="font-size:24px;color:${isFavorite(m.id)?'var(--rose-deep)':'var(--ink-soft)'}" onclick="toggleFavorite('${m.id}')">${isFavorite(m.id)?'♥':'♡'}</button>
@@ -1880,11 +1890,39 @@ async function fillMasterDetail(){
   let body='';
   if(state.masterDetailTab==='about'){
     body = `<div class="card"><p style="margin:0;font-size:14px;line-height:1.6;color:var(--ink)">${escapeHtml(m.bio)||'Мастер пока не добавил описание.'}</p></div>`;
+    body += renderGiftCertificateCard(m);
+    try{
+      const allMasters = await loadAllMasters();
+      const similar = allMasters
+        .filter(x=>x.id!==m.id && !x.isDemo && x.subscriptionActive && x.moderationStatus==='approved' && x.city===m.city && x.specialization===m.specialization)
+        .sort((a,b)=>(ratingOf(b)||0)-(ratingOf(a)||0))
+        .slice(0,4);
+      if(similar.length){
+        body += `<div style="padding:14px 18px 8px;font-weight:700;font-size:13.5px;">Похожие мастера</div>`;
+        body += similar.map(sm=>{
+          const smSpec = SPECS[sm.specialization];
+          const smAvg = ratingOf(sm);
+          const pf = priceFrom(sm);
+          return `<div class="mcard" style="cursor:pointer;" onclick="openMaster('${sm.id}')">
+            <div class="avatar" style="${avatarStyle(sm)}">${avatarInner(sm,smSpec)}</div>
+            <div class="mcard-body">
+              <div class="mcard-top"><div class="mcard-name">${escapeHtml(sm.name)}</div>${pf!=null?`<div class="price-from">от ${pf}₽</div>`:''}</div>
+              <div class="rating-row"><span class="stars">${starsStr(smAvg)}</span> ${smAvg?smAvg.toFixed(1):'нет оценок'}</div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    }catch(e){ console.warn('similar masters failed:', e); }
   } else if(state.masterDetailTab==='services'){
     body = `<div class="card">${
       m.services.length? m.services.map(s=>`<div class="svc-row"><div><div class="svc-name">${escapeHtml(s.name)}</div><div class="svc-meta">${s.duration} мин</div></div><div class="svc-price">${s.price}₽</div></div>`).join('')
       : '<div class="empty" style="padding:20px 0">Пока нет услуг</div>'
     }</div>`;
+    if((m.packages||[]).length){
+      body += `<div style="padding:14px 18px 8px;font-weight:700;font-size:13.5px;">📦 Пакеты услуг</div>`;
+      body += `<div class="card">${m.packages.map(p=>`<div class="svc-row"><div><div class="svc-name">${escapeHtml(p.name)}</div><div class="svc-meta">${p.visitsIncluded} визитов</div></div><div class="svc-price">${p.price}₽</div></div>`).join('')}</div>`;
+      body += `<div class="pillnote" style="margin:0 18px 14px;">Чтобы оформить пакет, напишите мастеру в чат — оплата напрямую, как с предоплатой за запись.</div>`;
+    }
   } else if(state.masterDetailTab==='portfolio'){
     body = `<div class="card"><div class="gallery">${
       m.portfolio.length? m.portfolio.map(p=>`<img src="${p.url}" loading="lazy">`).join('') : ''
@@ -2036,17 +2074,36 @@ function renderBookingForm(m, bookings, waitlist){
   state.booking = b;
 
   const serviceOpts = m.services.map(s=>`<option value="${s.id}" ${b.serviceId===s.id?'selected':''}>${escapeHtml(s.name)} — ${s.price}₽</option>`).join('');
+  const extraIds = state.booking.extraServiceIds || [];
+  const primaryService = m.services.find(s=>s.id===b.serviceId);
+  const extraServices = m.services.filter(s=>s.id!==b.serviceId && extraIds.includes(s.id));
+  const totalPrice = (primaryService?primaryService.price:0) + extraServices.reduce((s,x)=>s+x.price,0);
+  const totalDuration = (primaryService?primaryService.duration||60:60) + extraServices.reduce((s,x)=>s+(x.duration||60),0);
+  const otherServices = m.services.filter(s=>s.id!==b.serviceId);
+  const extraServicesHtml = otherServices.length ? `<div class="field">
+    <label>Добавить ещё услуги за этот визит (необязательно)</label>
+    ${otherServices.map(s=>`<div class="checkrow"><input type="checkbox" id="bkExtra_${s.id}" onchange="toggleExtraService('${s.id}')" ${extraIds.includes(s.id)?'checked':''}><label for="bkExtra_${s.id}">${escapeHtml(s.name)} — ${s.price}₽</label></div>`).join('')}
+  </div>` : '';
+  const totalSummary = extraServices.length ? `<div class="pillnote" style="margin:0 0 12px;">Итого: ${totalPrice}₽ · примерно ${totalDuration} мин</div>` : '';
+
+  const hasStaff = m.accountType==='company' && (m.staff||[]).length>0;
+  if(hasStaff && !b.staffId) b.staffId = m.staff[0].id;
+  const staffPicker = hasStaff ? `<div class="field">
+    <label>Выберите сотрудника</label>
+    <div class="chiprow" style="padding:0;">${m.staff.map(s=>`<span class="chip ${b.staffId===s.id?'active':''}" onclick="pickStaff('${s.id}')">${escapeHtml(s.name)}</span>`).join('')}</div>
+  </div>` : '';
+  const staffSlotsSrc = hasStaff ? ((m.staffSlots&&m.staffSlots[b.staffId])||{}) : (m.slots||{});
 
   const days = Array.from({length:10},(_,i)=>todayISO(i));
   const dayChips = days.map(d=>{
-    const has = (m.slots && m.slots[d] && m.slots[d].length);
+    const has = (staffSlotsSrc[d] && staffSlotsSrc[d].length);
     return `<button class="chip ${b.date===d?'active':''}" ${has?'':'style="opacity:.35;pointer-events:none;"'} onclick="pickDate('${d}')">${fmtDate(d)}</button>`;
   }).join('');
 
   let slotsHtml = '';
   if(b.date){
-    const daySlots = (m.slots && m.slots[b.date]) || [];
-    const takenTimes = bookings.filter(bk=>bk.date===b.date && bk.status!=='cancelled').flatMap(bk=>occupiedTimesForBooking(bk, m.bufferMinutes));
+    const daySlots = staffSlotsSrc[b.date] || [];
+    const takenTimes = bookings.filter(bk=>bk.date===b.date && bk.status!=='cancelled' && (bk.staffId||null)===(b.staffId||null)).flatMap(bk=>occupiedTimesForBooking(bk, m.bufferMinutes));
     slotsHtml = `<div class="slotgrid">${daySlots.map(t=>{
       const taken = takenTimes.includes(t);
       return `<div class="slot ${b.time===t?'on':''} ${taken?'taken':''}" onclick="${taken?'':`pickTime('${t}')`}">${t}</div>`;
@@ -2074,20 +2131,171 @@ function renderBookingForm(m, bookings, waitlist){
   return `<div class="card">
     ${depositRequisites}
     <div class="field"><label>Услуга</label><select id="bkService" onchange="setBookField('serviceId', this.value)">${serviceOpts}</select></div>
+    ${extraServicesHtml}
+    ${totalSummary}
+    ${staffPicker}
     <div class="field"><label>Дата</label><div class="chiprow" style="padding:0;overflow-x:auto;">${dayChips}</div></div>
     ${b.date?`<div class="field"><label>Время</label>${slotsHtml}</div>`:''}
-    <div class="field"><label>Ваше имя</label><input id="bkName" value="${escapeHtml(state.clientName)}" placeholder="Имя"></div>
-    <div class="field"><label>Телефон / Telegram</label><input id="bkContact" value="${escapeHtml(state.clientContact)}" placeholder="@username или телефон"></div>
-    <button class="btn primary" onclick="submitBooking('${m.id}')" ${(!b.date||!b.time)?'disabled':''}>${depositAmount>0?`Я перевёл(а) ${depositAmount}₽, отправить заявку`:'Отправить заявку на запись'}</button>
+    ${b.giftCertCode ? `<div class="pillnote" style="margin:0 0 12px;background:var(--pink-tint);border-color:rgba(236,24,118,.28);">🎁 Сертификат ${b.giftCertCode} на ${b.giftCertAmount}₽ применён к этой записи</div>`
+      : `<div class="field"><label>Есть код подарочного сертификата? (необязательно)</label><div style="display:flex;gap:8px;"><input id="giftCodeInput" placeholder="Например, A1B2C3" style="flex:1;"><button class="btn ghost small" style="width:auto;padding:0 14px;" onclick="redeemGiftCertificate('${m.id}')">Применить</button></div></div>`}
+    <div class="checkrow"><input type="checkbox" id="bkForSomeoneElse" onchange="toggleBookForSomeoneElse()" ${state._bookForSomeoneElse?'checked':''}><label for="bkForSomeoneElse">Записываю не себя, а другого человека</label></div>
+    <div class="field"><label id="bkNameLabel">${state._bookForSomeoneElse?'Имя того, кого записываете':'Ваше имя'}</label><input id="bkName" value="${escapeHtml(state.clientName)}" placeholder="Имя"></div>
+    <div class="field"><label id="bkContactLabel">${state._bookForSomeoneElse?'Телефон того, кого записываете':'Телефон / Telegram'}</label><input id="bkContact" value="${escapeHtml(state.clientContact)}" placeholder="@username или телефон"></div>
+    <button class="btn primary" onclick="submitBooking('${m.id}')" ${(!b.date||!b.time)?'disabled':''}>${depositAmount>0?`Я перевёл(а) ${depositAmount}₽, отправить заявку`:`Отправить заявку${extraServices.length?` (${totalPrice}₽)`:''}`}</button>
     <div class="pillnote" style="margin:10px 0 0;">${depositAmount>0?'Заявка придёт мастеру с пометкой «ожидает подтверждения предоплаты» — он подтвердит получение денег сам.':'После отправки заявка придёт мастеру. Как только он подтвердит запись, вы увидите статус во вкладке «Мои записи».'}</div>
 
   </div>
   ${waitlistCard}`;
 }
+function pickStaff(staffId){
+  state.booking = {...state.booking, staffId, date:null, time:null};
+  fillMasterDetail();
+}
+window.pickStaff = pickStaff;
+
+function toggleExtraService(serviceId){
+  const list = state.booking.extraServiceIds || [];
+  const idx = list.indexOf(serviceId);
+  if(idx===-1) list.push(serviceId); else list.splice(idx,1);
+  state.booking = {...state.booking, extraServiceIds: list};
+  fillMasterDetail();
+}
+window.toggleExtraService = toggleExtraService;
+
+/* ============ ПОДАРОЧНЫЙ СЕРТИФИКАТ ============
+   Оплата — напрямую мастеру (как предоплата за запись), платформа деньги не принимает.
+   Покупатель создаёт сертификат с кодом → переводит деньги мастеру → мастер подтверждает
+   получение → сертификат становится активным → получатель вводит код при записи. */
+function genCertCode(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for(let i=0;i<6;i++) code += chars[Math.floor(Math.random()*chars.length)];
+  return code;
+}
+
+function renderGiftCertificateCard(m){
+  if(!state._giftCertOpen){
+    return `<div class="card">
+      <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🎁 Подарочный сертификат</div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Подарите визит к этому мастеру — укажите сумму и получателя, оплатите напрямую мастеру, а он подтвердит и активирует сертификат.</div>
+      <button class="btn ghost small" onclick="state._giftCertOpen=true; fillMasterDetail();">Оформить сертификат</button>
+    </div>`;
+  }
+  return `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:10px;">🎁 Оформление сертификата</div>
+    <div class="field"><label>Сумма, ₽</label><input id="giftAmount" type="number" min="500" step="100" placeholder="3000"></div>
+    <div class="field"><label>Имя получателя</label><input id="giftRecipient" placeholder="Кому дарите"></div>
+    <div class="field"><label>Поздравление (необязательно)</label><textarea id="giftMessage" placeholder="С днём рождения! Дарю тебе..."></textarea></div>
+    <button class="btn primary" onclick="createGiftCertificate('${m.id}')">Создать сертификат</button>
+    <button class="btn ghost small" style="margin-top:8px;" onclick="state._giftCertOpen=false; fillMasterDetail();">Отмена</button>
+  </div>`;
+}
+
+async function createGiftCertificate(masterId){
+  const amount = Number(document.getElementById('giftAmount').value);
+  const recipient = document.getElementById('giftRecipient').value.trim();
+  const message = document.getElementById('giftMessage').value.trim();
+  if(!amount || amount<500 || !recipient){ showToast('Укажите сумму (от 500₽) и имя получателя'); return; }
+  const m = await loadMaster(masterId);
+  if(!m) return;
+  const code = genCertCode();
+  const cert = {
+    id: uid(), code, amount, recipientName: recipient, message: message||null,
+    buyerName: state.clientName || (state.tgUser?[state.tgUser.first_name,state.tgUser.last_name].filter(Boolean).join(' '):'') || 'Покупатель',
+    buyerTelegramId: state.tgUser ? String(state.tgUser.id) : null,
+    status: 'pending_payment', createdAt: Date.now(), redeemedAt:null, redeemedBookingId:null
+  };
+  const certs = await sget('gift-certificates:'+masterId, true) || [];
+  certs.push(cert);
+  await sset('gift-certificates:'+masterId, certs, true);
+
+  if(m.telegramId){
+    notifyTelegram(m.telegramId, `🎁 Новый подарочный сертификат!\nКод: ${code}\nСумма: ${amount}₽\nДля: ${recipient}\n\nПодтвердите получение оплаты во вкладке «Мастеру → Профиль».`);
+  }
+  state._giftCertOpen = false;
+  showToast(`Сертификат создан! Код: ${code}`);
+  document.getElementById('content').innerHTML = `<div class="card" style="text-align:center;padding:30px 18px;">
+    <div style="font-size:30px;">🎁</div>
+    <div style="font-weight:800;font-size:22px;margin-top:10px;letter-spacing:2px;">${code}</div>
+    <div style="font-size:12.5px;color:var(--ink-soft);margin-top:10px;line-height:1.5;">Сохраните этот код — переведите ${amount}₽ мастеру напрямую (реквизиты — как для предоплаты, уточните у мастера в чате) и сообщите код. После подтверждения мастером сертификат станет активным.</div>
+    <button class="btn ghost small" style="margin-top:16px;" onclick="fillMasterDetail()">Готово</button>
+  </div>`;
+}
+window.createGiftCertificate = createGiftCertificate;
+window.renderGiftCertificateCard = renderGiftCertificateCard;
+
+async function confirmCertificatePayment(masterId, certId){
+  const certs = await sget('gift-certificates:'+masterId, true) || [];
+  const cert = certs.find(c=>c.id===certId);
+  if(!cert) return;
+  cert.status = 'active';
+  await sset('gift-certificates:'+masterId, certs, true);
+  showToast('Сертификат активирован');
+  if(cert.buyerTelegramId){
+    notifyTelegram(cert.buyerTelegramId, `✅ Мастер подтвердил оплату — сертификат на ${cert.amount}₽ (код ${cert.code}) активирован и готов к использованию!`);
+  }
+  fillMasterArea();
+}
+window.confirmCertificatePayment = confirmCertificatePayment;
+
+async function redeemGiftCertificate(masterId){
+  const input = document.getElementById('giftCodeInput');
+  const code = input ? input.value.trim().toUpperCase() : '';
+  if(!code){ showToast('Введите код сертификата'); return; }
+  const certs = await sget('gift-certificates:'+masterId, true) || [];
+  const cert = certs.find(c=>c.code===code);
+  if(!cert){ showToast('Сертификат с таким кодом не найден'); return; }
+  if(cert.status==='redeemed'){ showToast('Этот сертификат уже использован'); return; }
+  if(cert.status!=='active'){ showToast('Сертификат ещё не подтверждён мастером'); return; }
+  state.booking = state.booking || {};
+  state.booking.giftCertCode = code;
+  state.booking.giftCertAmount = cert.amount;
+  showToast(`Сертификат на ${cert.amount}₽ применён к записи`);
+  fillMasterDetail();
+}
+window.redeemGiftCertificate = redeemGiftCertificate;
 function pickDate(d){ state.booking = {...state.booking, date:d, time:null}; fillMasterDetail(); }
-function pickTime(t){ state.booking = {...state.booking, time:t}; fillMasterDetail(); }
+function pickTime(t){
+  state.booking = {...state.booking, time:t};
+  trackAbandonedView(); // не блокируем рендер — просто фиксируем интерес клиента
+  fillMasterDetail();
+}
+
+/* Клиент дошёл до выбора времени, но мог не отправить заявку — фиксируем это,
+   чтобы мастер видел «был интерес, но не записались» и мог сам написать. */
+async function trackAbandonedView(){
+  try{
+    const m = await loadMaster(state.selectedMasterId);
+    if(!m) return;
+    const service = m.services.find(s=>s.id===state.booking.serviceId);
+    if(!service || !state.booking.date || !state.booking.time) return;
+    const key = 'abandoned-views:'+m.id;
+    const list = await sget(key, true) || [];
+    const clientKey = ownerId();
+    // Не дублируем запись, если тот же клиент уже отмечен по этой дате/времени недавно
+    const existing = list.find(v=>v.clientKey===clientKey && v.date===state.booking.date && v.time===state.booking.time && !v.converted);
+    if(existing){ existing.viewedAt = Date.now(); }
+    else {
+      list.push({
+        id: uid(), clientKey,
+        clientName: state.clientName || (state.tgUser?[state.tgUser.first_name,state.tgUser.last_name].filter(Boolean).join(' '):'') || 'Клиент',
+        clientTelegramId: state.tgUser ? String(state.tgUser.id) : null,
+        serviceName: service.name, date: state.booking.date, time: state.booking.time,
+        viewedAt: Date.now(), converted: false
+      });
+    }
+    while(list.length>200) list.shift();
+    await sset(key, list, true);
+  }catch(e){ console.warn('trackAbandonedView failed:', e); }
+}
 function setBookField(k,v){ state.booking = {...state.booking, [k]:v}; }
 window.pickDate=pickDate; window.pickTime=pickTime; window.setBookField=setBookField;
+
+function toggleBookForSomeoneElse(){
+  state._bookForSomeoneElse = document.getElementById('bkForSomeoneElse').checked;
+  fillMasterDetail();
+}
+window.toggleBookForSomeoneElse = toggleBookForSomeoneElse;
 
 async function submitBooking(masterId){
   const name = document.getElementById('bkName').value.trim();
@@ -2107,12 +2315,20 @@ async function submitBooking(masterId){
 
   const m = await loadMaster(masterId);
   const service = m.services.find(s=>s.id===state.booking.serviceId);
+  const extraServiceIds = state.booking.extraServiceIds || [];
+  const extraServicesObj = m.services.filter(s=>extraServiceIds.includes(s.id) && s.id!==service.id);
+  const combinedPrice = service.price + extraServicesObj.reduce((s,x)=>s+x.price,0);
+  const combinedDuration = (service.duration||60) + extraServicesObj.reduce((s,x)=>s+(x.duration||60),0);
+  const combinedName = [service.name, ...extraServicesObj.map(x=>x.name)].join(' + ');
+
+  const staffId = state.booking.staffId || null;
+  const staffMember = staffId ? (m.staff||[]).find(s=>s.id===staffId) : null;
 
   // Перечитываем самые свежие записи прямо перед сохранением, чтобы минимизировать
   // окно гонки, если кто-то другой записался на этот же слот почти одновременно.
   const bookings = await loadBookings(masterId);
-  const wantTimes = occupiedTimesForBooking({time:state.booking.time, duration:service.duration||60}, m.bufferMinutes);
-  const alreadyTaken = bookings.some(b=>b.status!=='cancelled' && b.date===state.booking.date && occupiedTimesForBooking(b, m.bufferMinutes).some(t=>wantTimes.includes(t)));
+  const wantTimes = occupiedTimesForBooking({time:state.booking.time, duration:combinedDuration}, m.bufferMinutes);
+  const alreadyTaken = bookings.some(b=>b.status!=='cancelled' && b.date===state.booking.date && (b.staffId||null)===staffId && occupiedTimesForBooking(b, m.bufferMinutes).some(t=>wantTimes.includes(t)));
   if(alreadyTaken){
     showToast('Увы, это время только что заняли. Выберите другое.');
     state.booking.time = null;
@@ -2121,17 +2337,37 @@ async function submitBooking(masterId){
   }
 
   const depositAmount = Number(m.depositRequired) > 0 ? Number(m.depositRequired) : 0;
+  const clientHealthNotes = await sget('my-health-notes', false) || '';
   const booking = {
-    id:uid(), masterId, serviceId:service.id, serviceName:service.name, price:service.price,
-    duration: service.duration||60,
+    id:uid(), masterId, serviceId:service.id, serviceName:combinedName, price:combinedPrice,
+    duration: combinedDuration,
+    staffId, staffName: staffMember ? staffMember.name : null,
+    extraServices: extraServicesObj.map(x=>({id:x.id, name:x.name, price:x.price, duration:x.duration||60})),
     date:state.booking.date, time:state.booking.time,
     clientName:name, clientContact:contact, status:'pending', createdAt:Date.now(),
     clientTelegramId: (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : null,
+    clientNotes: clientHealthNotes || null,
+    giftCertCode: state.booking.giftCertCode || null,
+    giftCertAmount: state.booking.giftCertAmount || null,
+    bookedForSomeoneElse: !!state._bookForSomeoneElse,
     // Предоплата идёт мастеру напрямую (на его СБП/карту) — платформа деньги не принимает
     // и не может подтвердить перевод автоматически, поэтому мастер подтверждает получение сам.
     depositAmount, depositStatus: depositAmount>0 ? 'awaiting_confirmation' : null
   };
   bookings.push(booking);
+  if(booking.giftCertCode){
+    try{
+      const certs = await sget('gift-certificates:'+masterId, true) || [];
+      const cert = certs.find(c=>c.code===booking.giftCertCode);
+      if(cert){ cert.status='redeemed'; cert.redeemedAt=Date.now(); cert.redeemedBookingId=booking.id; await sset('gift-certificates:'+masterId, certs, true); }
+    }catch(e){ console.warn('certificate redeem failed:', e); }
+  }
+  try{
+    const avKey = 'abandoned-views:'+masterId;
+    const avList = await sget(avKey, true) || [];
+    const avMatch = avList.find(v=>v.clientKey===ownerId() && v.date===booking.date && v.time===booking.time && !v.converted);
+    if(avMatch){ avMatch.converted = true; await sset(avKey, avList, true); }
+  }catch(e){ console.warn('mark abandoned view converted failed:', e); }
   await saveBookings(masterId, bookings);
 
   recentSubmits.push(Date.now());
@@ -2142,6 +2378,7 @@ async function submitBooking(masterId){
   await sset('my-client-bookings', mine, false);
 
   state.booking=null;
+  state._bookForSomeoneElse=false;
   showToast(depositAmount>0
     ? `Заявка отправлена мастеру. Он подтвердит получение предоплаты ${depositAmount}₽ и запись.`
     : 'Заявка отправлена мастеру! Ожидайте подтверждения.');
@@ -2174,6 +2411,14 @@ async function fillMyBookings(){
   const mine = await sget('my-client-bookings', false) || [];
   const hero = `<div class="hero"><h1>Мои записи</h1><p>Статусы ваших заявок к мастерам.</p></div>`;
 
+  const myHealthNotes = await sget('my-health-notes', false) || '';
+  const selfNotesCard = `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">📝 Заметка о себе</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Аллергии, чувствительность, предпочтения по материалам — заполните один раз, и мастер увидит это при каждой новой записи.</div>
+    <textarea id="myHealthNotesInput" placeholder="Например: аллергия на гипоаллергенный гель, чувствительная кутикула" style="min-height:60px;">${escapeHtml(myHealthNotes)}</textarea>
+    <button class="btn ghost small" style="margin-top:8px;" onclick="saveMyHealthNotes()">Сохранить</button>
+  </div>`;
+
   const refLink = `https://t.me/${BOT_USERNAME}?startapp=ref_${ownerId()}`;
   const referrals = await sget('referrals:'+ownerId(), true) || [];
   const referralCard = `<div class="card">
@@ -2186,7 +2431,7 @@ async function fillMyBookings(){
   </div>`;
 
   if(!mine.length){
-    document.getElementById('content').innerHTML = hero + referralCard + `<div class="empty"><div class="big">🗓️</div>Пока нет записей.<br>Найдите мастера в каталоге и оставьте заявку.</div>`;
+    document.getElementById('content').innerHTML = hero + selfNotesCard + referralCard + `<div class="empty"><div class="big">🗓️</div>Пока нет записей.<br>Найдите мастера в каталоге и оставьте заявку.</div>`;
     return;
   }
   const rows=[];
@@ -2227,6 +2472,7 @@ async function fillMyBookings(){
           ? `<div style="font-size:12px;font-weight:700;color:var(--teal);margin-top:6px;">🎁 У вас накопился бонус: ${escapeHtml(m.loyaltyReward)} — напомните мастеру при следующем визите</div>`
           : `<div style="font-size:11.5px;color:var(--ink-soft);margin-top:6px;">🎁 До «${escapeHtml(m.loyaltyReward)}» у этого мастера: ещё ${m.loyaltyEvery-rem} визит(ов)</div>`;
       })() : ''}
+      ${(!past && bk.status!=='cancelled' && m) ? `<div class="section-pad" style="padding:8px 0 0;"><button class="btn ghost small" onclick="exportBookingToICS('${entry.masterId}','${bk.id}')">📅 Добавить в календарь</button></div>` : ''}
       ${canCancel ? `<div style="display:flex;gap:8px;margin-top:10px;">
         <button class="btn ghost small" style="flex:1" onclick="toggleReschedule('${bk.id}')">${state.reschedulingBookingId===bk.id?'Отмена':'🔁 Перенести'}</button>
         <button class="btn danger small" style="flex:1" onclick="clientCancelBooking('${entry.masterId}','${bk.id}')">Отменить</button>
@@ -2238,7 +2484,7 @@ async function fillMyBookings(){
       </div>` : ''}
     </div>`);
   }
-  document.getElementById('content').innerHTML = hero + referralCard + rows.join('');
+  document.getElementById('content').innerHTML = hero + selfNotesCard + referralCard + rows.join('');
 }
 
 /* Повторная запись «как в прошлый раз» — сразу открывает форму записи к тому же мастеру
@@ -2304,12 +2550,14 @@ function renderRescheduleWidget(m, bk, bookings){
   const days = [];
   for(let i=0;i<14;i++) days.push(todayISO(i));
   const selDate = state.rescheduleDate || bk.date;
+  const staffId = bk.staffId || null;
+  const slotsSrc = staffId ? ((m.staffSlots&&m.staffSlots[staffId])||{}) : (m.slots||{});
   const dayChips = days.map(d=>{
-    const has = (m.slots && m.slots[d] && m.slots[d].length);
+    const has = (slotsSrc[d] && slotsSrc[d].length);
     return `<button class="chip ${selDate===d?'active':''}" ${has?'':'style="opacity:.35;pointer-events:none;"'} onclick="pickRescheduleDate('${d}')">${fmtDate(d)}</button>`;
   }).join('');
-  const daySlots = (m.slots && m.slots[selDate]) || [];
-  const takenTimes = bookings.filter(b=>b.id!==bk.id && b.date===selDate && b.status!=='cancelled').flatMap(b=>occupiedTimesForBooking(b, m.bufferMinutes));
+  const daySlots = slotsSrc[selDate] || [];
+  const takenTimes = bookings.filter(b=>b.id!==bk.id && b.date===selDate && b.status!=='cancelled' && (b.staffId||null)===staffId).flatMap(b=>occupiedTimesForBooking(b, m.bufferMinutes));
   const slotsHtml = `<div class="slotgrid">${daySlots.map(t=>{
     const taken = takenTimes.includes(t);
     return `<div class="slot ${state.rescheduleTime===t?'on':''} ${taken?'taken':''}" onclick="${taken?'':`pickRescheduleTime('${t}')`}">${t}</div>`;
@@ -2429,6 +2677,8 @@ window.enterDemo=enterDemo; window.exitDemo=exitDemo;
 
 function startRegistration(){
   trackFunnelStart(); // не блокируем экран ожиданием записи
+  const preferCompany = state._preferredAccountType === 'company';
+  state._regAccountType = preferCompany ? 'company' : 'individual';
   document.getElementById('content').innerHTML = `
   <div class="backbar"><button class="backbtn" onclick="fillMasterArea()">←</button><div style="font-weight:700">Регистрация мастера</div></div>
   <div class="pillnote" style="margin:0 18px 14px;">⏱️ Занимает 2 минуты. Достаточно имени, специализации и города — остальное можно дозаполнить позже, пока анкету проверяет модератор.</div>
@@ -2436,12 +2686,12 @@ function startRegistration(){
     <div class="field">
       <label>Тип профиля</label>
       <div class="chiprow" style="padding:0;">
-        <span class="chip active" id="regTypeIndividual" onclick="setRegAccountType('individual')">👤 Частный мастер</span>
-        <span class="chip" id="regTypeCompany" onclick="setRegAccountType('company')">🏢 Компания / салон</span>
+        <span class="chip ${preferCompany?'':'active'}" id="regTypeIndividual" onclick="setRegAccountType('individual')">👤 Частный мастер</span>
+        <span class="chip ${preferCompany?'active':''}" id="regTypeCompany" onclick="setRegAccountType('company')">🏢 Компания / салон</span>
       </div>
     </div>
-    <div class="field"><label id="regNameLabel">Имя</label><input id="regName" placeholder="Как вас видят клиенты"></div>
-    <div class="field" id="regContactPersonField" style="display:none;"><label>Контактное лицо (необязательно)</label><input id="regContactPerson" placeholder="Кто отвечает клиентам"></div>
+    <div class="field"><label id="regNameLabel">${preferCompany?'Название компании / салона':'Имя'}</label><input id="regName" placeholder="${preferCompany?'Как вас видят клиенты':'Как вас видят клиенты'}"></div>
+    <div class="field" id="regContactPersonField" style="${preferCompany?'':'display:none;'}"><label>Контактное лицо (необязательно)</label><input id="regContactPerson" placeholder="Кто отвечает клиентам"></div>
     <div class="field"><label>Специализация</label><select id="regSpec">${Object.entries(SPECS).map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join('')}</select></div>
     <div class="row2">
       <div class="field"><label>Город</label><input id="regCity" placeholder="Москва"></div>
@@ -2922,6 +3172,17 @@ async function renderMProfile(m, isDemo, bookings){
   const requests = (bookings||[]).length;
   const conversion = views ? Math.round((requests/views)*100) : 0;
   const sourcesTotal = (sources.link||0)+(sources.referral||0)+(sources.catalog||0);
+
+  const allCerts = isDemo ? [] : (await sget('gift-certificates:'+m.id, true) || []);
+  const pendingCerts = allCerts.filter(c=>c.status==='pending_payment');
+  const certsCard = pendingCerts.length ? `<div class="card" style="background:var(--pink-tint);border:1px solid rgba(236,24,118,0.28);">
+    <div style="font-weight:700;font-size:13.5px;color:var(--rose-deep);margin-bottom:8px;">🎁 Сертификаты, ждущие подтверждения оплаты (${pendingCerts.length})</div>
+    ${pendingCerts.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;">
+      <div><div style="font-size:12.5px;font-weight:700;color:var(--rose-deep);">${c.code} — ${c.amount}₽</div><div style="font-size:11px;color:var(--rose-deep);">Для: ${escapeHtml(c.recipientName)} · от ${escapeHtml(c.buyerName)}</div></div>
+      <button class="btn ghost small" style="width:auto;padding:5px 10px;font-size:11px;" onclick="confirmCertificatePayment('${m.id}','${c.id}')">Подтвердить</button>
+    </div>`).join('')}
+  </div>` : '';
+
   const analyticsCard = isDemo ? '' : `<div class="card">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:10px;">📊 Мини-аналитика</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
@@ -2961,7 +3222,7 @@ async function renderMProfile(m, isDemo, bookings){
       <img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(masterBookingLink(m.id))}" alt="QR-код ссылки для записи" style="width:200px;height:200px;border-radius:14px;border:1px solid var(--line);">
       <div style="font-size:11.5px;color:var(--ink-soft);margin-top:8px;">Сохраните картинку (зажмите/ПКМ) и добавьте в сторис или на визитку.</div>
     </div>
-    ${BOT_USERNAME==='YOUR_BOT_USERNAME' ? `<div class="pillnote" style="margin:10px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:#B23A48;">⚠️ Ссылка ещё не работает — владельцу платформы нужно указать username Telegram-бота в настройках приложения (константа BOT_USERNAME).</div>` : ''}
+    ${BOT_USERNAME==='YOUR_BOT_USERNAME' ? `<div class="pillnote" style="margin:10px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:var(--danger);">⚠️ Ссылка ещё не работает — владельцу платформы нужно указать username Telegram-бота в настройках приложения (константа BOT_USERNAME).</div>` : ''}
   </div>`;
 
   const newsChannelCard = isDemo ? '' : `<div class="card">
@@ -2971,7 +3232,7 @@ async function renderMProfile(m, isDemo, bookings){
       <span class="v">@${NEWS_CHANNEL_USERNAME}</span>
       <a href="https://t.me/${NEWS_CHANNEL_USERNAME}" target="_blank" class="btn ghost small" style="width:auto;padding:9px 16px;white-space:nowrap;flex:0 0 auto;text-decoration:none;">Подписаться</a>
     </div>
-    ${NEWS_CHANNEL_USERNAME==='YOUR_NEWS_CHANNEL' ? `<div class="pillnote" style="margin:10px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:#B23A48;">⚠️ Владельцу платформы нужно указать username канала в настройках приложения (константа NEWS_CHANNEL_USERNAME).</div>` : ''}
+    ${NEWS_CHANNEL_USERNAME==='YOUR_NEWS_CHANNEL' ? `<div class="pillnote" style="margin:10px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:var(--danger);">⚠️ Владельцу платформы нужно указать username канала в настройках приложения (константа NEWS_CHANNEL_USERNAME).</div>` : ''}
   </div>`;
 
   const depositCard = isDemo ? '' : `<div class="card">
@@ -2981,6 +3242,19 @@ async function renderMProfile(m, isDemo, bookings){
     <div class="field"><label>Телефон для СБП (необязательно)</label><input id="pfDepositPhone" placeholder="+7 900 000-00-00" value="${escapeHtml(m.depositPhone||'')}"></div>
     <div class="field"><label>Номер карты (необязательно)</label><input id="pfDepositCard" placeholder="0000 0000 0000 0000" value="${escapeHtml(m.depositCard||'')}"></div>
     <button class="btn ghost small" onclick="saveDepositSetting('${m.id}')">Сохранить</button>
+  </div>`;
+
+  const staffCard = (isDemo || m.accountType!=='company') ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">👥 Сотрудники</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Добавьте сотрудников — у каждого будет своё расписание, а клиент при записи сможет выбрать, к кому именно хочет попасть. Отзывы, услуги и клиенты остаются общими для компании.</div>
+    ${(m.staff||[]).length ? (m.staff||[]).map(s=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;">
+      <div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:34px;height:34px;font-size:14px;background:linear-gradient(135deg,var(--rose),var(--rose-deep));color:#fff;">${escapeHtml(s.name.slice(0,1).toUpperCase())}</div><span style="font-size:13px;font-weight:600;">${escapeHtml(s.name)}</span></div>
+      <button onclick="deleteStaff('${m.id}','${s.id}')" style="background:none;border:none;color:var(--ink-soft);font-size:14px;">✕</button>
+    </div>`).join('') : ''}
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <input id="newStaffName" placeholder="Имя сотрудника" style="flex:1;padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:13px;">
+      <button class="btn ghost small" style="width:auto;padding:0 14px;" onclick="addStaff('${m.id}')">Добавить</button>
+    </div>
   </div>`;
 
   const widgetCard = isDemo ? '' : `<div class="card">
@@ -3048,11 +3322,13 @@ async function renderMProfile(m, isDemo, bookings){
     <div class="field"><label>Специализация</label><select id="pfSpec" ${isDemo?'disabled':''}>${Object.entries(SPECS).map(([k,v])=>`<option value="${k}" ${m.specialization===k?'selected':''}>${v.icon} ${v.label}</option>`).join('')}</select></div>
     <div class="row2">
       <div class="field"><label>Город</label><input id="pfCity" value="${escapeHtml(m.city)}" ${isDemo?'disabled':''}></div>
-      <div class="field"><label>Адрес приёма</label><input id="pfAddress" value="${escapeHtml(m.address||'')}" ${isDemo?'disabled':''}></div>
+      <div class="field"><label>Основной адрес приёма</label><input id="pfAddress" value="${escapeHtml(m.address||'')}" ${isDemo?'disabled':''}></div>
     </div>
+    <div class="field"><label>Дополнительные адреса (по одному на строке, необязательно)</label><textarea id="pfExtraAddresses" placeholder="Например, если принимаете в нескольких салонах" ${isDemo?'disabled':''}>${escapeHtml((m.extraAddresses||[]).join('\n'))}</textarea></div>
     <div class="field"><label>О себе</label><textarea id="pfBio" ${isDemo?'disabled':''}>${escapeHtml(m.bio||'')}</textarea></div>
     ${isDemo? '<div class="pillnote" style="margin:0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">В демо-режиме изменения не сохраняются.</div>' : `<button class="btn primary" onclick="saveProfileEdits()">Сохранить</button>`}
   </div>
+  ${certsCard}
   ${analyticsCard}
   ${linkCard}
   ${newsChannelCard}
@@ -3060,6 +3336,7 @@ async function renderMProfile(m, isDemo, bookings){
     <button class="btn ghost" onclick="openInstructions()">✨ Инструкция по использованию</button>
   </div>
   ${masterRefCard}
+  ${staffCard}
   ${depositCard}
   ${loyaltyCard}
   ${bufferCard}
@@ -3095,6 +3372,57 @@ async function saveMapCoords(masterId){
   (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
 }
 window.saveMapCoords = saveMapCoords;
+
+async function addStaff(masterId){
+  const el = document.getElementById('newStaffName');
+  const name = el ? el.value.trim() : '';
+  if(!name){ showToast('Введите имя сотрудника'); return; }
+  const m = await loadMaster(masterId);
+  m.staff = m.staff || [];
+  m.staff.push({ id:uid(), name });
+  await saveMaster(m);
+  showToast('Сотрудник добавлен');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.addStaff = addStaff;
+
+async function deleteStaff(masterId, staffId){
+  const m = await loadMaster(masterId);
+  m.staff = (m.staff||[]).filter(s=>s.id!==staffId);
+  if(m.staffSlots) delete m.staffSlots[staffId];
+  await saveMaster(m);
+  showToast('Сотрудник удалён');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.deleteStaff = deleteStaff;
+
+async function grantPackage(masterId, clientKey, i){
+  const selectEl = document.getElementById('grantPkgSelect_'+i);
+  const packageId = selectEl ? selectEl.value : null;
+  if(!packageId) return;
+  const m = await loadMaster(masterId);
+  const pkg = (m.packages||[]).find(p=>p.id===packageId);
+  if(!pkg) return;
+  const clientPackages = await sget('client-packages:'+masterId, true) || {};
+  clientPackages[clientKey] = clientPackages[clientKey] || [];
+  clientPackages[clientKey].push({ packageId, remaining: pkg.visitsIncluded, purchasedAt: Date.now() });
+  await sset('client-packages:'+masterId, clientPackages, true);
+  showToast(`Пакет «${pkg.name}» выдан клиенту`);
+  fillMasterArea();
+}
+window.grantPackage = grantPackage;
+
+async function spendPackageVisit(masterId, clientKey, packageId, i){
+  const clientPackages = await sget('client-packages:'+masterId, true) || {};
+  const list = clientPackages[clientKey] || [];
+  const cp = list.find(x=>x.packageId===packageId && x.remaining>0);
+  if(!cp) return;
+  cp.remaining = Math.max(0, cp.remaining-1);
+  await sset('client-packages:'+masterId, clientPackages, true);
+  showToast(cp.remaining>0 ? `Списан 1 визит, осталось ${cp.remaining}` : 'Пакет полностью использован');
+  fillMasterArea();
+}
+window.spendPackageVisit = spendPackageVisit;
 
 async function saveLoyaltySetting(masterId){
   const everyEl = document.getElementById('pfLoyaltyEvery');
@@ -3189,6 +3517,7 @@ async function saveProfileEdits(){
   m.specialization = document.getElementById('pfSpec').value;
   m.city = document.getElementById('pfCity').value.trim();
   m.address = document.getElementById('pfAddress').value.trim();
+  m.extraAddresses = document.getElementById('pfExtraAddresses').value.split('\n').map(s=>s.trim()).filter(Boolean);
   m.bio = document.getElementById('pfBio').value.trim();
   await saveMaster(m);
   showToast('Профиль обновлён');
@@ -3201,6 +3530,28 @@ function renderMServices(m, isDemo){
     <div><div class="svc-name">${escapeHtml(s.name)}</div><div class="svc-meta">${s.duration} мин</div></div>
     <div style="display:flex;align-items:center;gap:10px;"><div class="svc-price">${s.price}₽</div>${isDemo?'':`<button class="link-btn" onclick="deleteService('${s.id}')">✕</button>`}</div>
   </div>`).join('');
+
+  const packages = m.packages || [];
+  const svcOptions = m.services.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+  const packagesCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">📦 Пакеты услуг</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Например «5 визитов по цене 4» — клиент платит один раз, а посещения списываются по факту. Начислять и списывать визиты можно в CRM по каждому клиенту.</div>
+    ${packages.length ? packages.map(p=>{
+      const svc = m.services.find(s=>s.id===p.serviceId);
+      return `<div class="svc-row"><div><div class="svc-name">${escapeHtml(p.name)}</div><div class="svc-meta">${svc?escapeHtml(svc.name):'услуга удалена'} · ${p.visitsIncluded} визитов</div></div>
+        <div style="display:flex;align-items:center;gap:10px;"><div class="svc-price">${p.price}₽</div><button class="link-btn" onclick="deletePackage('${p.id}')">✕</button></div>
+      </div>`;
+    }).join('') : ''}
+    ${m.services.length ? `<div class="divider"></div>
+    <div class="field"><label>Название пакета</label><input id="pkgName" placeholder="5 маникюров по цене 4"></div>
+    <div class="row2">
+      <div class="field"><label>Услуга</label><select id="pkgService">${svcOptions}</select></div>
+      <div class="field"><label>Кол-во визитов</label><input id="pkgVisits" type="number" min="2" placeholder="5"></div>
+    </div>
+    <div class="field"><label>Цена пакета, ₽</label><input id="pkgPrice" type="number" min="0" placeholder="6000"></div>
+    <button class="btn ghost small" onclick="addPackage()">Добавить пакет</button>` : `<div class="pillnote" style="margin:0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">Сначала добавьте хотя бы одну услугу выше.</div>`}
+  </div>`;
+
   return `<div class="card">
     ${rows || '<div class="empty" style="padding:10px 0">Пока нет услуг</div>'}
     ${isDemo? '<div class="pillnote" style="margin:12px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">В демо-режиме нельзя сохранить новые услуги.</div>' : `
@@ -3211,8 +3562,30 @@ function renderMServices(m, isDemo){
     </div>
     <div class="field"><label>Длительность (мин)</label><input id="svDuration" type="number" placeholder="60"></div>
     <button class="btn primary" onclick="addService()">Добавить услугу</button>`}
-  </div>`;
+  </div>
+  ${packagesCard}`;
 }
+async function addPackage(){
+  const name = document.getElementById('pkgName').value.trim();
+  const serviceId = document.getElementById('pkgService').value;
+  const visitsIncluded = parseInt(document.getElementById('pkgVisits').value);
+  const price = parseInt(document.getElementById('pkgPrice').value);
+  if(!name || !serviceId || !visitsIncluded || visitsIncluded<2 || !price){ showToast('Заполните все поля пакета — визитов должно быть от 2'); return; }
+  const m = await loadMaster(state.myMasterId);
+  m.packages = m.packages || [];
+  m.packages.push({id:uid(), name, serviceId, visitsIncluded, price});
+  await saveMaster(m);
+  showToast('Пакет добавлен');
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.addPackage = addPackage;
+async function deletePackage(pid){
+  const m = await loadMaster(state.myMasterId);
+  m.packages = (m.packages||[]).filter(p=>p.id!==pid);
+  await saveMaster(m);
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.deletePackage = deletePackage;
 async function addService(){
   const name = document.getElementById('svName').value.trim();
   const price = parseInt(document.getElementById('svPrice').value);
@@ -3291,12 +3664,35 @@ async function deletePortfolio(pid){
 }
 window.addPortfolio=addPortfolio; window.deletePortfolio=deletePortfolio;
 
+/* Возвращает ссылку на нужный объект расписания: если у компании заведены сотрудники —
+   своё расписание на каждого (m.staffSlots[staffId]), иначе общее m.slots как раньше —
+   полная обратная совместимость для частных мастеров и компаний без сотрудников. */
+function activeStaffId(m){
+  if(m.accountType==='company' && (m.staff||[]).length){
+    return state.masterScheduleStaffId || m.staff[0].id;
+  }
+  return null;
+}
+function slotsRefFor(m, staffId){
+  if(staffId){
+    m.staffSlots = m.staffSlots || {};
+    m.staffSlots[staffId] = m.staffSlots[staffId] || {};
+    return m.staffSlots[staffId];
+  }
+  m.slots = m.slots || {};
+  return m.slots;
+}
+
 function renderMSchedule(m, isDemo){
+  const staffId = activeStaffId(m);
+  const staffChips = (m.accountType==='company' && (m.staff||[]).length) ? `<div class="chiprow" style="padding:0 0 12px;">${m.staff.map(s=>`<button class="chip ${staffId===s.id?'active':''}" onclick="pickScheduleStaff('${s.id}')">${escapeHtml(s.name)}</button>`).join('')}</div>` : '';
   const days = Array.from({length:14},(_,i)=>todayISO(i));
   const dayChips = days.map(d=>`<button class="chip ${state.masterScheduleDate===d?'active':''}" onclick="pickScheduleDate('${d}')">${fmtDate(d)}</button>`).join('');
-  const daySlots = (m.slots && m.slots[state.masterScheduleDate]) || [];
+  const slotsRef = staffId ? ((m.staffSlots&&m.staffSlots[staffId])||{}) : (m.slots||{});
+  const daySlots = slotsRef[state.masterScheduleDate] || [];
   const slotGrid = TIMES.map(t=>`<div class="slot ${daySlots.includes(t)?'on':''}" onclick="${isDemo?'':`toggleSlot('${t}')`}">${t}</div>`).join('');
   const templates = isDemo ? '' : `<div class="card">
+    ${staffChips}
     <div style="font-weight:700;font-size:13.5px;margin-bottom:8px;">Быстрые шаблоны</div>
     <div style="display:flex;flex-direction:column;gap:8px;">
       <button class="btn ghost small" onclick="applyScheduleTemplate('weekdays')">Пн–Пт, 10:00–19:00, на месяц вперёд</button>
@@ -3315,16 +3711,19 @@ function renderMSchedule(m, isDemo){
     ${isDemo?'<div class="pillnote" style="margin:12px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">В демо-режиме расписание не сохраняется.</div>':''}
   </div>`;
 }
+function pickScheduleStaff(staffId){ state.masterScheduleStaffId=staffId; (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)(); }
+window.pickScheduleStaff=pickScheduleStaff;
 function pickScheduleDate(d){ state.masterScheduleDate=d; (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)(); }
 window.pickScheduleDate=pickScheduleDate;
 async function toggleSlot(t){
   const m = await loadMaster(state.myMasterId);
-  m.slots = m.slots || {};
+  const staffId = activeStaffId(m);
+  const slots = slotsRefFor(m, staffId);
   const d = state.masterScheduleDate;
-  m.slots[d] = m.slots[d] || [];
-  const wasOpen = m.slots[d].includes(t);
-  if(wasOpen) m.slots[d] = m.slots[d].filter(x=>x!==t);
-  else m.slots[d].push(t);
+  slots[d] = slots[d] || [];
+  const wasOpen = slots[d].includes(t);
+  if(wasOpen) slots[d] = slots[d].filter(x=>x!==t);
+  else slots[d].push(t);
   await saveMaster(m);
   (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
   if(!wasOpen) notifyWaitlist(m.id); // открыли новое время — сообщим листу ожидания
@@ -3336,15 +3735,16 @@ function timesInRange(start, end){
 }
 async function applyScheduleTemplate(kind){
   const m = await loadMaster(state.myMasterId);
-  m.slots = m.slots || {};
+  const staffId = activeStaffId(m);
+  const slots = slotsRefFor(m, staffId);
   const days = Array.from({length:30},(_,i)=>todayISO(i));
   for(const d of days){
     const dow = new Date(d+'T00:00:00').getDay(); // 0=вс, 6=сб
     const isWeekend = (dow===0 || dow===6);
     if(kind==='weekdays'){
-      if(!isWeekend) m.slots[d] = timesInRange('10:00','19:00');
+      if(!isWeekend) slots[d] = timesInRange('10:00','19:00');
     } else if(kind==='everyday'){
-      m.slots[d] = timesInRange('10:00','19:00');
+      slots[d] = timesInRange('10:00','19:00');
     }
   }
   await saveMaster(m);
@@ -3356,8 +3756,9 @@ window.applyScheduleTemplate = applyScheduleTemplate;
 
 async function clearScheduleDay(){
   const m = await loadMaster(state.myMasterId);
-  m.slots = m.slots || {};
-  m.slots[state.masterScheduleDate] = [];
+  const staffId = activeStaffId(m);
+  const slots = slotsRefFor(m, staffId);
+  slots[state.masterScheduleDate] = [];
   await saveMaster(m);
   showToast('День сделан выходным');
   (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
@@ -3416,6 +3817,18 @@ async function renderMBookings(m, bookings, isDemo){
       </div>`).join('')}` : ''}
   </div>`;
 
+  const taxReportCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">📋 Отчёт для налоговой</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Для самозанятых: выгрузка дохода за месяц или год списком, с суммой к отложению на налог (НПД, 4% при работе с физлицами).</div>
+    <div class="row2">
+      <div class="field"><label>Период</label><select id="taxPeriod">
+        <option value="month">Текущий месяц</option>
+        <option value="year">Текущий год</option>
+      </select></div>
+    </div>
+    <button class="btn ghost small" onclick="exportTaxReport('${m.id}')">Сформировать отчёт</button>
+  </div>`;
+
   const exportBtn = bookings.length ? `<div class="section-pad"><button class="btn ghost small" onclick="exportMyBookingsCSV()">📤 Экспорт записей в CSV</button></div>` : '';
 
   if(!bookings.length) return `<div class="card"><div class="empty" style="padding:10px 0">Пока нет заявок на запись</div></div>`;
@@ -3437,7 +3850,9 @@ async function renderMBookings(m, bookings, isDemo){
     </div>
     <div class="divider"></div>
     <div style="font-size:13px;color:var(--ink-soft);">📅 ${fmtDate(b.date)} в ${b.time}</div>
-    <div style="font-size:13px;color:var(--ink-soft);margin-top:2px;">📞 ${escapeHtml(b.clientContact)}</div>
+    ${b.staffName?`<div style="font-size:12.5px;color:var(--rose-deep);font-weight:600;margin-top:2px;">👤 ${escapeHtml(b.staffName)}</div>`:''}
+    <div style="font-size:13px;color:var(--ink-soft);margin-top:2px;">📞 ${escapeHtml(b.clientContact)}${b.bookedForSomeoneElse?' <span style="color:var(--gold);">· записано за другого человека</span>':''}</div>
+    ${b.clientNotes?`<div style="font-size:12px;color:var(--gold);margin-top:4px;background:var(--pink-tint);padding:6px 9px;border-radius:8px;">📝 От клиента: ${escapeHtml(b.clientNotes)}</div>`:''}
     ${b.depositAmount?`<div style="font-size:12.5px;margin-top:4px;color:${b.depositStatus==='confirmed'?'var(--teal)':'var(--gold)'};">${b.depositStatus==='confirmed'?'✅':'⏳'} Предоплата ${b.depositAmount}₽ — ${b.depositStatus==='confirmed'?'получена':'ожидает вашего подтверждения'}</div>`:''}
     ${(b.depositAmount && b.depositStatus==='awaiting_confirmation')?`<div style="margin-top:10px;">
       <button class="btn teal small" onclick="confirmDepositReceived('${b.id}')">✅ Деньги получены</button>
@@ -3459,7 +3874,7 @@ async function renderMBookings(m, bookings, isDemo){
     </div>`:''}
   </div>`;
   }).join('');
-  return financeCard + expensesCard + exportBtn + rows;
+  return financeCard + expensesCard + taxReportCard + exportBtn + rows;
 }
 
 async function sendReceipt(masterId, bookingId){
@@ -3530,6 +3945,75 @@ function exportMyBookingsCSV(){
 }
 window.exportMyBookingsCSV = exportMyBookingsCSV;
 
+async function saveMyHealthNotes(){
+  const el = document.getElementById('myHealthNotesInput');
+  const val = el ? el.value.trim() : '';
+  await sset('my-health-notes', val, false);
+  showToast('Заметка сохранена');
+}
+window.saveMyHealthNotes = saveMyHealthNotes;
+
+async function exportBookingToICS(masterId, bookingId){
+  const bookings = await loadBookings(masterId);
+  const bk = bookings.find(b=>b.id===bookingId);
+  const m = await loadMaster(masterId);
+  if(!bk || !m) return;
+  const start = new Date(bk.date+'T'+bk.time+':00');
+  const end = new Date(start.getTime() + (bk.duration||60)*60000);
+  const fmt = (d)=>d.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
+  const uidVal = bk.id+'@beautyhub';
+  const desc = `Услуга: ${bk.serviceName}\\nЦена: ${bk.price}₽\\nМастер: ${m.name}`;
+  const loc = [m.city, m.address].filter(Boolean).join(', ');
+  const ics = [
+    'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//BeautyHub//RU','CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    'UID:'+uidVal,
+    'DTSTAMP:'+fmt(new Date()),
+    'DTSTART:'+fmt(start),
+    'DTEND:'+fmt(end),
+    'SUMMARY:'+bk.serviceName+' — '+m.name,
+    'DESCRIPTION:'+desc,
+    'LOCATION:'+loc,
+    'END:VEVENT','END:VCALENDAR'
+  ].join('\r\n');
+  const blob = new Blob([ics], {type:'text/calendar;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `beautyhub-${bk.date}.ics`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+}
+window.exportBookingToICS = exportBookingToICS;
+
+async function exportTaxReport(masterId){
+  const period = document.getElementById('taxPeriod').value;
+  const bookings = await loadBookings(masterId);
+  const now = new Date();
+  const startDate = period==='year' ? `${now.getFullYear()}-01-01` : todayISO(-now.getDate()+1);
+  const came = bookings.filter(b=>b.status==='confirmed' && isBookingPast(b) && b.attendance!=='no-show' && b.date>=startDate);
+  const total = came.reduce((s,b)=>s+(b.price||0),0);
+  const tax = Math.round(total*0.04);
+  const periodLabel = period==='year' ? `${now.getFullYear()} год` : now.toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
+  const lines = [
+    `Отчёт по доходу — ${periodLabel}`,
+    '',
+    ...came.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(b=>`${fmtDate(b.date)} · ${b.serviceName} · ${b.price}₽`),
+    '',
+    `Итого визитов: ${came.length}`,
+    `Итого доход: ${total}₽`,
+    `К отложению на налог (НПД 4%): ${tax}₽`,
+  ];
+  const text = lines.join('\n');
+  const blob = new Blob(['\uFEFF'+text], {type:'text/plain;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `beautyhub-tax-report-${period}-${todayISO(0)}.txt`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+  showToast('Отчёт скачан');
+}
+window.exportTaxReport = exportTaxReport;
+
 async function addExpense(masterId){
   const nameEl = document.getElementById('expName');
   const amountEl = document.getElementById('expAmount');
@@ -3590,8 +4074,19 @@ async function renderMClients(m, isDemo, bookings){
   list.forEach(c=>{
     // Обратная совместимость: раньше client-notes хранил просто строку, теперь {note, tags}
     const raw = notesRaw[c.key];
-    if(typeof raw === 'string'){ c.note = raw; c.tags = []; }
-    else { c.note = (raw && raw.note) || ''; c.tags = (raw && raw.tags) || []; }
+    if(typeof raw === 'string'){ c.note = raw; c.tags = []; c.birthday = null; }
+    else { c.note = (raw && raw.note) || ''; c.tags = (raw && raw.tags) || []; c.birthday = (raw && raw.birthday) || null; }
+
+    // Скоро день рождения — сравниваем месяц/день, год не важен (может отсутствовать смысл возраста)
+    c.birthdaySoon = false;
+    if(c.birthday){
+      const bd = new Date(c.birthday+'T00:00:00');
+      const nextBd = new Date(todayD.getFullYear(), bd.getMonth(), bd.getDate());
+      if(nextBd < todayD) nextBd.setFullYear(todayD.getFullYear()+1);
+      const daysUntil = Math.round((nextBd - todayD) / 86400000);
+      c.daysUntilBirthday = daysUntil;
+      if(daysUntil>=0 && daysUntil<=14) c.birthdaySoon = true;
+    }
 
     // «Давно не был» — если визитов ≥2, сравниваем с обычным интервалом между визитами;
     // если визит один — простой порог в 60 дней.
@@ -3624,6 +4119,24 @@ async function renderMClients(m, isDemo, bookings){
     <div style="font-size:12px;color:#8A5A1F;line-height:1.5;">Обычно приходят чаще — возможно, стоит написать и напомнить о себе. Ищите бейдж «⏰ давно не был(а)» в списке ниже.</div>
   </div>` : '';
 
+  const birthdaySoonList = list.filter(c=>c.birthdaySoon).sort((a,b)=>a.daysUntilBirthday-b.daysUntilBirthday);
+  const birthdayCard = birthdaySoonList.length ? `<div class="card" style="background:var(--pink-tint);border:1px solid rgba(236,24,118,0.28);">
+    <div style="font-weight:700;font-size:13.5px;color:var(--rose-deep);margin-bottom:6px;">🎂 Скоро день рождения (${birthdaySoonList.length})</div>
+    ${birthdaySoonList.map(c=>`<div style="font-size:12.5px;color:var(--rose-deep);padding:3px 0;">${escapeHtml(c.name)} — ${c.daysUntilBirthday===0?'сегодня!':c.daysUntilBirthday===1?'завтра':`через ${c.daysUntilBirthday} дн.`}</div>`).join('')}
+  </div>` : '';
+
+  // --- Брошенный просмотр: клиент дошёл до выбора времени, но не отправил заявку (прошло от 15 минут) ---
+  const abandonedViews = (await sget('abandoned-views:'+m.id, true) || [])
+    .filter(v=>!v.converted && (Date.now()-v.viewedAt) > 15*60000 && (Date.now()-v.viewedAt) < 7*24*3600000)
+    .sort((a,b)=>b.viewedAt-a.viewedAt).slice(0,10);
+  const abandonedViewsCard = abandonedViews.length ? `<div class="card" style="background:#FBEFD6;border:1px solid #F3DFA8;">
+    <div style="font-weight:700;font-size:13.5px;color:#8A5A1F;margin-bottom:6px;">👀 Смотрели время записи, но не отправили заявку (${abandonedViews.length})</div>
+    ${abandonedViews.map(v=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;">
+      <div style="font-size:12.5px;color:#8A5A1F;">${escapeHtml(v.clientName)} — ${escapeHtml(v.serviceName)}, ${fmtDate(v.date)} ${v.time}</div>
+      ${v.clientTelegramId?`<button class="btn ghost small" style="width:auto;padding:5px 10px;font-size:11px;" onclick="notifyTelegram('${v.clientTelegramId}','Здравствуйте! Заметил(а), что вы смотрели свободное время у меня — если ещё актуально, с радостью запишу вас 🙂'); showToast('Сообщение отправлено');">Написать</button>`:''}
+    </div>`).join('')}
+  </div>` : '';
+
   const importCard = `<div class="card">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">📥 Импортировать базу клиентов</div>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Переносите базу из блокнота или другого сервиса — по одному клиенту на строке, формат «Имя, телефон или @username». Так вы сразу увидите их здесь.</div>
@@ -3642,6 +4155,9 @@ async function renderMClients(m, isDemo, bookings){
     return broadcastCard + importCard + `<div class="card"><div class="empty" style="padding:10px 0">Пока нет клиентов — они появятся здесь после первых записей или импорта.</div></div>`;
   }
 
+  const clientPackages = isDemo ? {} : (await sget('client-packages:'+m.id, true) || {});
+  const masterPackages = m.packages || [];
+
   const rows = list.map((c,i)=>{
     let loyaltyHtml = '';
     if(m.loyaltyEvery && m.loyaltyReward){
@@ -3652,6 +4168,19 @@ async function renderMClients(m, isDemo, bookings){
         loyaltyHtml = `<div style="font-size:11.5px;color:var(--ink-soft);margin-top:6px;">🎁 До бонуса «${escapeHtml(m.loyaltyReward)}»: ещё ${m.loyaltyEvery-rem} визит(ов)</div>`;
       }
     }
+    const myPackages = clientPackages[c.key] || [];
+    const packagesHtml = myPackages.length ? myPackages.map(cp=>{
+      const pkg = masterPackages.find(p=>p.id===cp.packageId);
+      if(!pkg) return '';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-top:4px;background:var(--pink-tint);padding:6px 9px;border-radius:8px;">
+        <span style="color:var(--rose-deep);">📦 ${escapeHtml(pkg.name)}: ${cp.remaining} визит(ов) осталось</span>
+        ${cp.remaining>0?`<button class="link-btn" style="font-size:11px;" onclick="spendPackageVisit('${m.id}','${c.key}','${cp.packageId}', ${i})">Списать 1</button>`:''}
+      </div>`;
+    }).join('') : '';
+    const grantPackageHtml = masterPackages.length ? `<div style="margin-top:6px;display:flex;gap:6px;">
+      <select id="grantPkgSelect_${i}" style="flex:1;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-size:11.5px;">${masterPackages.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}</select>
+      <button class="btn ghost small" style="width:auto;padding:0 10px;font-size:11px;" onclick="grantPackage('${m.id}','${c.key}', ${i})">Выдать пакет</button>
+    </div>` : '';
     return `<div class="card" data-tags="${escapeHtml(c.tags.join(',').toLowerCase())}">
     <div class="mcard-top">
       <div>
@@ -3665,14 +4194,20 @@ async function renderMClients(m, isDemo, bookings){
     </div>
     <div style="font-size:12.5px;color:var(--ink-soft);margin-top:6px;">🗓️ ${c.visits} визит${c.visits===1?'':c.visits<5?'а':'ов'}${c.lastDate?` · последний ${fmtDate(c.lastDate)}`:''}${c.spent?` · ${c.spent}₽ потрачено`:''}</div>
     ${loyaltyHtml}
+    ${packagesHtml}
+    ${grantPackageHtml}
     ${c.tags.length?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${c.tags.map(t=>`<span class="tag" style="background:var(--bg);color:var(--ink-soft);font-size:10.5px;">${escapeHtml(t)}</span>`).join('')}</div>`:''}
     <div class="divider"></div>
     <textarea id="clientNote_${i}" placeholder="Заметка (например: аллергия на такой-то состав, любит крепкий кофе...)" style="min-height:44px;font-size:12.5px;" onblur="saveClientNote('${m.id}', ${i})">${escapeHtml(c.note)}</textarea>
     <input id="clientTags_${i}" placeholder="Теги через запятую (VIP, чувствительная кожа...)" value="${escapeHtml(c.tags.join(', '))}" style="margin-top:8px;width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:12px;" onblur="saveClientNote('${m.id}', ${i})">
+    <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+      <label style="font-size:11.5px;color:var(--ink-soft);white-space:nowrap;">🎂 День рождения</label>
+      <input id="clientBirthday_${i}" type="date" value="${c.birthday||''}" style="flex:1;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:12px;" onblur="saveClientNote('${m.id}', ${i})">
+    </div>
   </div>`;
   }).join('');
 
-  return broadcastCard + winBackCard + importCard + exportCard + tagFilterBar + `<div id="clientListRows">${rows}</div>`;
+  return broadcastCard + winBackCard + birthdayCard + abandonedViewsCard + importCard + exportCard + tagFilterBar + `<div id="clientListRows">${rows}</div>`;
 }
 window.renderMClients = renderMClients;
 
@@ -3729,10 +4264,12 @@ async function saveClientNote(masterId, i){
   if(!c) return;
   const noteEl = document.getElementById('clientNote_'+i);
   const tagsEl = document.getElementById('clientTags_'+i);
+  const birthdayEl = document.getElementById('clientBirthday_'+i);
   const text = noteEl ? noteEl.value.trim() : '';
   const tags = tagsEl ? tagsEl.value.split(',').map(t=>t.trim()).filter(Boolean) : [];
+  const birthday = birthdayEl ? birthdayEl.value : '';
   const notes = await sget('client-notes:'+masterId, true) || {};
-  notes[c.key] = { note:text, tags };
+  notes[c.key] = { note:text, tags, birthday: birthday || null };
   await sset('client-notes:'+masterId, notes, true);
 }
 window.saveClientNote = saveClientNote;
@@ -3803,6 +4340,7 @@ async function fillAdmin(){
     if(state.adminScreen==='admins') return renderAdminAdmins();
     if(state.adminScreen==='banners') return renderAdminBanners();
     if(state.adminScreen==='visitHistory') return renderAdminVisitHistory();
+    if(state.adminScreen==='fraudCheck') return renderAdminFraudCheck();
     if(state.adminScreen==='adrequests') return renderAdminAdRequests();
     if(state.adminScreen==='adrequest' && state.adminAdRequestKey) return renderAdminAdRequestThread(state.adminAdRequestKey);
     if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
@@ -3821,6 +4359,7 @@ async function fillAdmin(){
   if(state.adminScreen==='admins') return renderAdminAdmins();
   if(state.adminScreen==='banners') return renderAdminBanners();
   if(state.adminScreen==='visitHistory') return renderAdminVisitHistory();
+    if(state.adminScreen==='fraudCheck') return renderAdminFraudCheck();
   if(state.adminScreen==='adrequests') return renderAdminAdRequests();
   if(state.adminScreen==='adrequest' && state.adminAdRequestKey) return renderAdminAdRequestThread(state.adminAdRequestKey);
   if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
@@ -4042,8 +4581,18 @@ async function renderAdminDashboard(){
     </button>
   </div>
   <div class="section-pad">
+    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='fraudCheck'; fillAdmin();">
+      🚨 Проверка накруток отзывов
+    </button>
+  </div>
+  <div class="section-pad">
     <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='visitHistory'; fillAdmin();">
       🕒 История заходов
+    </button>
+  </div>
+  <div class="section-pad">
+    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="exportFullBackup()">
+      💾 Полный бэкап базы
     </button>
   </div>` : `<div class="section-pad">
     <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reviewsShowcase'; fillAdmin();">
@@ -4235,6 +4784,7 @@ async function renderAdminAuditLog(){
     set_featured:'⭐ Отметил «Мастер месяца»', unset_featured:'⭐ Убрал «Мастер месяца»',
     add_admin:'👤 Добавил администратора', remove_admin:'👤 Убрал администратора',
     create_banner:'📣 Опубликовал баннер',
+    export_backup:'💾 Выгрузил полный бэкап',
   };
   const rows = log.length ? log.map(e=>`<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -4293,7 +4843,7 @@ window.removeSupportAdmin = removeSupportAdmin;
 async function renderAdminBanners(){
   const banners = (await loadBanners()).slice().sort((a,b)=>b.createdAt-a.createdAt);
   const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Баннеры / объявления</div></div>`;
-  const intro = `<div class="pillnote" style="margin:0 18px 14px;">Баннер показывается на главном экране клиентов и/или в кабинете мастеров, пока не закрыт крестиком (у каждого человека — своё «закрыто», повторно не всплывёт). Удобно для акций, техработ, анонсов новых функций.</div>`;
+  const intro = `<div class="pillnote" style="margin:0 18px 14px;">Баннер показывается на главном экране клиентов и/или в кабинете мастеров, пока не закрыт крестиком (у каждого человека — своё «закрыто», повторно не всплывёт). Укажите дату «Показывать с», чтобы запланировать публикацию заранее — баннер появится автоматически в нужный день, ничего нажимать не придётся.</div>`;
 
   const form = `<div class="card">
     <div class="field"><label>Текст объявления</label><textarea id="bnText" placeholder="Например: С 1 по 5 августа скидка 20% на первую запись!" style="min-height:60px;"></textarea></div>
@@ -4307,7 +4857,7 @@ async function renderAdminBanners(){
     </div>
     <div class="field"><label>Ссылка «Подробнее» (необязательно)</label><input id="bnLink" placeholder="https://..."></div>
     <div class="row2">
-      <div class="field"><label>Показывать с (необязательно)</label><input id="bnStart" type="date"></div>
+      <div class="field"><label>Запланировать публикацию на (необязательно)</label><input id="bnStart" type="date"></div>
       <div class="field"><label>Показывать по (необязательно)</label><input id="bnEnd" type="date"></div>
     </div>
     <div class="field"><label>Цвет</label><select id="bnStyle">
@@ -4315,27 +4865,33 @@ async function renderAdminBanners(){
       <option value="gold">Жёлтый (акция/важное)</option>
       <option value="teal">Зелёный (нейтральная новость)</option>
     </select></div>
-    <button class="btn primary" onclick="createBanner()">Опубликовать баннер</button>
+    <button class="btn primary" onclick="createBanner()">Опубликовать / запланировать</button>
   </div>`;
 
-  const list = banners.length ? banners.map(b=>`<div class="card">
+  const today = todayISO(0);
+  const list = banners.length ? banners.map(b=>{
+    let statusLabel = 'Активен', statusClass = 'active';
+    if(b.active===false){ statusLabel='Скрыт'; statusClass='cancelled'; }
+    else if(b.startDate && b.startDate>today){ statusLabel='Запланирован'; statusClass='pending'; }
+    else if(b.endDate && b.endDate<today){ statusLabel='Истёк'; statusClass='inactive'; }
+    return `<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
       <div style="flex:1;">
         <div style="font-weight:700;font-size:13px;">${escapeHtml(b.emoji||'📣')} ${escapeHtml(b.text)}</div>
         <div style="font-size:11px;color:var(--ink-soft);margin-top:4px;">
           ${b.audience==='all'?'Всем':b.audience==='clients'?'Клиентам':'Мастерам'}
           ${b.startDate?` · с ${fmtDate(b.startDate)}`:''}${b.endDate?` · по ${fmtDate(b.endDate)}`:''}
-          ${b.active===false?' · <span style="color:var(--danger);">выключен</span>':''}
         </div>
       </div>
-      <span class="badge ${b.active===false?'cancelled':'active'}">${b.active===false?'Скрыт':'Активен'}</span>
+      <span class="badge ${statusClass}">${statusLabel}</span>
     </div>
     <div class="divider"></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn ghost small" onclick="toggleBannerActive('${b.id}')">${b.active===false?'Включить':'Выключить'}</button>
       <button class="btn danger small" onclick="deleteBanner('${b.id}')">Удалить</button>
     </div>
-  </div>`).join('') : `<div class="empty"><div class="big">📣</div>Пока нет баннеров.</div>`;
+  </div>`;
+  }).join('') : `<div class="empty"><div class="big">📣</div>Пока нет баннеров.</div>`;
 
   document.getElementById('content').innerHTML = back + intro + form + `<div style="padding:14px 18px 8px;font-weight:700;font-size:13.5px;">Все баннеры</div>` + list;
 }
@@ -4449,6 +5005,76 @@ function messageVisitor(i){
   }
 }
 window.messageVisitor = messageVisitor;
+
+/* Полный бэкап базы — выгружает все SHARED записи (мастера, записи, отзывы, чаты и т.д.)
+   одним JSON-файлом. Личные данные конкретных пользователей (shared:false) не включаются —
+   это не персональный бэкап конкретного человека, а бэкап платформы. */
+async function exportFullBackup(){
+  showToast('Собираем бэкап, это может занять немного времени…');
+  try{
+    const { data, error } = await sb.from('app_storage').select('scope_key,shared,value,updated_at').eq('shared', true);
+    if(error) throw error;
+    const backup = {
+      exportedAt: new Date().toISOString(),
+      app: 'BeautyHub',
+      rowCount: data.length,
+      rows: data
+    };
+    const json = JSON.stringify(backup, null, 2);
+    const blob = new Blob([json], {type:'application/json;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `beautyhub-backup-${todayISO(0)}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 3000);
+    showToast(`Бэкап готов: ${data.length} записей`);
+    logAdminAction('export_backup', `${data.length} записей`);
+  }catch(e){
+    console.error('backup failed', e);
+    showToast('Не удалось собрать бэкап — попробуйте ещё раз');
+  }
+}
+window.exportFullBackup = exportFullBackup;
+
+/* ============ ПРОВЕРКА НАКРУТОК ОТЗЫВОВ (эвристика, не доказательство) ============ */
+async function renderAdminFraudCheck(){
+  const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Проверка накруток отзывов</div></div>`;
+  const intro = `<div class="pillnote" style="margin:0 18px 14px;">Простая эвристика, не доказательство — сигнал для ручной проверки, а не автоматический бан. Смотрим на всплески одинаковых по времени отзывов и отзывы без привязки к реальной записи.</div>`;
+
+  const masterIds = await sget('masters-index', true) || [];
+  const flagged = [];
+  for(const id of masterIds){
+    const m = await sget('master:'+id, true);
+    if(!m || m.isDemo) continue;
+    const reviews = await loadReviews(id);
+    if(reviews.length < 3) continue;
+
+    // Всплеск: 3+ отзыва в пределах одного часа друг от друга
+    const sorted = reviews.slice().sort((a,b)=>a.createdAt-b.createdAt);
+    let burstFound = false, burstCount = 0;
+    for(let i=0;i<sorted.length;i++){
+      const windowReviews = sorted.filter(r=>Math.abs(r.createdAt-sorted[i].createdAt) < 3600000);
+      if(windowReviews.length>=3){ burstFound=true; burstCount=Math.max(burstCount, windowReviews.length); }
+    }
+    const noBookingCount = reviews.filter(r=>!r.bookingId).length;
+
+    if(burstFound || noBookingCount>0){
+      flagged.push({ m, burstFound, burstCount, noBookingCount, totalReviews: reviews.length });
+    }
+  }
+
+  const rows = flagged.length ? flagged.map(f=>`<div class="card">
+    <div class="mcard-name" style="font-size:14px;">${escapeHtml(f.m.name)}</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-top:4px;">Всего отзывов: ${f.totalReviews}</div>
+    ${f.burstFound?`<div style="font-size:12.5px;color:var(--danger);margin-top:6px;">⚠️ Похоже на всплеск: ${f.burstCount} отзыва(ов) в пределах часа</div>`:''}
+    ${f.noBookingCount>0?`<div style="font-size:12.5px;color:var(--danger);margin-top:4px;">⚠️ ${f.noBookingCount} отзыв(ов) без привязки к реальной записи</div>`:''}
+    <div class="divider"></div>
+    <button class="btn ghost small" onclick="adminEditMaster('${f.m.id}')">Открыть карточку мастера</button>
+  </div>`).join('') : `<div class="empty"><div class="big">✅</div>Подозрительных паттернов не найдено.</div>`;
+
+  document.getElementById('content').innerHTML = back + intro + rows;
+}
+window.renderAdminFraudCheck = renderAdminFraudCheck;
 
 /* ============ ЗАЯВКИ НА РАЗМЕЩЕНИЕ ОБЪЯВЛЕНИЙ (от любого посетителя) ============ */
 async function renderAdminAdRequests(){
@@ -5067,7 +5693,7 @@ window.adminSaveEdit = adminSaveEdit;
 window.addEventListener('error', function(e){
   const app = document.getElementById('app');
   if(app && !app.dataset.rendered){
-    app.innerHTML = `<div style="padding:60px 24px;text-align:center;font-family:sans-serif;">
+    app.innerHTML = `<div style="padding:60px 24px;text-align:center;font-family:sans-serif;background:#FCEEF6;min-height:100vh;">
       <div style="font-size:40px;margin-bottom:14px;">⚠️</div>
       <div style="font-weight:700;font-size:16px;color:#34202C;margin-bottom:8px;">Ошибка при загрузке приложения</div>
       <div style="font-size:12.5px;color:#7C6670;word-break:break-word;">${(e.message||'').toString().replace(/</g,'&lt;')}</div>
