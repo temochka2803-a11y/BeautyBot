@@ -1319,8 +1319,36 @@ async function init(){
   if(state._startParam && state._startParam.startsWith('paid_')){
     setTimeout(()=>showToast('Проверяем статус оплаты… Если подписка не появилась сразу — подождите немного и нажмите «Обновить статус оплаты»'), 300);
   }
+  trackVisit(); // не блокируем рендер ожиданием записи в историю заходов
   state.loading = false;
   render();
+}
+
+/* ============ ИСТОРИЯ ЗАХОДОВ (для владельца) ============
+   Фиксируем каждого уникального пользователя Telegram, который открыл приложение —
+   имя, username, роль на момент захода, когда впервые и когда в последний раз заходил,
+   сколько раз всего. Владелец может увидеть список и перейти в личку в Telegram. */
+async function trackVisit(){
+  try{
+    if(!state.tgUser) return; // вне Telegram (тест в браузере) — нечего отслеживать
+    const id = String(state.tgUser.id);
+    const key = 'visitor:'+id;
+    const existing = await sget(key, true);
+    const role = state.isOwner ? 'owner' : (state.userRole || 'unknown');
+    const record = {
+      id,
+      firstName: state.tgUser.first_name || '',
+      lastName: state.tgUser.last_name || '',
+      username: state.tgUser.username || null,
+      role,
+      firstSeen: existing ? existing.firstSeen : Date.now(),
+      lastSeen: Date.now(),
+      visitCount: existing ? (existing.visitCount||0) + 1 : 1,
+    };
+    await sset(key, record, true);
+    const idx = await sget('visitors-index', true) || [];
+    if(!idx.includes(id)){ idx.push(id); await sset('visitors-index', idx, true); }
+  }catch(e){ console.warn('trackVisit failed:', e); }
 }
 
 function renderSetupError(message){
@@ -1482,7 +1510,7 @@ async function fillFavorites(){
         <div style="flex:1;cursor:pointer;" onclick="openMaster('${m.id}')">
           <div class="mcard-top">
             <div>
-              <div class="mcard-name">${escapeHtml(m.name)}</div>
+              <div class="mcard-name">${escapeHtml(m.name)}${m.accountType==='company'?' <span class="badge demo" style="font-size:9.5px;vertical-align:middle;">🏢 Компания</span>':''}</div>
               <div class="mcard-city">📍 ${escapeHtml(m.city)}</div>
             </div>
             ${pf!=null?`<div class="price-from">от ${pf}₽</div>`:''}
@@ -1697,7 +1725,7 @@ function renderListStep(masters){
         <div class="mcard-body" style="cursor:pointer;" onclick="openMaster('${m.id}')">
           <div class="mcard-top">
             <div>
-              <div class="mcard-name">${escapeHtml(m.name)}</div>
+              <div class="mcard-name">${escapeHtml(m.name)}${m.accountType==='company'?' <span class="badge demo" style="font-size:9.5px;vertical-align:middle;">🏢 Компания</span>':''}</div>
               <div class="mcard-city">📍 ${escapeHtml(m.city)}</div>
             </div>
             ${pf!=null?`<div class="price-from">от ${pf}₽</div>`:''}
@@ -1832,7 +1860,8 @@ async function fillMasterDetail(){
   const header = `<div class="card" style="display:flex;gap:12px;align-items:center;">
     <div class="avatar" style="width:64px;height:64px;font-size:30px;${avatarStyle(m)}">${avatarInner(m,spec)}</div>
     <div style="flex:1;">
-      <div class="mcard-name" style="font-size:18px;">${escapeHtml(m.name)}</div>
+      <div class="mcard-name" style="font-size:18px;">${escapeHtml(m.name)}${m.accountType==='company'?' <span class="badge demo" style="font-size:10px;vertical-align:middle;">🏢 Компания</span>':''}</div>
+      ${m.accountType==='company' && m.contactPerson ? `<div class="mcard-city">Контактное лицо: ${escapeHtml(m.contactPerson)}</div>` : ''}
       <div class="mcard-city">📍 ${escapeHtml(m.city)}${m.address?', '+escapeHtml(m.address):''}</div>
       <div class="rating-row" style="margin-top:6px;"><span class="stars">${starsStr(avg)}</span> ${avg?avg.toFixed(1):'нет оценок'} ${m.ratingCount?`· ${m.ratingCount} отзыв.`:''}</div>
     </div>
@@ -2404,7 +2433,15 @@ function startRegistration(){
   <div class="backbar"><button class="backbtn" onclick="fillMasterArea()">←</button><div style="font-weight:700">Регистрация мастера</div></div>
   <div class="pillnote" style="margin:0 18px 14px;">⏱️ Занимает 2 минуты. Достаточно имени, специализации и города — остальное можно дозаполнить позже, пока анкету проверяет модератор.</div>
   <div class="card">
-    <div class="field"><label>Имя</label><input id="regName" placeholder="Как вас видят клиенты"></div>
+    <div class="field">
+      <label>Тип профиля</label>
+      <div class="chiprow" style="padding:0;">
+        <span class="chip active" id="regTypeIndividual" onclick="setRegAccountType('individual')">👤 Частный мастер</span>
+        <span class="chip" id="regTypeCompany" onclick="setRegAccountType('company')">🏢 Компания / салон</span>
+      </div>
+    </div>
+    <div class="field"><label id="regNameLabel">Имя</label><input id="regName" placeholder="Как вас видят клиенты"></div>
+    <div class="field" id="regContactPersonField" style="display:none;"><label>Контактное лицо (необязательно)</label><input id="regContactPerson" placeholder="Кто отвечает клиентам"></div>
     <div class="field"><label>Специализация</label><select id="regSpec">${Object.entries(SPECS).map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join('')}</select></div>
     <div class="row2">
       <div class="field"><label>Город</label><input id="regCity" placeholder="Москва"></div>
@@ -2415,6 +2452,18 @@ function startRegistration(){
   </div>`;
 }
 window.startRegistration=startRegistration;
+
+function setRegAccountType(type){
+  state._regAccountType = type;
+  const isCompany = type==='company';
+  document.getElementById('regTypeIndividual').classList.toggle('active', !isCompany);
+  document.getElementById('regTypeCompany').classList.toggle('active', isCompany);
+  document.getElementById('regNameLabel').textContent = isCompany ? 'Название компании / салона' : 'Имя';
+  const nameInput = document.getElementById('regName');
+  nameInput.placeholder = isCompany ? 'Например, «Салон красоты Люкс»' : 'Как вас видят клиенты';
+  document.getElementById('regContactPersonField').style.display = isCompany ? 'block' : 'none';
+}
+window.setRegAccountType = setRegAccountType;
 
 /* Воронка регистрации мастеров: фиксируем сам факт открытия формы, чтобы владелец видел
    не только успешные регистрации, но и тех, кто начал и не дошёл до конца (потенциальные лиды). */
@@ -2450,13 +2499,16 @@ async function finishRegistration(){
   const city = document.getElementById('regCity').value.trim();
   const address = document.getElementById('regAddress').value.trim();
   const bio = document.getElementById('regBio').value.trim();
-  if(!name || !city){ showToast('Укажите как минимум имя и город'); return; }
+  const accountType = state._regAccountType==='company' ? 'company' : 'individual';
+  const contactPerson = accountType==='company' ? (document.getElementById('regContactPerson').value.trim() || null) : null;
+  if(!name || !city){ showToast(accountType==='company' ? 'Укажите как минимум название компании и город' : 'Укажите как минимум имя и город'); return; }
   const id = uid();
   // Автоматически подтягиваем аватарку из Telegram-профиля мастера (если разрешено его настройками приватности).
   const avatarUrl = (state.tgUser && state.tgUser.photo_url) ? state.tgUser.photo_url : null;
   const referredByMasterId = await sget('my-referred-by-master', false) || null;
   const master = {
     id, specialization:spec, name, city, address, bio,
+    accountType, contactPerson,
     services:[], portfolio:[], slots:{},
     subscriptionActive:false, subscriptionUntil:null,
     ratingSum:0, ratingCount:0, createdAt:Date.now(), isDemo:false, disabledByAdmin:false,
@@ -2984,7 +3036,15 @@ async function renderMProfile(m, isDemo, bookings){
   </div>`;
 
   return `<div class="card">
-    <div class="field"><label>Имя</label><input id="pfName" value="${escapeHtml(m.name)}" ${isDemo?'disabled':''}></div>
+    <div class="field">
+      <label>Тип профиля</label>
+      <div class="chiprow" style="padding:0;">
+        <span class="chip ${m.accountType!=='company'?'active':''}" id="pfTypeIndividual" onclick="${isDemo?'':`setProfileAccountType('individual')`}">👤 Частный мастер</span>
+        <span class="chip ${m.accountType==='company'?'active':''}" id="pfTypeCompany" onclick="${isDemo?'':`setProfileAccountType('company')`}">🏢 Компания / салон</span>
+      </div>
+    </div>
+    <div class="field"><label id="pfNameLabel">${m.accountType==='company'?'Название компании / салона':'Имя'}</label><input id="pfName" value="${escapeHtml(m.name)}" ${isDemo?'disabled':''}></div>
+    <div class="field" id="pfContactPersonField" style="${m.accountType==='company'?'':'display:none;'}"><label>Контактное лицо (необязательно)</label><input id="pfContactPerson" value="${escapeHtml(m.contactPerson||'')}" ${isDemo?'disabled':''}></div>
     <div class="field"><label>Специализация</label><select id="pfSpec" ${isDemo?'disabled':''}>${Object.entries(SPECS).map(([k,v])=>`<option value="${k}" ${m.specialization===k?'selected':''}>${v.icon} ${v.label}</option>`).join('')}</select></div>
     <div class="row2">
       <div class="field"><label>Город</label><input id="pfCity" value="${escapeHtml(m.city)}" ${isDemo?'disabled':''}></div>
@@ -3111,9 +3171,21 @@ async function endVacation(){
   (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
 }
 window.endVacation = endVacation;
+function setProfileAccountType(type){
+  state._pfAccountType = type;
+  const isCompany = type==='company';
+  document.getElementById('pfTypeIndividual').classList.toggle('active', !isCompany);
+  document.getElementById('pfTypeCompany').classList.toggle('active', isCompany);
+  document.getElementById('pfNameLabel').textContent = isCompany ? 'Название компании / салона' : 'Имя';
+  document.getElementById('pfContactPersonField').style.display = isCompany ? 'block' : 'none';
+}
+window.setProfileAccountType = setProfileAccountType;
+
 async function saveProfileEdits(){
   const m = await loadMaster(state.myMasterId);
   m.name = document.getElementById('pfName').value.trim() || m.name;
+  m.accountType = (state._pfAccountType || m.accountType) === 'company' ? 'company' : 'individual';
+  m.contactPerson = m.accountType==='company' ? (document.getElementById('pfContactPerson').value.trim() || null) : null;
   m.specialization = document.getElementById('pfSpec').value;
   m.city = document.getElementById('pfCity').value.trim();
   m.address = document.getElementById('pfAddress').value.trim();
@@ -3730,6 +3802,7 @@ async function fillAdmin(){
     if(state.adminScreen==='auditlog') return renderAdminAuditLog();
     if(state.adminScreen==='admins') return renderAdminAdmins();
     if(state.adminScreen==='banners') return renderAdminBanners();
+    if(state.adminScreen==='visitHistory') return renderAdminVisitHistory();
     if(state.adminScreen==='adrequests') return renderAdminAdRequests();
     if(state.adminScreen==='adrequest' && state.adminAdRequestKey) return renderAdminAdRequestThread(state.adminAdRequestKey);
     if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
@@ -3747,6 +3820,7 @@ async function fillAdmin(){
   if(state.adminScreen==='auditlog') return renderAdminAuditLog();
   if(state.adminScreen==='admins') return renderAdminAdmins();
   if(state.adminScreen==='banners') return renderAdminBanners();
+  if(state.adminScreen==='visitHistory') return renderAdminVisitHistory();
   if(state.adminScreen==='adrequests') return renderAdminAdRequests();
   if(state.adminScreen==='adrequest' && state.adminAdRequestKey) return renderAdminAdRequestThread(state.adminAdRequestKey);
   if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
@@ -3863,12 +3937,7 @@ async function renderAdminDashboard(){
     ${pendingModeration.map(m=>{
       const spec = SPECS[m.specialization];
       return `<div class="card">
-        <div class="mcard-name" style="font-size:15px;">${spec.icon} ${escapeHtml(m.name)}</div>
-        <div class="mcard-city">📍 ${escapeHtml(m.city)} · ${spec.label}</div>
-        <div style="font-size:13px;color:var(--ink-soft);margin-top:8px;line-height:1.5;">${escapeHtml(m.bio||'Без описания')}</div>
-        <div class="divider"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn teal small" onclick="adminApproveMaster('${m.id}')">Одобрить</button>
+        <div class="mcard-name" style="font-size:15px;">${spec.icon} ${escapeHtml(m.name)}${m.accountType==='company'?' <span class="badge demo" style="font-size:9.5px;vertical-align:middle;">🏢 Компания</span>':''}</div>
           <button class="btn danger small" onclick="adminRejectMaster('${m.id}')">Отклонить</button>
           <button class="btn ghost small" onclick="adminEditMaster('${m.id}')">Посмотреть/редактировать</button>
         </div>
@@ -3905,7 +3974,7 @@ async function renderAdminDashboard(){
     return `<div class="card" data-search="${escapeHtml((m.name+' '+m.city+' '+spec.label+' '+(m.tags||[]).join(' ')).toLowerCase())}" data-tags="${escapeHtml((m.tags||[]).join(',').toLowerCase())}">
       <div class="mcard-top">
         <div>
-          <div class="mcard-name" style="font-size:15px;">${spec.icon} ${escapeHtml(m.name)}</div>
+          <div class="mcard-name" style="font-size:15px;">${spec.icon} ${escapeHtml(m.name)}${m.accountType==='company'?' <span class="badge demo" style="font-size:9.5px;vertical-align:middle;">🏢 Компания</span>':''}</div>
           <div class="mcard-city">📍 ${escapeHtml(m.city)} · ${spec.label}</div>
         </div>
       </div>
@@ -3970,6 +4039,11 @@ async function renderAdminDashboard(){
   <div class="section-pad">
     <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='adrequests'; fillAdmin();">
       🗣️ Заявки на объявления
+    </button>
+  </div>
+  <div class="section-pad">
+    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='visitHistory'; fillAdmin();">
+      🕒 История заходов
     </button>
   </div>` : `<div class="section-pad">
     <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reviewsShowcase'; fillAdmin();">
@@ -4309,6 +4383,72 @@ async function deleteBanner(id){
   renderAdminBanners();
 }
 window.deleteBanner = deleteBanner;
+
+/* ============ ИСТОРИЯ ЗАХОДОВ ============ */
+async function renderAdminVisitHistory(){
+  const ids = await sget('visitors-index', true) || [];
+  const visitors = [];
+  for(const id of ids){
+    const v = await sget('visitor:'+id, true);
+    if(v) visitors.push(v);
+  }
+  visitors.sort((a,b)=>b.lastSeen-a.lastSeen);
+  state._visitHistoryCache = visitors;
+
+  const roleLabel = { client:'клиент', master:'мастер', owner:'владелец', unknown:'роль не выбрана' };
+  const roleBadgeClass = { client:'demo', master:'active', owner:'pending', unknown:'inactive' };
+
+  const rows = visitors.length ? visitors.map((v,i)=>{
+    const name = [v.firstName, v.lastName].filter(Boolean).join(' ') || 'Без имени';
+    const lastSeenStr = new Date(v.lastSeen).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    const firstSeenStr = new Date(v.firstSeen).toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'});
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+        <div>
+          <div class="mcard-name" style="font-size:14px;">${escapeHtml(name)} ${v.username?`<span style="font-weight:400;color:var(--ink-soft);font-size:12px;">@${escapeHtml(v.username)}</span>`:''}</div>
+          <div style="font-size:11.5px;color:var(--ink-soft);margin-top:3px;">Последний раз: ${lastSeenStr} · заходов: ${v.visitCount}</div>
+          <div style="font-size:11px;color:var(--ink-soft);margin-top:1px;">Первый раз: ${firstSeenStr} · Telegram ID ${v.id}</div>
+        </div>
+        <span class="badge ${roleBadgeClass[v.role]||'inactive'}">${roleLabel[v.role]||v.role}</span>
+      </div>
+      <div class="divider"></div>
+      <button class="btn ghost small" onclick="messageVisitor(${i})">✉️ Написать в личку</button>
+    </div>`;
+  }).join('') : `<div class="empty"><div class="big">🕒</div>Пока никто не заходил, либо приложение открывали только вне Telegram.</div>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">История заходов (${visitors.length})</div></div>
+  <div class="pillnote" style="margin:0 18px 14px;">Список всех, кто открывал приложение в Telegram — клиенты, мастера и вы сами. Сортировка — по последнему визиту.</div>
+  <div class="section-pad"><input placeholder="🔍 Поиск по имени или @username…" oninput="filterVisitHistory(this.value)" style="width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;"></div>
+  <div id="visitHistoryList">${rows}</div>`;
+}
+window.renderAdminVisitHistory = renderAdminVisitHistory;
+
+function filterVisitHistory(q){
+  const query = q.trim().toLowerCase();
+  const cards = document.querySelectorAll('#visitHistoryList .card');
+  cards.forEach(el=>{
+    const text = el.textContent.toLowerCase();
+    el.style.display = (!query || text.includes(query)) ? '' : 'none';
+  });
+}
+window.filterVisitHistory = filterVisitHistory;
+
+function messageVisitor(i){
+  const v = (state._visitHistoryCache||[])[i];
+  if(!v) return;
+  if(!v.username){
+    showToast('У этого человека нет публичного username в Telegram — написать напрямую по ссылке нельзя');
+    return;
+  }
+  const link = 'https://t.me/' + v.username;
+  if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink){
+    window.Telegram.WebApp.openTelegramLink(link);
+  } else {
+    window.open(link, '_blank');
+  }
+}
+window.messageVisitor = messageVisitor;
 
 /* ============ ЗАЯВКИ НА РАЗМЕЩЕНИЕ ОБЪЯВЛЕНИЙ (от любого посетителя) ============ */
 async function renderAdminAdRequests(){
