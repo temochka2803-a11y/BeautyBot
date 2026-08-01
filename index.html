@@ -1365,17 +1365,14 @@ function renderSetupError(message){
 /* ============ ROLE ONBOARDING ============ */
 function renderRolePicker(){
   return `
-  <div style="padding:64px 22px 24px;text-align:center;">
-    <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--rose),var(--rose-deep));display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;margin:0 auto 16px;">💄</div>
-    <div style="font-family:'Inter',sans-serif;font-weight:600;font-size:22px;margin-bottom:8px;">Добро пожаловать в Beauty<em style="color:var(--rose);font-style:italic;">Hub</em></div>
-    <div style="color:var(--ink-soft);font-size:14px;line-height:1.5;">Расскажите, зачем вы здесь — так мы покажем только нужные вам разделы.</div>
+  <div style="padding:80px 22px 32px;text-align:center;">
+    <div style="font-family:'Inter',sans-serif;font-weight:800;font-size:24px;">Кто вы?</div>
   </div>
   <div class="section-pad">
-    <button class="btn primary" onclick="chooseRole('client')" style="margin-bottom:12px;">🔎 Я ищу мастера</button>
-    <button class="btn ghost" onclick="chooseRole('master')" style="margin-bottom:12px;">👤 Я мастер, хочу разместить профиль</button>
-    <button class="btn ghost" onclick="chooseRole('company')">🏢 Я компания / салон</button>
-  </div>
-  <div class="pillnote" style="margin-top:16px;">Это можно изменить позже: если вы клиент, но захотите разместить свой профиль мастера — такая возможность будет доступна в каталоге. Тип профиля (частный мастер / компания) тоже можно поменять в любой момент в настройках.</div>`;
+    <button class="btn primary" onclick="chooseRole('client')" style="margin-bottom:12px;">🔎 Клиент</button>
+    <button class="btn ghost" onclick="chooseRole('master')" style="margin-bottom:12px;">👤 Мастер</button>
+    <button class="btn ghost" onclick="chooseRole('company')">🏢 Компания</button>
+  </div>`;
 }
 async function chooseRole(role){
   state.userRole = (role==='company') ? 'master' : role;
