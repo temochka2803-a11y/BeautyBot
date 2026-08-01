@@ -333,7 +333,8 @@ input,select,textarea{font-family:inherit;}
 /* ============ CONFIG ============ */
 const OWNER_TELEGRAM_IDS = ['8078091086']; // владелец платформы — доступ к кабинету только с этого Telegram-аккаунта
 const OWNER_TELEGRAM_USERNAME = 'whitespirited'; // ваш @username в Telegram (без @) — сюда попадут мастера с кнопки «Отправить квитанцию»
-const BOT_USERNAME = 'YOUR_BOT_USERNAME'; // ⚠️ ЗАПОЛНИТЕ: username вашего Telegram-бота (без @), через который открывается это приложение.
+const BOT_USERNAME = 'BeautyHubs_bot'; // ⚠️ ЗАПОЛНИТЕ: username вашего Telegram-бота (без @), через который открывается это приложение.
+const NEWS_CHANNEL_USERNAME = 'beautyhub_place'; // ⚠️ ЗАПОЛНИТЕ: username новостного канала приложения (без @), если он у вас есть.
                                             // Нужен, чтобы генерировать персональные ссылки-приглашения мастеров для клиентов.
 // ============================================================
 // ВРЕМЕННО ОТКЛЮЧЕНО: платная подписка мастеров.
@@ -762,11 +763,178 @@ async function sendMasterClientChatReply(masterId){
   fillMasterArea();
 }
 window.sendMasterClientChatReply = sendMasterClientChatReply;
+
+/* ============ ИНСТРУКЦИЯ ПО ИСПОЛЬЗОВАНИЮ (карусель на главной у мастера) ============ */
+const INSTRUCTION_SLIDES = [
+  {
+    title: 'Запись клиентов по ссылке',
+    example: `<div class="pinkfield" style="flex-direction:column;align-items:flex-start;gap:10px;">
+      <span class="v" style="white-space:normal;">https://t.me/beautyhub_bot?start=anna</span>
+      <button class="btn ghost small" style="width:100%;">Скопировать ссылку</button>
+    </div>`,
+    text: 'Клиент бронирует сам, когда удобно ему — 24/7, без звонков и переписки.'
+  },
+  {
+    title: 'Заявки не теряются',
+    example: `<div class="card" style="margin:0;border:1.5px solid var(--rose);">
+      <div class="mcard-top"><div><div class="mcard-name" style="font-size:14px;">Ольга Смирнова</div><div class="mcard-city">Окрашивание · 5200₽</div></div><span class="badge pending">⏳ Ждёт подтверждения</span></div>
+    </div>`,
+    text: 'Новая запись от клиента сразу видна и подсвечена, пока вы её не подтвердите.'
+  },
+  {
+    title: 'Подтверждение в один клик',
+    example: `<div class="card" style="margin:0;">
+      <div class="mcard-name" style="font-size:14px;margin-bottom:2px;">Ольга Смирнова</div>
+      <div class="mcard-city" style="margin-bottom:10px;">Окрашивание · 5200₽ · 150 мин</div>
+      <button class="btn teal small" style="width:100%;margin-bottom:8px;">✅ Подтвердить</button>
+      <button class="btn danger small" style="width:100%;">❌ Отклонить</button>
+    </div>`,
+    text: 'Вы подтверждаете или отклоняете — клиент сразу получает ответ в Telegram.'
+  },
+  {
+    title: 'Расписание и напоминания',
+    example: `<div class="card" style="margin:0;">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+        <span class="chip active">10:00</span><span class="chip active">11:00</span><span class="chip">12:00</span>
+      </div>
+      <div style="font-size:12.5px;color:var(--ink-soft);">⏰ Клиенту напомнят за день и за 2 часа до визита — автоматически, без вас</div>
+    </div>`,
+    text: 'Откройте удобные слоты в календаре — а дальше приложение само присмотрит за напоминаниями.'
+  },
+  {
+    title: 'Мини-CRM клиентов',
+    example: `<div class="card" style="margin:0;">
+      <div class="mcard-name" style="font-size:14px;">Юлия К.</div>
+      <div class="mcard-city">6 визитов · последний 12 июн</div>
+      <div style="margin-top:8px;"><span class="tag" style="background:var(--bg);color:var(--ink-soft);">VIP</span> <span class="tag" style="background:var(--bg);color:var(--ink-soft);">⏰ давно не была</span></div>
+    </div>`,
+    text: 'Заметки, теги и история визитов по каждому клиенту — приложение само подскажет, кому пора написать.'
+  },
+  {
+    title: 'Финансы и явка',
+    example: `<div class="card" style="margin:0;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><div style="font-size:18px;font-weight:800;">84 300₽</div><div style="font-size:10.5px;color:var(--ink-soft);">выручка за 30 дней</div></div>
+        <div><div style="font-size:18px;font-weight:800;color:var(--teal);">61 800₽</div><div style="font-size:10.5px;color:var(--ink-soft);">чистая прибыль</div></div>
+      </div>
+    </div>`,
+    text: 'Финансовый отчёт, расходы на материалы и отметка «пришёл/не пришёл» — всё в одном месте.'
+  },
+  {
+    title: 'Отзывы и портфолио',
+    example: `<div class="card" style="margin:0;">
+      <div style="display:flex;justify-content:space-between;"><b style="font-size:13px;">Юлия К.</b><span class="stars">★★★★★</span></div>
+      <div style="font-size:12.5px;color:var(--ink-soft);margin-top:4px;">«Лучший мастер в городе!»</div>
+    </div>`,
+    text: 'Добавляйте фото работ в портфолио — а довольные клиенты сами оставят отзыв с фото «до/после».'
+  },
+  {
+    title: 'Чат прямо в приложении',
+    example: `<div class="chat-wrap"><div class="chat-msg in"><div class="chat-bubble">Здравствуйте! Свободно ли завтра в 15:00?</div></div></div>
+    ${quickReplyChips('')}`,
+    text: 'Клиенты могут написать вам напрямую, а вы — ответить готовым шаблоном в один тап.'
+  },
+  {
+    title: 'Растите вместе с платформой',
+    example: `<div class="card" style="margin:0;">
+      <div style="font-size:13px;font-weight:700;">👥 Пригласите коллегу-мастера</div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-top:4px;">Оба получите +3 дня бонусного доступа</div>
+    </div>`,
+    text: 'Реферальная программа, программа лояльности для клиентов, карта мастеров и виджет для вашего сайта — уже внутри.'
+  },
+];
+
+function openInstructions(){
+  state.masterTab = 'instructions';
+  state.instructionSlide = 0;
+  fillMasterArea();
+}
+window.openInstructions = openInstructions;
+
+function renderInstructionsCarousel(){
+  const i = state.instructionSlide || 0;
+  const slide = INSTRUCTION_SLIDES[i];
+  const dots = INSTRUCTION_SLIDES.map((_,idx)=>`<span style="width:7px;height:7px;border-radius:50%;display:inline-block;margin:0 3px;background:${idx===i?'var(--rose)':'var(--line)'};"></span>`).join('');
+  return `
+  <div class="backbar"><button class="backbtn" onclick="state.masterTab='profile'; fillMasterArea();">←</button><div style="font-weight:700">Как это работает</div></div>
+  <div class="hero" style="padding-top:6px;"><h1 style="font-size:20px;">${escapeHtml(slide.title)}</h1></div>
+  <div class="section-pad">${slide.example}</div>
+  <div class="section-pad" style="color:var(--ink-soft);font-size:13.5px;line-height:1.5;">${escapeHtml(slide.text)}</div>
+  <div style="text-align:center;margin:18px 0;">${dots}</div>
+  <div class="section-pad" style="display:flex;gap:10px;">
+    ${i>0 ? `<button class="btn ghost" onclick="instructionStep(-1)">Назад</button>` : ''}
+    ${i<INSTRUCTION_SLIDES.length-1 ? `<button class="btn primary" onclick="instructionStep(1)">Далее</button>` : `<button class="btn primary" onclick="state.masterTab='profile'; fillMasterArea();">Готово</button>`}
+  </div>
+  <div class="section-pad"><button class="btn ghost" onclick="state.masterTab='profile'; fillMasterArea();">Закрыть</button></div>`;
+}
+window.renderInstructionsCarousel = renderInstructionsCarousel;
+
+function instructionStep(delta){
+  state.instructionSlide = Math.max(0, Math.min(INSTRUCTION_SLIDES.length-1, (state.instructionSlide||0)+delta));
+  fillMasterArea();
+}
+window.instructionStep = instructionStep;
 async function saveVisitorChat(key, arr){ await sset('visitor-chat:'+key, arr, true); }
 async function addVisitorChatToIndex(key){
   const ids = await sget('visitor-chat-index', true) || [];
   if(!ids.includes(key)){ ids.push(key); await sset('visitor-chat-index', ids, true); }
 }
+
+/* ============ ИНСТРУКЦИЯ ПО ИСПОЛЬЗОВАНИЮ (карусель на главной странице) ============ */
+const APP_INSTRUCTION_SLIDES = [
+  { title:'Найдите мастера рядом', text:'Выберите город и специализацию — маникюр, брови, ресницы, тату или пирсинг. Внутри — фильтры по рейтингу, цене и «свободен сегодня/завтра».', icon:'🔎' },
+  { title:'Портфолио и отзывы', text:'У каждого мастера — фото работ и отзывы клиентов, в том числе с фото «до/после» и оценками по критериям: качество, пунктуальность, атмосфера.', icon:'⭐' },
+  { title:'Запись без звонков', text:'Выберите услугу, дату и время — заявка сразу уходит мастеру. Как только он подтвердит, вы увидите статус во вкладке «Мои записи».', icon:'🗓️' },
+  { title:'Есть вопрос до записи?', text:'Прямо на странице мастера есть вкладка «Чат» — можно написать мастеру напрямую, например уточнить материалы или свободное время.', icon:'💬' },
+  { title:'Планы изменились — не беда', text:'Запись можно перенести в один тап прямо из «Моих записей», без отмены и повторного оформления заявки заново.', icon:'🔁' },
+  { title:'Ничего не забудете', text:'Приложение само напомнит о записи и предупредит, если у любимого мастера освободилось время (лист ожидания).', icon:'🔔' },
+  { title:'Возвращайтесь снова', text:'Добавляйте мастеров в избранное, копите бонусы по программе лояльности — некоторые мастера дарят скидку или бесплатный визит за постоянство.', icon:'♥' },
+  { title:'А если вы мастер?', text:'Разместите свой профиль бесплатно — своя ссылка на запись, CRM клиентов, финансовый отчёт, расписание и многое другое, прямо в этом же приложении.', icon:'💼' },
+];
+
+function openAppInstructions(){
+  state._instructionSlide = 0;
+  state._returnViewBeforeInstructions = state.view;
+  state.view = 'instructions';
+  render();
+}
+window.openAppInstructions = openAppInstructions;
+
+function closeAppInstructions(){
+  state.view = state._returnViewBeforeInstructions || 'catalog';
+  render();
+}
+window.closeAppInstructions = closeAppInstructions;
+
+function fillAppInstructions(){
+  const i = state._instructionSlide || 0;
+  const slide = APP_INSTRUCTION_SLIDES[i];
+  const isFirst = i===0;
+  const isLast = i===APP_INSTRUCTION_SLIDES.length-1;
+  const dots = APP_INSTRUCTION_SLIDES.map((_,idx)=>`<span style="width:8px;height:8px;border-radius:50%;display:inline-block;margin:0 3px;background:${idx===i?'var(--rose)':'var(--line)'};"></span>`).join('');
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="closeAppInstructions()">←</button><div style="font-weight:700">Как это работает</div></div>
+  <div class="card" style="text-align:center;padding:36px 20px;min-height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+    <div style="font-size:40px;margin-bottom:14px;">${slide.icon}</div>
+    <div style="font-weight:800;font-size:19px;margin-bottom:10px;">${escapeHtml(slide.title)}</div>
+    <div style="font-size:14px;color:var(--ink-soft);line-height:1.6;">${escapeHtml(slide.text)}</div>
+  </div>
+  <div style="text-align:center;margin:14px 0;">${dots}</div>
+  <div class="section-pad" style="display:flex;gap:10px;">
+    ${!isFirst?`<button class="btn ghost" onclick="appInstructionStep(-1)">Назад</button>`:''}
+    ${!isLast?`<button class="btn primary" onclick="appInstructionStep(1)">Далее</button>`:''}
+  </div>
+  ${isLast?`<div class="section-pad"><button class="btn ghost" onclick="closeAppInstructions()">Закрыть</button></div>`:`<div class="section-pad" style="padding-top:0;text-align:center;"><button class="link-btn" onclick="closeAppInstructions()">Закрыть</button></div>`}
+  `;
+}
+window.fillAppInstructions = fillAppInstructions;
+
+function appInstructionStep(dir){
+  state._instructionSlide = Math.max(0, Math.min(APP_INSTRUCTION_SLIDES.length-1, (state._instructionSlide||0)+dir));
+  fillAppInstructions();
+}
+window.appInstructionStep = appInstructionStep;
 
 function openAnnouncementChat(){
   state._returnViewBeforeChat = state.view;
@@ -1159,6 +1327,7 @@ function render(){
   else if(state.view==='admin') html += `<div class="loading">Загрузка…</div>`;
   else if(state.view==='favorites') html += `<div class="loading">Загрузка…</div>`;
   else if(state.view==='visitorChat') html += `<div class="loading">Загрузка…</div>`;
+  else if(state.view==='instructions') html += `<div class="loading">Загрузка…</div>`;
   html += '</div>' + renderNav();
   if(state.toast) html += `<div class="toast">${escapeHtml(state.toast)}</div>`;
   app.innerHTML = html;
@@ -1171,6 +1340,7 @@ function render(){
   if(state.view==='admin') safeFill(fillAdmin);
   if(state.view==='favorites') safeFill(fillFavorites);
   if(state.view==='visitorChat') safeFill(fillVisitorChat);
+  if(state.view==='instructions') safeFill(fillAppInstructions);
 }
 
 /* Ловит любую ошибку внутри асинхронных экранов и показывает её текстом
@@ -1356,7 +1526,19 @@ async function renderCityStep(masters){
   const becomeMasterLink = state.userRole==='client' ? `<div class="section-pad" style="text-align:center;padding-bottom:0;"><button class="link-btn" onclick="becomeMaster()">Вы мастер? Разместите свой профиль →</button></div>` : '';
   const placeAdLink = `<div class="section-pad" style="text-align:center;"><button class="link-btn" onclick="openAnnouncementChat()">📣 Разместить объявление →</button></div>`;
 
-  document.getElementById('content').innerHTML = bannersHtml + hero + searchBox + popularChips + cityList + manual + becomeMasterLink + placeAdLink;
+  const newsChannelCard = `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">Новостной канал приложения</div>
+    <div class="pinkfield">
+      <span class="v">@${NEWS_CHANNEL_USERNAME}</span>
+      <button class="btn ghost small" style="width:auto;padding:9px 16px;white-space:nowrap;flex:0 0 auto;" onclick="window.open('https://t.me/${NEWS_CHANNEL_USERNAME}','_blank')">Подписаться</button>
+    </div>
+  </div>`;
+
+  const instructionsCard = `<div class="section-pad">
+    <button class="btn ghost" onclick="openAppInstructions()">✨ Инструкция по использованию</button>
+  </div>`;
+
+  document.getElementById('content').innerHTML = bannersHtml + hero + searchBox + popularChips + cityList + manual + newsChannelCard + instructionsCard + becomeMasterLink + placeAdLink;
 }
 function filterCityList(q){
   const query = q.trim().toLowerCase();
@@ -2338,7 +2520,8 @@ async function renderMasterDashboard(m, isDemo){
   else if(state.masterTab==='clients') body = await renderMClients(m, isDemo, bookings);
   else if(state.masterTab==='chat') body = renderMChat(m, isDemo, chat);
   else if(state.masterTab==='clientchat') body = await renderMasterClientChatThread(m);
-  const tabsHtml = state.masterTab==='clientchat' ? '' : tabs;
+  else if(state.masterTab==='instructions') body = renderInstructionsCarousel();
+  const tabsHtml = (state.masterTab==='clientchat' || state.masterTab==='instructions') ? '' : tabs;
 
   const dashHeader = `<div class="hero" style="padding-top:20px;padding-bottom:0;display:flex;align-items:center;gap:12px;">
     <div class="avatar" style="width:44px;height:44px;font-size:20px;border-radius:14px;${avatarStyle(m)}">${avatarInner(m,SPECS[m.specialization])}</div>
@@ -2681,6 +2864,16 @@ async function renderMProfile(m, isDemo, bookings){
     ${BOT_USERNAME==='YOUR_BOT_USERNAME' ? `<div class="pillnote" style="margin:10px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:#B23A48;">⚠️ Ссылка ещё не работает — владельцу платформы нужно указать username Telegram-бота в настройках приложения (константа BOT_USERNAME).</div>` : ''}
   </div>`;
 
+  const newsChannelCard = isDemo ? '' : `<div class="card">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">📣 Новостной канал приложения</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Подпишитесь, чтобы первыми узнавать о новых функциях и обновлениях платформы.</div>
+    <div class="pinkfield">
+      <span class="v">@${NEWS_CHANNEL_USERNAME}</span>
+      <a href="https://t.me/${NEWS_CHANNEL_USERNAME}" target="_blank" class="btn ghost small" style="width:auto;padding:9px 16px;white-space:nowrap;flex:0 0 auto;text-decoration:none;">Подписаться</a>
+    </div>
+    ${NEWS_CHANNEL_USERNAME==='YOUR_NEWS_CHANNEL' ? `<div class="pillnote" style="margin:10px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:#B23A48;">⚠️ Владельцу платформы нужно указать username канала в настройках приложения (константа NEWS_CHANNEL_USERNAME).</div>` : ''}
+  </div>`;
+
   const depositCard = isDemo ? '' : `<div class="card">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">💰 Предоплата за запись</div>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Если включено, клиент при записи увидит ваши реквизиты и переведёт предоплату <b>вам напрямую</b> — платформа деньги не принимает и не удерживает. Вы сами подтверждаете получение перевода в заявке.</div>
@@ -2754,6 +2947,10 @@ async function renderMProfile(m, isDemo, bookings){
   </div>
   ${analyticsCard}
   ${linkCard}
+  ${newsChannelCard}
+  <div class="section-pad">
+    <button class="btn ghost" onclick="openInstructions()">✨ Инструкция по использованию</button>
+  </div>
   ${masterRefCard}
   ${depositCard}
   ${loyaltyCard}
