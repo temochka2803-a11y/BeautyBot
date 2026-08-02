@@ -325,6 +325,18 @@ input,select,textarea{font-family:inherit;}
 .statrow:last-child{border-bottom:none;}
 .statrow .v{font-weight:700;}
 .statrow .v.neg{color:var(--danger);}
+
+/* Модальное подтверждение (например удаление профиля) — по образцу референса */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(20,10,20,.5);z-index:200;
+  display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.modal-card{
+  background:var(--surface);border-radius:var(--radius);padding:24px 22px;
+  max-width:380px;width:100%;box-shadow:0 30px 60px rgba(0,0,0,.3);
+}
+.modal-card h3{color:var(--danger);font-size:18px;margin:0 0 10px;font-family:'Inter',sans-serif;font-weight:800;}
+.modal-card p{font-size:13.5px;color:var(--ink-soft);line-height:1.5;margin:0 0 16px;}
 </style>
 </head>
 <body>
@@ -989,6 +1001,145 @@ function appInstructionStep(dir){
 }
 window.appInstructionStep = appInstructionStep;
 
+/* ============ ПРОФИЛЬ КЛИЕНТА (отдельная вкладка, по образцу референса) ============ */
+async function fillClientProfile(){
+  const tg = state.tgUser;
+  const hasProfile = !!(state.clientName && state.clientContact);
+  const displayName = state.clientName || (tg ? [tg.first_name, tg.last_name].filter(Boolean).join(' ') : '') || 'Гость';
+  const initial = displayName.trim().slice(0,1).toUpperCase() || '?';
+  const username = tg && tg.username ? '@'+tg.username : '';
+
+  const infoBox = hasProfile
+    ? `<div class="pillnote" style="margin:16px 0 0;">Профиль настроен — эти имя и контакт подставляются автоматически при новой записи.</div>`
+    : `<div class="pillnote" style="margin:16px 0 0;background:#FFF;border:1px solid var(--line);color:var(--ink-soft);">Это временные данные из Telegram. Настройте профиль, чтобы имя и контакт подставлялись автоматически при записи.</div>`;
+
+  const editForm = state._clientProfileEditing ? `<div class="card" style="margin-top:${(!hasProfile)?'0':'14px'};">
+    <div class="field"><label>Имя</label><input id="cpName" value="${escapeHtml(state.clientName||(tg?[tg.first_name,tg.last_name].filter(Boolean).join(' '):''))}" placeholder="Ваше имя"></div>
+    <div class="field"><label>Телефон / Telegram для связи</label><input id="cpContact" value="${escapeHtml(state.clientContact||(username||''))}" placeholder="@username или телефон"></div>
+    <button class="btn primary" onclick="saveClientProfileFields()">Сохранить</button>
+  </div>` : '';
+
+  document.getElementById('content').innerHTML = `
+  <div class="hero" style="padding-bottom:0;"><h1>Профиль</h1></div>
+  <div class="card" style="text-align:center;">
+    <button class="link-btn" style="float:right;" onclick="toggleClientProfileEdit()">${state._clientProfileEditing?'Отмена':'Редактировать'}</button>
+    <div style="width:88px;height:88px;border-radius:50%;background:linear-gradient(135deg,var(--rose),var(--rose-deep));display:flex;align-items:center;justify-content:center;color:#fff;font-size:32px;font-weight:800;margin:8px auto 14px;">${initial}</div>
+    <div style="font-weight:800;font-size:20px;">${escapeHtml(displayName)}</div>
+    ${username?`<div style="color:var(--ink-soft);font-size:13.5px;margin-top:2px;">${escapeHtml(username)}</div>`:''}
+    ${infoBox}
+  </div>
+  ${editForm}
+  <div class="section-pad" style="display:flex;gap:${'var(--gap)'};">
+    <button class="btn ghost" style="flex:1;flex-direction:column;height:auto;padding:18px 10px;gap:8px;" onclick="goto('help')">
+      <span style="font-size:20px;">❓</span><span>Помощь</span>
+    </button>
+    <button class="btn ghost" style="flex:1;flex-direction:column;height:auto;padding:18px 10px;gap:8px;" onclick="goto('settings')">
+      <span style="font-size:20px;">⚙️</span><span>Настройки</span>
+    </button>
+  </div>`;
+}
+window.fillClientProfile = fillClientProfile;
+
+function toggleClientProfileEdit(){
+  state._clientProfileEditing = !state._clientProfileEditing;
+  fillClientProfile();
+}
+window.toggleClientProfileEdit = toggleClientProfileEdit;
+
+async function saveClientProfileFields(){
+  const name = document.getElementById('cpName').value.trim();
+  const contact = document.getElementById('cpContact').value.trim();
+  if(!name || !contact){ showToast('Заполните имя и контакт'); return; }
+  await sset('my-client-name', name, false);
+  await sset('my-client-contact', contact, false);
+  state.clientName = name;
+  state.clientContact = contact;
+  state._clientProfileEditing = false;
+  showToast('Профиль сохранён');
+  fillClientProfile();
+}
+window.saveClientProfileFields = saveClientProfileFields;
+
+/* ============ НАСТРОЙКИ (список-меню, по образцу референса) ============ */
+async function fillSettingsScreen(){
+  const roleLabel = state.userRole==='master' ? 'Мастер / компания' : 'Клиент';
+  const refLink = `https://t.me/${BOT_USERNAME}?startapp=ref_${ownerId()}`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="goto(state.userRole==='master'?'master':'clientprofile')">←</button><div style="font-weight:700">Настройки</div></div>
+  <div class="card" style="padding:6px 18px;">
+    <div class="linkrow" onclick="toggleRoleSwitcher()">
+      <div class="linkic">👤</div>
+      <div class="linkbody"><div class="linkname">Роль</div><div class="linkmeta">Как вы используете приложение</div></div>
+      <div style="font-weight:700;color:var(--ink-soft);font-size:13px;">${roleLabel}</div>
+      <div class="linkarrow">›</div>
+    </div>
+  </div>
+  ${state._roleSwitcherOpen ? `<div class="card">
+    <div style="font-weight:700;font-size:13px;margin-bottom:10px;color:var(--ink-soft);">Переключить на:</div>
+    ${state.userRole!=='master' ? `<div class="linkrow" onclick="becomeMaster('individual')"><div class="linkic">👤</div><div class="linkbody"><div class="linkname">Мастер</div><div class="linkmeta">Своя запись, CRM клиентов</div></div><div class="linkarrow">›</div></div>
+    <div class="linkrow" onclick="becomeMaster('company')"><div class="linkic">🏢</div><div class="linkbody"><div class="linkname">Компания / салон</div><div class="linkmeta">Несколько сотрудников</div></div><div class="linkarrow">›</div></div>` : `<div class="linkrow" onclick="switchToClientRole()"><div class="linkic">🔎</div><div class="linkbody"><div class="linkname">Клиент</div><div class="linkmeta">Поиск и запись к мастерам</div></div><div class="linkarrow">›</div></div>`}
+  </div>` : ''}
+  <div class="card" style="padding:6px 18px;">
+    <div class="linkrow" onclick="goto('help')">
+      <div class="linkic">❓</div>
+      <div class="linkbody"><div class="linkname">Помощь</div><div class="linkmeta">Частые вопросы</div></div>
+      <div class="linkarrow">›</div>
+    </div>
+  </div>
+  <div class="card">
+    <div style="font-weight:700;font-size:14px;margin-bottom:4px;">Расскажите о нас</div>
+    <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:10px;">Поделитесь ссылкой на приложение с друзьями</div>
+    <div class="pinkfield"><span class="v">${refLink}</span><button class="btn ghost small" onclick="copyText('${refLink}')">Скопировать</button></div>
+  </div>
+  <div class="pillnote" style="background:#FFF;border:1px solid var(--line);color:var(--ink-soft);">Удаление аккаунта и всех данных — напишите в «Помощь → Поддержка», обработаем вручную.</div>
+  `;
+}
+window.fillSettingsScreen = fillSettingsScreen;
+
+function toggleRoleSwitcher(){ state._roleSwitcherOpen = !state._roleSwitcherOpen; fillSettingsScreen(); }
+window.toggleRoleSwitcher = toggleRoleSwitcher;
+
+async function switchToClientRole(){
+  state.userRole = 'client';
+  await sset('my-role', 'client', false);
+  showToast('Теперь вы клиент');
+  goto('catalog');
+}
+window.switchToClientRole = switchToClientRole;
+
+/* ============ ПОМОЩЬ / FAQ (аккордеон, по образцу референса) ============ */
+const FAQ_ITEMS = [
+  { q:'Как найти мастера и записаться?', a:'Откройте вкладку «Каталог», выберите город и специализацию, откройте профиль понравившегося мастера и нажмите «Записаться» — выберите услугу, дату и время.' },
+  { q:'Как посмотреть свои записи?', a:'Вкладка «Мои записи» показывает все ваши заявки и их статус: ожидает подтверждения, подтверждено, отменено.' },
+  { q:'Как отменить или перенести запись?', a:'Откройте запись во вкладке «Мои записи» — там есть кнопки «Перенести» и «Отменить» (доступны, пока запись ещё не наступила).' },
+  { q:'Как написать мастеру до записи?', a:'На странице мастера есть вкладка «💬 Чат» — можно задать вопрос напрямую, ещё до записи.' },
+  { q:'Как разместить свой профиль мастера?', a:'В Настройках → Роль выберите «Мастер» или «Компания» — откроется форма регистрации, занимает 2 минуты.' },
+  { q:'Приложение платное?', a:'Для клиентов приложение полностью бесплатно. Для мастеров размещение сейчас тоже бесплатно навсегда.' },
+];
+async function fillHelpScreen(){
+  const open = state._faqOpenIndex;
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="goto('settings')">←</button><div style="font-weight:700">Помощь</div></div>
+  <div class="card" style="padding:6px 18px;">
+    ${FAQ_ITEMS.map((item,i)=>`
+      <div class="linkrow" style="cursor:pointer;flex-direction:column;align-items:stretch;gap:0;" onclick="toggleFaqItem(${i})">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="flex:1;font-weight:700;font-size:14px;">${escapeHtml(item.q)}</div>
+          <div class="linkarrow" style="transform:rotate(${open===i?90:0}deg);transition:.15s;">›</div>
+        </div>
+        ${open===i?`<div style="font-size:13px;color:var(--ink-soft);line-height:1.5;padding-top:8px;">${escapeHtml(item.a)}</div>`:''}
+      </div>`).join('')}
+  </div>
+  <div class="section-pad" style="text-align:center;padding-top:6px;">
+    <button class="btn primary" style="width:auto;padding:14px 26px;" onclick="openAnnouncementChat()">🎧 Поддержка</button>
+  </div>
+  `;
+}
+window.fillHelpScreen = fillHelpScreen;
+function toggleFaqItem(i){ state._faqOpenIndex = state._faqOpenIndex===i ? null : i; fillHelpScreen(); }
+window.toggleFaqItem = toggleFaqItem;
+
 function openAnnouncementChat(){
   state._returnViewBeforeChat = state.view;
   state.view = 'visitorChat';
@@ -1409,6 +1560,9 @@ function render(){
   else if(state.view==='favorites') html += `<div class="loading">Загрузка…</div>`;
   else if(state.view==='visitorChat') html += `<div class="loading">Загрузка…</div>`;
   else if(state.view==='instructions') html += `<div class="loading">Загрузка…</div>`;
+  else if(state.view==='clientprofile') html += `<div class="loading">Загрузка…</div>`;
+  else if(state.view==='settings') html += `<div class="loading">Загрузка…</div>`;
+  else if(state.view==='help') html += `<div class="loading">Загрузка…</div>`;
   html += '</div>' + renderNav();
   if(state.toast) html += `<div class="toast">${escapeHtml(state.toast)}</div>`;
   app.innerHTML = html;
@@ -1422,6 +1576,9 @@ function render(){
   if(state.view==='favorites') safeFill(fillFavorites);
   if(state.view==='visitorChat') safeFill(fillVisitorChat);
   if(state.view==='instructions') safeFill(fillAppInstructions);
+  if(state.view==='clientprofile') safeFill(fillClientProfile);
+  if(state.view==='settings') safeFill(fillSettingsScreen);
+  if(state.view==='help') safeFill(fillHelpScreen);
 }
 
 /* Ловит любую ошибку внутри асинхронных экранов и показывает её текстом
@@ -1457,14 +1614,17 @@ function renderNav(){
   const ownerBadge = state._ownerAlertCount ? `<span class="navdot"></span>` : '';
   const showAdminTab = state.isOwner || !state.isTelegramContext; // hidden entirely for non-owners inside real Telegram
   const showMasterTab = state.userRole !== 'client'; // клиенты, искавшие мастеров при регистрации, эту вкладку не видят
+  const showClientProfileTab = state.userRole === 'client'; // отдельная вкладка «Профиль» только у чистых клиентов
   const adminTab = showAdminTab ? `<button class="navbtn ${state.view==='admin'?'active':''}" onclick="goto('admin')">${ownerBadge}<span class="ic">🛠️</span>Владельцу</button>` : '';
   const masterTab = showMasterTab ? `<button class="navbtn ${state.view==='master'?'active':''}" onclick="goto('master')">${pendingBadge}<span class="ic">💼</span>Мастеру</button>` : '';
+  const clientProfileTab = showClientProfileTab ? `<button class="navbtn ${state.view==='clientprofile'?'active':''}" onclick="goto('clientprofile')"><span class="ic">👤</span>Профиль</button>` : '';
   return `
   <div class="navbar"><div class="navbar-inner">
     <button class="navbtn ${state.view==='catalog'?'active':''}" onclick="goto('catalog')"><span class="ic">🔎</span>Каталог</button>
     <button class="navbtn ${state.view==='mybookings'?'active':''}" onclick="goto('mybookings')"><span class="ic">🗓️</span>Мои записи</button>
     ${masterTab}
     ${adminTab}
+    ${clientProfileTab}
   </div></div>`;
 }
 
@@ -1873,7 +2033,7 @@ async function fillMasterDetail(){
     <div style="flex:1;">
       <div class="mcard-name" style="font-size:18px;">${escapeHtml(m.name)}${m.accountType==='company'?' <span class="badge demo" style="font-size:10px;vertical-align:middle;">🏢 Компания</span>':''}</div>
       ${m.accountType==='company' && m.contactPerson ? `<div class="mcard-city">Контактное лицо: ${escapeHtml(m.contactPerson)}</div>` : ''}
-      <div class="mcard-city">📍 ${escapeHtml(m.city)}${m.address?', '+escapeHtml(m.address):''}</div>
+      <div class="mcard-city">📍 ${escapeHtml(m.city)}${m.address?', '+escapeHtml(m.address):(m.noPhysicalAddress?' · 🚗 выездное обслуживание':'')}</div>
       ${(m.extraAddresses&&m.extraAddresses.length)?m.extraAddresses.map(a=>`<div class="mcard-city">📍 ${escapeHtml(a)}</div>`).join(''):''}
       <div class="rating-row" style="margin-top:6px;"><span class="stars">${starsStr(avg)}</span> ${avg?avg.toFixed(1):'нет оценок'} ${m.ratingCount?`· ${m.ratingCount} отзыв.`:''}</div>
     </div>
@@ -2697,8 +2857,9 @@ function startRegistration(){
     <div class="field"><label>Специализация</label><select id="regSpec">${Object.entries(SPECS).map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join('')}</select></div>
     <div class="row2">
       <div class="field"><label>Город</label><input id="regCity" placeholder="Москва"></div>
-      <div class="field"><label>Адрес приёма (необязательно)</label><input id="regAddress" placeholder="ул. Пример, 1"></div>
+      <div class="field" id="regAddressField"><label>Адрес приёма</label><input id="regAddress" placeholder="ул. Пример, 1"></div>
     </div>
+    <div class="checkrow"><input type="checkbox" id="regNoAddress" onchange="toggleRegNoAddress()"><label for="regNoAddress">Нет физического адреса (выезд к клиенту / удалённые услуги)</label></div>
     <div class="field"><label>О себе (необязательно)</label><textarea id="regBio" placeholder="Опыт, специализация, материалы… можно добавить позже"></textarea></div>
     <button class="btn primary" onclick="finishRegistration()">Создать профиль</button>
   </div>`;
@@ -2716,6 +2877,13 @@ function setRegAccountType(type){
   document.getElementById('regContactPersonField').style.display = isCompany ? 'block' : 'none';
 }
 window.setRegAccountType = setRegAccountType;
+
+function toggleRegNoAddress(){
+  const checked = document.getElementById('regNoAddress').checked;
+  document.getElementById('regAddressField').style.display = checked ? 'none' : 'block';
+  if(checked) document.getElementById('regAddress').value = '';
+}
+window.toggleRegNoAddress = toggleRegNoAddress;
 
 /* Воронка регистрации мастеров: фиксируем сам факт открытия формы, чтобы владелец видел
    не только успешные регистрации, но и тех, кто начал и не дошёл до конца (потенциальные лиды). */
@@ -2749,7 +2917,8 @@ async function finishRegistration(){
   const name = document.getElementById('regName').value.trim();
   const spec = document.getElementById('regSpec').value;
   const city = document.getElementById('regCity').value.trim();
-  const address = document.getElementById('regAddress').value.trim();
+  const noAddress = document.getElementById('regNoAddress').checked;
+  const address = noAddress ? '' : document.getElementById('regAddress').value.trim();
   const bio = document.getElementById('regBio').value.trim();
   const accountType = state._regAccountType==='company' ? 'company' : 'individual';
   const contactPerson = accountType==='company' ? (document.getElementById('regContactPerson').value.trim() || null) : null;
@@ -2759,7 +2928,7 @@ async function finishRegistration(){
   const avatarUrl = (state.tgUser && state.tgUser.photo_url) ? state.tgUser.photo_url : null;
   const referredByMasterId = await sget('my-referred-by-master', false) || null;
   const master = {
-    id, specialization:spec, name, city, address, bio,
+    id, specialization:spec, name, city, address, bio, noPhysicalAddress: noAddress,
     accountType, contactPerson,
     services:[], portfolio:[], slots:{},
     subscriptionActive:false, subscriptionUntil:null,
@@ -3344,7 +3513,12 @@ async function renderMProfile(m, isDemo, bookings){
   ${bufferCard}
   ${mapCoordsCard}
   ${widgetCard}
-  ${vacationCard}`;
+  ${vacationCard}
+  ${isDemo ? '' : `<div class="card" style="border:1px solid #F3D8DE;">
+    <div style="font-weight:700;font-size:13.5px;color:var(--danger);margin-bottom:4px;">Удаление профиля</div>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Профиль, услуги, портфолио и история записей будут удалены безвозвратно. Это действие нельзя отменить.</div>
+    <button class="btn danger small" onclick="openDeleteMasterModal('${m.id}')">Удалить профиль</button>
+  </div>`}`;
 }
 function copyWidgetEmbed(masterId){
   const code = `<iframe src="https://ВАШ-ДОМЕН/widget.html?master=${masterId}" width="100%" height="640" frameborder="0"></iframe>`;
@@ -3397,6 +3571,47 @@ async function deleteStaff(masterId, staffId){
   (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
 }
 window.deleteStaff = deleteStaff;
+
+/* ============ УДАЛЕНИЕ ПРОФИЛЯ МАСТЕРА (подтверждение вводом слова, по образцу референса) ============ */
+function openDeleteMasterModal(masterId){
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'deleteMasterOverlay';
+  overlay.innerHTML = `<div class="modal-card">
+    <h3>Удалить профиль?</h3>
+    <p>Все данные — профиль, услуги, портфолио, история записей — будут удалены безвозвратно. Это действие нельзя отменить.</p>
+    <div class="field"><label>Введите «Удалить» для подтверждения</label><input id="deleteConfirmInput" placeholder="Удалить"></div>
+    <button class="btn danger" style="background:var(--danger);color:#fff;border:none;margin-bottom:8px;" onclick="confirmDeleteMaster('${masterId}')">Удалить профиль</button>
+    <button class="btn ghost" onclick="closeDeleteMasterModal()">Отменить</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+window.openDeleteMasterModal = openDeleteMasterModal;
+
+function closeDeleteMasterModal(){
+  const el = document.getElementById('deleteMasterOverlay');
+  if(el) el.remove();
+}
+window.closeDeleteMasterModal = closeDeleteMasterModal;
+
+async function confirmDeleteMaster(masterId){
+  const input = document.getElementById('deleteConfirmInput');
+  if(!input || input.value.trim() !== 'Удалить'){
+    showToast('Введите слово «Удалить» точно, как указано');
+    return;
+  }
+  await sset('master:'+masterId, null, true);
+  const idx = await sget('masters-index', true) || [];
+  await sset('masters-index', idx.filter(id=>id!==masterId), true);
+  await sset('my-master-id', null, false);
+  state.myMasterId = null;
+  closeDeleteMasterModal();
+  showToast('Профиль удалён');
+  state.userRole = 'client';
+  await sset('my-role', 'client', false);
+  goto('catalog');
+}
+window.confirmDeleteMaster = confirmDeleteMaster;
 
 async function grantPackage(masterId, clientKey, i){
   const selectEl = document.getElementById('grantPkgSelect_'+i);
