@@ -344,6 +344,7 @@ input,select,textarea{font-family:inherit;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://browser.sentry-cdn.com/7.120.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
 <div id="frame"><div id="app"></div></div>
 
 <script>
@@ -352,6 +353,74 @@ const OWNER_TELEGRAM_IDS = ['8078091086']; // владелец платформ�
 const OWNER_TELEGRAM_USERNAME = 'whitespirited'; // ваш @username в Telegram (без @) — сюда попадут мастера с кнопки «Отправить квитанцию»
 const BOT_USERNAME = 'BeautyHubs_bot'; // ⚠️ ЗАПОЛНИТЕ: username вашего Telegram-бота (без @), через который открывается это приложение.
 const NEWS_CHANNEL_USERNAME = 'beautyhub_place'; // ⚠️ ЗАПОЛНИТЕ: username новостного канала приложения (без @), если он у вас есть.
+
+// ⚠️ Мониторинг ошибок (Sentry). Зарегистрируйтесь на sentry.io (есть бесплатный тариф),
+// создайте проект типа Browser JavaScript, вставьте выданный DSN сюда. Пока здесь заглушка —
+// мониторинг просто не включается, приложение работает как раньше, ничего не сломается.
+const SENTRY_DSN = 'YOUR_SENTRY_DSN'; // например: https://xxxxx@o000000.ingest.sentry.io/0000000
+if(SENTRY_DSN !== 'YOUR_SENTRY_DSN' && window.Sentry){
+  try{
+    window.Sentry.init({
+      dsn: SENTRY_DSN,
+      environment: 'production',
+      tracesSampleRate: 0.1, // трейсим 10% запросов — достаточно для картины, не раздувает квоту бесплатного тарифа
+    });
+  }catch(e){ console.warn('Sentry init failed:', e); }
+}
+function reportError(err, context){
+  console.error(err, context);
+  if(window.Sentry && SENTRY_DSN !== 'YOUR_SENTRY_DSN'){
+    try{ window.Sentry.captureException(err, { extra: context||{} }); }catch(e){ /* тихо игнорируем */ }
+  }
+}
+
+// ============================================================
+// ЮРИДИЧЕСКИЕ ДОКУМЕНТЫ. Это не консультация юриста — базовый черновик под
+// реальные функции приложения. Перед публичным запуском стоит показать
+// юристу, особенно пункты про персональные данные (в т.ч. заметки о здоровье
+// клиентов) и про то, в какой юрисдикции вы работаете.
+// ============================================================
+const TERMS_OF_SERVICE = `Пользуясь BeautyHub, вы соглашаетесь со следующими условиями.
+
+1. ЧТО ТАКОЕ BEAUTYHUB
+BeautyHub — приложение-платформа внутри Telegram, которое соединяет клиентов и мастеров/салонов индустрии красоты. Мы не оказываем услуги красоты сами и не являемся стороной договора между клиентом и мастером — мы предоставляем инструмент для записи и учёта.
+
+2. ОПЛАТА УСЛУГ МАСТЕРА
+Оплата услуг (включая предоплату, пакеты визитов, подарочные сертификаты) происходит напрямую между клиентом и мастером, минуя платформу. BeautyHub не хранит платёжные данные клиентов и не несёт ответственности за расчёты между сторонами.
+
+3. ОТВЕТСТВЕННОСТЬ
+Мы не проверяем квалификацию мастеров и не гарантируем качество оказанных услуг. Отзывы отражают мнения клиентов, а не позицию платформы. Мы вправе удалить профиль или контент, нарушающий эти условия или законодательство.
+
+4. РЕГИСТРАЦИЯ МАСТЕРА
+Размещая профиль, вы подтверждаете, что предоставленная информация (услуги, цены, фото) достоверна и что у вас есть право использовать загруженные изображения.
+
+5. ИЗМЕНЕНИЯ УСЛОВИЙ
+Мы можем обновлять эти условия. О существенных изменениях сообщим через приложение или новостной канал.
+
+6. КОНТАКТЫ
+По вопросам — через раздел «Помощь» в приложении.`;
+
+const PRIVACY_POLICY = `1. КАКИЕ ДАННЫЕ МЫ СОБИРАЕМ
+— Имя и username, которые вы указали в Telegram (стандартный доступ Telegram Mini Apps)
+— Номер телефона или контакт для связи, который вы вводите сами при записи или регистрации
+— История записей, отзывы, сообщения в чатах внутри приложения
+— Для мастеров: услуги, цены, портфолио, финансовая статистика по вашим записям
+— Необязательные личные заметки (например, о предпочтениях или чувствительности к материалам) — вы указываете их сами и по желанию
+
+2. ЗАЧЕМ
+Чтобы показывать вашу запись мастеру, присылать напоминания, показывать каталог мастеров, вести историю визитов и финансовую статистику для мастеров.
+
+3. КОМУ ПЕРЕДАЁМ
+Мастеру, к которому вы записываетесь (имя, контакт, указанные заметки — только в рамках вашей записи к нему). Мы не продаём данные третьим лицам и не используем их для рекламы вне приложения.
+
+4. ГДЕ ХРАНИМ
+Данные хранятся на серверах Supabase. Доступ ограничен политиками безопасности на уровне базы данных.
+
+5. ВАШИ ПРАВА
+Вы можете в любой момент удалить свой профиль мастера и связанные с ним данные (Профиль → Удаление профиля). Чтобы удалить персональные данные клиента (историю записей, заметки) — напишите в раздел «Помощь», обработаем вручную.
+
+6. ЛИЧНЫЕ ЗАМЕТКИ О СЕБЕ
+Поле «заметка о себе» (например, про аллергии) заполняется добровольно и видно только тем мастерам, к которым вы записываетесь. Не указывайте туда ничего, чем не готовы поделиться с мастером.`;
                                             // Нужен, чтобы генерировать персональные ссылки-приглашения мастеров для клиентов.
 // ============================================================
 // ВРЕМЕННО ОТКЛЮЧЕНО: платная подписка мастеров.
@@ -709,6 +778,14 @@ async function sendClientMasterChat(masterId){
   const text = (input && input.value || '').trim();
   if(!text){ showToast('Введите сообщение'); return; }
   if(!state.tgUser){ showToast('Чат доступен только через Telegram'); return; }
+
+  // Простая защита от спама: не больше 15 сообщений за 5 минут с этого аккаунта
+  const recentMsgs = (await sget('my-chat-attempts', false) || []).filter(ts => Date.now()-ts < 5*60*1000);
+  if(recentMsgs.length >= 15){
+    showToast('Слишком много сообщений подряд. Попробуйте немного позже.');
+    return;
+  }
+
   const clientKey = String(state.tgUser.id);
   const chat = await loadClientMasterChat(masterId, clientKey);
   chat.push({
@@ -717,6 +794,9 @@ async function sendClientMasterChat(masterId){
   });
   await saveClientMasterChat(masterId, clientKey, chat);
   await addClientMasterChatToIndex(masterId, clientKey);
+
+  recentMsgs.push(Date.now());
+  await sset('my-chat-attempts', recentMsgs, false);
 
   const m = await loadMaster(masterId);
   if(m && m.telegramId){
@@ -1061,6 +1141,22 @@ async function saveClientProfileFields(){
 window.saveClientProfileFields = saveClientProfileFields;
 
 /* ============ НАСТРОЙКИ (список-меню, по образцу референса) ============ */
+/* ============ ЮРИДИЧЕСКИЕ ДОКУМЕНТЫ (просмотр в приложении) ============ */
+async function fillLegalScreen(){
+  const isTerms = state.legalDoc !== 'privacy';
+  const title = isTerms ? 'Пользовательское соглашение' : 'Политика конфиденциальности';
+  const text = isTerms ? TERMS_OF_SERVICE : PRIVACY_POLICY;
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="goto('settings')">←</button><div style="font-weight:700">${title}</div></div>
+  <div class="section-pad" style="display:flex;gap:8px;padding-bottom:14px;">
+    <button class="chip ${isTerms?'active':''}" onclick="state.legalDoc='terms'; fillLegalScreen();">Соглашение</button>
+    <button class="chip ${!isTerms?'active':''}" onclick="state.legalDoc='privacy'; fillLegalScreen();">Конфиденциальность</button>
+  </div>
+  <div class="card"><div style="font-size:13.5px;line-height:1.7;color:var(--ink);white-space:pre-wrap;">${escapeHtml(text)}</div></div>
+  `;
+}
+window.fillLegalScreen = fillLegalScreen;
+
 async function fillSettingsScreen(){
   const roleLabel = state.userRole==='master' ? 'Мастер / компания' : 'Клиент';
   const refLink = `https://t.me/${BOT_USERNAME}?startapp=ref_${ownerId()}`;
@@ -1091,6 +1187,18 @@ async function fillSettingsScreen(){
     <div style="font-weight:700;font-size:14px;margin-bottom:4px;">Расскажите о нас</div>
     <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:10px;">Поделитесь ссылкой на приложение с друзьями</div>
     <div class="pinkfield"><span class="v">${refLink}</span><button class="btn ghost small" onclick="copyText('${refLink}')">Скопировать</button></div>
+  </div>
+  <div class="card" style="padding:6px 18px;">
+    <div class="linkrow" onclick="state.legalDoc='terms'; goto('legal');">
+      <div class="linkic">📄</div>
+      <div class="linkbody"><div class="linkname">Пользовательское соглашение</div></div>
+      <div class="linkarrow">›</div>
+    </div>
+    <div class="linkrow" onclick="state.legalDoc='privacy'; goto('legal');">
+      <div class="linkic">🔒</div>
+      <div class="linkbody"><div class="linkname">Политика конфиденциальности</div></div>
+      <div class="linkarrow">›</div>
+    </div>
   </div>
   <div class="pillnote" style="background:#FFF;border:1px solid var(--line);color:var(--ink-soft);">Удаление аккаунта и всех данных — напишите в «Помощь → Поддержка», обработаем вручную.</div>
   `;
@@ -1563,6 +1671,7 @@ function render(){
   else if(state.view==='clientprofile') html += `<div class="loading">Загрузка…</div>`;
   else if(state.view==='settings') html += `<div class="loading">Загрузка…</div>`;
   else if(state.view==='help') html += `<div class="loading">Загрузка…</div>`;
+  else if(state.view==='legal') html += `<div class="loading">Загрузка…</div>`;
   html += '</div>' + renderNav();
   if(state.toast) html += `<div class="toast">${escapeHtml(state.toast)}</div>`;
   app.innerHTML = html;
@@ -1579,6 +1688,7 @@ function render(){
   if(state.view==='clientprofile') safeFill(fillClientProfile);
   if(state.view==='settings') safeFill(fillSettingsScreen);
   if(state.view==='help') safeFill(fillHelpScreen);
+  if(state.view==='legal') safeFill(fillLegalScreen);
 }
 
 /* Ловит любую ошибку внутри асинхронных экранов и показывает её текстом
@@ -2031,7 +2141,7 @@ async function fillMasterDetail(){
   const header = `<div class="card" style="display:flex;gap:12px;align-items:center;">
     <div class="avatar" style="width:64px;height:64px;font-size:30px;${avatarStyle(m)}">${avatarInner(m,spec)}</div>
     <div style="flex:1;">
-      <div class="mcard-name" style="font-size:18px;">${escapeHtml(m.name)}${m.accountType==='company'?' <span class="badge demo" style="font-size:10px;vertical-align:middle;">🏢 Компания</span>':''}</div>
+      <div class="mcard-name" style="font-size:18px;">${escapeHtml(m.name)}${m.telegramId?' <span title="Личность подтверждена через Telegram" style="color:var(--rose-deep);font-size:15px;">✓</span>':''}${m.accountType==='company'?' <span class="badge demo" style="font-size:10px;vertical-align:middle;">🏢 Компания</span>':''}</div>
       ${m.accountType==='company' && m.contactPerson ? `<div class="mcard-city">Контактное лицо: ${escapeHtml(m.contactPerson)}</div>` : ''}
       <div class="mcard-city">📍 ${escapeHtml(m.city)}${m.address?', '+escapeHtml(m.address):(m.noPhysicalAddress?' · 🚗 выездное обслуживание':'')}</div>
       ${(m.extraAddresses&&m.extraAddresses.length)?m.extraAddresses.map(a=>`<div class="mcard-city">📍 ${escapeHtml(a)}</div>`).join(''):''}
@@ -2180,13 +2290,40 @@ function pickSubStar(key, i){
 }
 window.pickSubStar=pickSubStar;
 
-async function uploadReviewPhoto(input){
-  const file = input.files && input.files[0];
-  if(!file) return;
-  const statusEl = document.getElementById('rvUploadStatus');
-  if(statusEl) statusEl.textContent = 'Загружаем…';
+/* Сжимает изображение перед загрузкой в Supabase Storage — уменьшает до maxDim по большей
+   стороне и пережимает в JPEG с заданным качеством. Экономит место на бесплатном тарифе
+   и ускоряет загрузку для клиента. Если сжатие почему-то не удалось — используем оригинал. */
+async function compressImage(file, maxDim=1280, quality=0.8){
   try{
-    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    if(!file.type || !file.type.startsWith('image/')) return file;
+    const bitmap = await createImageBitmap(file);
+    let { width, height } = bitmap;
+    if(width>maxDim || height>maxDim){
+      const scale = maxDim / Math.max(width, height);
+      width = Math.round(width*scale);
+      height = Math.round(height*scale);
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+    if(!blob || blob.size >= file.size) return file; // сжатое не меньше — не рискуем, берём оригинал
+    return new File([blob], (file.name||'photo').replace(/\.[^.]+$/,'')+'.jpg', {type:'image/jpeg'});
+  }catch(e){
+    console.warn('compressImage failed, using original file:', e);
+    return file;
+  }
+}
+
+async function uploadReviewPhoto(input){
+  const file0 = input.files && input.files[0];
+  if(!file0) return;
+  const statusEl = document.getElementById('rvUploadStatus');
+  if(statusEl) statusEl.textContent = 'Сжимаем и загружаем…';
+  try{
+    const file = await compressImage(file0);
+    const ext = 'jpg';
     const path = `reviews/${uid()}.${ext}`;
     const { error: upErr } = await sb.storage.from('portfolios').upload(path, file, { upsert:false, contentType: file.type || 'image/jpeg' });
     if(upErr) throw upErr;
@@ -2643,6 +2780,7 @@ async function fillMyBookings(){
       ${isCompleted && m ? `<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <button class="btn ghost small" onclick="repeatBooking('${entry.masterId}','${bk.serviceId}')">🔁 Повторить запись</button>
         <button class="btn ghost small" onclick="goToReview('${entry.masterId}')">⭐ Оставить отзыв</button>
+        <button class="btn ghost small" style="color:var(--danger);" onclick='openReportModal({type:"booking",masterId:"${entry.masterId}",bookingId:"${bk.id}",label:"Запись: ${escapeHtml(bk.serviceName)} у мастера ${escapeHtml(m.name)}"})'>🚩 Пожаловаться</button>
       </div>` : ''}
     </div>`);
   }
@@ -2861,6 +2999,7 @@ function startRegistration(){
     </div>
     <div class="checkrow"><input type="checkbox" id="regNoAddress" onchange="toggleRegNoAddress()"><label for="regNoAddress">Нет физического адреса (выезд к клиенту / удалённые услуги)</label></div>
     <div class="field"><label>О себе (необязательно)</label><textarea id="regBio" placeholder="Опыт, специализация, материалы… можно добавить позже"></textarea></div>
+    <div class="checkrow"><input type="checkbox" id="regConsent"><label for="regConsent">Согласен(на) с <a href="#" onclick="event.stopPropagation(); event.preventDefault(); showLegalModal('terms');" style="color:var(--rose-deep);">условиями использования</a> и <a href="#" onclick="event.stopPropagation(); event.preventDefault(); showLegalModal('privacy');" style="color:var(--rose-deep);">политикой конфиденциальности</a></label></div>
     <button class="btn primary" onclick="finishRegistration()">Создать профиль</button>
   </div>`;
 }
@@ -2877,6 +3016,21 @@ function setRegAccountType(type){
   document.getElementById('regContactPersonField').style.display = isCompany ? 'block' : 'none';
 }
 window.setRegAccountType = setRegAccountType;
+
+function showLegalModal(doc){
+  const title = doc==='terms' ? 'Пользовательское соглашение' : 'Политика конфиденциальности';
+  const text = doc==='terms' ? TERMS_OF_SERVICE : PRIVACY_POLICY;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'legalModalOverlay';
+  overlay.innerHTML = `<div class="modal-card" style="max-height:80vh;overflow-y:auto;">
+    <h3 style="color:var(--ink);">${title}</h3>
+    <p style="white-space:pre-wrap;line-height:1.6;">${escapeHtml(text)}</p>
+    <button class="btn primary" onclick="document.getElementById('legalModalOverlay').remove();">Закрыть</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+window.showLegalModal = showLegalModal;
 
 function toggleRegNoAddress(){
   const checked = document.getElementById('regNoAddress').checked;
@@ -2923,6 +3077,7 @@ async function finishRegistration(){
   const accountType = state._regAccountType==='company' ? 'company' : 'individual';
   const contactPerson = accountType==='company' ? (document.getElementById('regContactPerson').value.trim() || null) : null;
   if(!name || !city){ showToast(accountType==='company' ? 'Укажите как минимум название компании и город' : 'Укажите как минимум имя и город'); return; }
+  if(!document.getElementById('regConsent').checked){ showToast('Нужно принять условия использования и политику конфиденциальности'); return; }
   const id = uid();
   // Автоматически подтягиваем аватарку из Telegram-профиля мастера (если разрешено его настройками приватности).
   const avatarUrl = (state.tgUser && state.tgUser.photo_url) ? state.tgUser.photo_url : null;
@@ -3839,12 +3994,13 @@ function renderMPortfolio(m, isDemo){
   </div>`;
 }
 async function uploadPortfolioPhoto(input){
-  const file = input.files && input.files[0];
-  if(!file) return;
+  const file0 = input.files && input.files[0];
+  if(!file0) return;
   const statusEl = document.getElementById('pfUploadStatus');
-  if(statusEl) statusEl.textContent = 'Загружаем…';
+  if(statusEl) statusEl.textContent = 'Сжимаем и загружаем…';
   try{
-    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const file = await compressImage(file0);
+    const ext = 'jpg';
     const path = `${state.myMasterId}/${uid()}.${ext}`;
     const { error: upErr } = await sb.storage.from('portfolios').upload(path, file, { upsert:false, contentType: file.type || 'image/jpeg' });
     if(upErr) throw upErr;
@@ -4089,6 +4245,9 @@ async function renderMBookings(m, bookings, isDemo){
       <button class="btn ghost small" onclick="sendReceipt('${m.id}','${b.id}')">🧾 ${b.receiptSentAt?'Отправить чек ещё раз':'Отправить чек клиенту'}</button>
       ${b.receiptSentAt?`<div style="font-size:11px;color:var(--ink-soft);margin-top:4px;">Отправлен ${new Date(b.receiptSentAt).toLocaleDateString('ru-RU')}</div>`:''}
     </div>`:''}
+    ${isCompleted ? `<div style="margin-top:8px;">
+      <button class="btn ghost small" style="color:var(--danger);" onclick='openReportModal({type:"booking",masterId:"${m.id}",bookingId:"${b.id}",label:"Клиент ${escapeHtml(b.clientName)}, запись ${escapeHtml(b.serviceName)}"})'>🚩 Пожаловаться на клиента</button>
+    </div>` : ''}
   </div>`;
   }).join('');
   return financeCard + expensesCard + taxReportCard + exportBtn + rows;
@@ -4557,6 +4716,7 @@ async function fillAdmin(){
     if(state.adminScreen==='admins') return renderAdminAdmins();
     if(state.adminScreen==='banners') return renderAdminBanners();
     if(state.adminScreen==='visitHistory') return renderAdminVisitHistory();
+    if(state.adminScreen==='reports') return renderAdminReports();
     if(state.adminScreen==='fraudCheck') return renderAdminFraudCheck();
     if(state.adminScreen==='adrequests') return renderAdminAdRequests();
     if(state.adminScreen==='adrequest' && state.adminAdRequestKey) return renderAdminAdRequestThread(state.adminAdRequestKey);
@@ -4576,6 +4736,7 @@ async function fillAdmin(){
   if(state.adminScreen==='admins') return renderAdminAdmins();
   if(state.adminScreen==='banners') return renderAdminBanners();
   if(state.adminScreen==='visitHistory') return renderAdminVisitHistory();
+    if(state.adminScreen==='reports') return renderAdminReports();
     if(state.adminScreen==='fraudCheck') return renderAdminFraudCheck();
   if(state.adminScreen==='adrequests') return renderAdminAdRequests();
   if(state.adminScreen==='adrequest' && state.adminAdRequestKey) return renderAdminAdRequestThread(state.adminAdRequestKey);
@@ -4800,6 +4961,11 @@ async function renderAdminDashboard(){
   <div class="section-pad">
     <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='fraudCheck'; fillAdmin();">
       🚨 Проверка накруток отзывов
+    </button>
+  </div>
+  <div class="section-pad">
+    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reports'; fillAdmin();">
+      🚩 Жалобы
     </button>
   </div>
   <div class="section-pad">
@@ -5158,6 +5324,77 @@ async function deleteBanner(id){
 window.deleteBanner = deleteBanner;
 
 /* ============ ИСТОРИЯ ЗАХОДОВ ============ */
+/* ============ ЖАЛОБЫ ============
+   Кнопка «Пожаловаться» на записи и в чатах — категория + комментарий,
+   уходит владельцу в общий список для ручного разбора. */
+const REPORT_REASONS = ['Мастер не пришёл/не вышел на связь', 'Клиент не пришёл без предупреждения', 'Грубость/хамство', 'Подозрение на мошенничество', 'Спам или реклама', 'Другое'];
+
+function openReportModal(context){
+  // context: {type:'booking'|'chat', masterId, bookingId?, clientKey?, label}
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'reportModalOverlay';
+  overlay.innerHTML = `<div class="modal-card">
+    <h3 style="color:var(--ink);">Пожаловаться</h3>
+    <p>${escapeHtml(context.label||'')}</p>
+    <div class="field"><label>Причина</label><select id="reportReason">${REPORT_REASONS.map(r=>`<option>${escapeHtml(r)}</option>`).join('')}</select></div>
+    <div class="field"><label>Комментарий (необязательно)</label><textarea id="reportComment" placeholder="Опишите ситуацию подробнее"></textarea></div>
+    <button class="btn danger" style="background:var(--danger);color:#fff;border:none;margin-bottom:8px;" onclick='submitReport(${JSON.stringify(context)})'>Отправить жалобу</button>
+    <button class="btn ghost" onclick="document.getElementById('reportModalOverlay').remove();">Отмена</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+window.openReportModal = openReportModal;
+
+async function submitReport(context){
+  const reason = document.getElementById('reportReason').value;
+  const comment = document.getElementById('reportComment').value.trim();
+  const report = {
+    id: uid(), ...context, reason, comment,
+    fromTelegramId: state.tgUser ? String(state.tgUser.id) : null,
+    fromName: state.tgUser ? [state.tgUser.first_name,state.tgUser.last_name].filter(Boolean).join(' ') : 'Гость',
+    createdAt: Date.now(), status: 'new',
+  };
+  const list = await sget('reports', true) || [];
+  list.push(report);
+  await sset('reports', list, true);
+  const el = document.getElementById('reportModalOverlay');
+  if(el) el.remove();
+  showToast('Жалоба отправлена владельцу');
+}
+window.submitReport = submitReport;
+
+/* ============ ЭКРАН ВЛАДЕЛЬЦА: ЖАЛОБЫ ============ */
+async function renderAdminReports(){
+  const reports = (await sget('reports', true) || []).slice().sort((a,b)=>b.createdAt-a.createdAt);
+  const rows = reports.length ? reports.map(r=>`<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+      <div style="flex:1;">
+        <div style="font-weight:700;font-size:13.5px;">${escapeHtml(r.reason)}</div>
+        <div style="font-size:12px;color:var(--ink-soft);margin-top:3px;">${escapeHtml(r.label||'')}</div>
+        ${r.comment?`<div style="font-size:12.5px;color:var(--ink);margin-top:6px;background:var(--bg);padding:8px 10px;border-radius:10px;">${escapeHtml(r.comment)}</div>`:''}
+        <div style="font-size:11px;color:var(--ink-soft);margin-top:6px;">От: ${escapeHtml(r.fromName)} · ${new Date(r.createdAt).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+      </div>
+      <span class="badge ${r.status==='resolved'?'active':'pending'}">${r.status==='resolved'?'Решено':'Новая'}</span>
+    </div>
+    ${r.status!=='resolved'?`<div class="divider"></div><button class="btn ghost small" onclick="resolveReport('${r.id}')">Отметить решённой</button>`:''}
+  </div>`).join('') : `<div class="empty"><div class="big">🚩</div>Жалоб пока нет.</div>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Жалобы (${reports.filter(r=>r.status!=='resolved').length})</div></div>
+  ${rows}`;
+}
+window.renderAdminReports = renderAdminReports;
+
+async function resolveReport(id){
+  const reports = await sget('reports', true) || [];
+  const r = reports.find(x=>x.id===id);
+  if(r) r.status = 'resolved';
+  await sset('reports', reports, true);
+  renderAdminReports();
+}
+window.resolveReport = resolveReport;
+
 async function renderAdminVisitHistory(){
   const ids = await sget('visitors-index', true) || [];
   const visitors = [];
