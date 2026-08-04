@@ -2537,6 +2537,12 @@ async function confirmCertificatePayment(masterId, certId){
 }
 window.confirmCertificatePayment = confirmCertificatePayment;
 
+async function dismissOnboardChecklist(masterId){
+  await sset('onboard-checklist-dismissed:'+masterId, true, true);
+  (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)();
+}
+window.dismissOnboardChecklist = dismissOnboardChecklist;
+
 async function redeemGiftCertificate(masterId){
   const input = document.getElementById('giftCodeInput');
   const code = input ? input.value.trim().toUpperCase() : '';
@@ -3499,6 +3505,28 @@ async function renderMProfile(m, isDemo, bookings){
   const conversion = views ? Math.round((requests/views)*100) : 0;
   const sourcesTotal = (sources.link||0)+(sources.referral||0)+(sources.catalog||0);
 
+  // --- Онбординг-чеклист: показываем, пока профиль не заполнен полностью и пока не закрыли ---
+  const onboardTasks = isDemo ? [] : [
+    { done: (m.services||[]).length>0, label:'Добавьте хотя бы одну услугу', tab:'services' },
+    { done: (m.portfolio||[]).length>0, label:'Загрузите фото в портфолио', tab:'portfolio' },
+    { done: !!(m.slots && Object.values(m.slots).some(arr=>arr && arr.length)), label:'Откройте расписание — отметьте свободное время', tab:'schedule' },
+    { done: !!(m.bio && m.bio.trim().length>10), label:'Заполните «О себе»', tab:'profile' },
+  ];
+  const onboardDone = onboardTasks.filter(t=>t.done).length;
+  const onboardTotal = onboardTasks.length;
+  const onboardDismissed = !isDemo && (await sget('onboard-checklist-dismissed:'+m.id, true));
+  const onboardCard = (!isDemo && onboardDone<onboardTotal && !onboardDismissed) ? `<div class="card" style="background:var(--pink-tint);border:1px solid rgba(236,24,118,0.28);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div style="font-weight:700;font-size:13.5px;color:var(--rose-deep);">✨ Заполните профиль (${onboardDone}/${onboardTotal})</div>
+      <button onclick="dismissOnboardChecklist('${m.id}')" style="background:none;border:none;color:var(--rose-deep);font-size:16px;">✕</button>
+    </div>
+    <div style="height:6px;background:rgba(139,62,240,0.15);border-radius:3px;overflow:hidden;margin-bottom:12px;"><div style="height:100%;width:${Math.round(onboardDone/onboardTotal*100)}%;background:var(--accent-grad);"></div></div>
+    ${onboardTasks.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:6px 0;cursor:pointer;" onclick="state.masterTab='${t.tab}'; fillMasterArea();">
+      <span style="width:20px;height:20px;border-radius:50%;flex:0 0 20px;display:flex;align-items:center;justify-content:center;font-size:12px;background:${t.done?'var(--teal)':'#fff'};color:${t.done?'#fff':'transparent'};border:${t.done?'none':'1.5px solid rgba(139,62,240,0.3)'};">✓</span>
+      <span style="font-size:13px;color:var(--rose-deep);${t.done?'text-decoration:line-through;opacity:.6;':''}">${t.label}</span>
+    </div>`).join('')}
+  </div>` : '';
+
   const allCerts = isDemo ? [] : (await sget('gift-certificates:'+m.id, true) || []);
   const pendingCerts = allCerts.filter(c=>c.status==='pending_payment');
   const certsCard = pendingCerts.length ? `<div class="card" style="background:var(--pink-tint);border:1px solid rgba(236,24,118,0.28);">
@@ -3654,6 +3682,7 @@ async function renderMProfile(m, isDemo, bookings){
     <div class="field"><label>О себе</label><textarea id="pfBio" ${isDemo?'disabled':''}>${escapeHtml(m.bio||'')}</textarea></div>
     ${isDemo? '<div class="pillnote" style="margin:0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">В демо-режиме изменения не сохраняются.</div>' : `<button class="btn primary" onclick="saveProfileEdits()">Сохранить</button>`}
   </div>
+  ${onboardCard}
   ${certsCard}
   ${analyticsCard}
   ${linkCard}
@@ -4718,6 +4747,7 @@ async function fillAdmin(){
     if(state.adminScreen==='visitHistory') return renderAdminVisitHistory();
     if(state.adminScreen==='reports') return renderAdminReports();
     if(state.adminScreen==='fraudCheck') return renderAdminFraudCheck();
+    if(state.adminScreen==='duplicates') return renderAdminDuplicates();
     if(state.adminScreen==='adrequests') return renderAdminAdRequests();
     if(state.adminScreen==='adrequest' && state.adminAdRequestKey) return renderAdminAdRequestThread(state.adminAdRequestKey);
     if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
@@ -4738,6 +4768,7 @@ async function fillAdmin(){
   if(state.adminScreen==='visitHistory') return renderAdminVisitHistory();
     if(state.adminScreen==='reports') return renderAdminReports();
     if(state.adminScreen==='fraudCheck') return renderAdminFraudCheck();
+    if(state.adminScreen==='duplicates') return renderAdminDuplicates();
   if(state.adminScreen==='adrequests') return renderAdminAdRequests();
   if(state.adminScreen==='adrequest' && state.adminAdRequestKey) return renderAdminAdRequestThread(state.adminAdRequestKey);
   if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
@@ -4961,6 +4992,11 @@ async function renderAdminDashboard(){
   <div class="section-pad">
     <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='fraudCheck'; fillAdmin();">
       🚨 Проверка накруток отзывов
+    </button>
+  </div>
+  <div class="section-pad">
+    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='duplicates'; fillAdmin();">
+      👥 Возможные дубли
     </button>
   </div>
   <div class="section-pad">
@@ -5491,6 +5527,49 @@ async function exportFullBackup(){
 window.exportFullBackup = exportFullBackup;
 
 /* ============ ПРОВЕРКА НАКРУТОК ОТЗЫВОВ (эвристика, не доказательство) ============ */
+/* ============ ОБНАРУЖЕНИЕ ДУБЛЕЙ МАСТЕРОВ (эвристика) ============ */
+async function renderAdminDuplicates(){
+  const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Возможные дубли</div></div>`;
+  const intro = `<div class="pillnote" style="margin:0 18px 14px;">Эвристика, не доказательство — сигнал для ручной проверки. Группируем профили с одинаковым Telegram-аккаунтом, а также с совпадающими именем и городом.</div>`;
+
+  const masterIds = await sget('masters-index', true) || [];
+  const masters = [];
+  for(const id of masterIds){
+    const m = await sget('master:'+id, true);
+    if(m && !m.isDemo) masters.push(m);
+  }
+
+  // Группировка по Telegram ID — самый надёжный сигнал (один и тот же аккаунт стоит за 2+ профилями)
+  const byTelegram = {};
+  masters.forEach(m=>{ if(m.telegramId){ (byTelegram[m.telegramId]=byTelegram[m.telegramId]||[]).push(m); } });
+
+  // Более слабый сигнал: совпадение имени и города (разные Telegram-аккаунты, но похоже на дубль)
+  const byNameCity = {};
+  masters.forEach(m=>{
+    const key = (m.name||'').trim().toLowerCase()+'|'+(m.city||'').trim().toLowerCase();
+    if(key.length>1) (byNameCity[key]=byNameCity[key]||[]).push(m);
+  });
+
+  const groups = [];
+  Object.values(byTelegram).forEach(g=>{ if(g.length>1) groups.push({reason:'Один Telegram-аккаунт на несколько профилей', masters:g}); });
+  Object.values(byNameCity).forEach(g=>{
+    if(g.length>1 && !groups.some(existing=>existing.masters.some(m=>g.includes(m)))){
+      groups.push({reason:'Совпадают имя и город', masters:g});
+    }
+  });
+
+  const rows = groups.length ? groups.map(g=>`<div class="card">
+    <div style="font-weight:700;font-size:13px;color:var(--danger);margin-bottom:8px;">⚠️ ${escapeHtml(g.reason)}</div>
+    ${g.masters.map(m=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);">
+      <div><div style="font-size:13px;font-weight:600;">${escapeHtml(m.name)}</div><div style="font-size:11px;color:var(--ink-soft);">${escapeHtml(m.city||'')} · создан ${new Date(m.createdAt||0).toLocaleDateString('ru-RU')}</div></div>
+      <button class="btn ghost small" onclick="adminEditMaster('${m.id}')">Открыть</button>
+    </div>`).join('')}
+  </div>`).join('') : `<div class="empty"><div class="big">✅</div>Похожих профилей не найдено.</div>`;
+
+  document.getElementById('content').innerHTML = back + intro + rows;
+}
+window.renderAdminDuplicates = renderAdminDuplicates;
+
 async function renderAdminFraudCheck(){
   const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Проверка накруток отзывов</div></div>`;
   const intro = `<div class="pillnote" style="margin:0 18px 14px;">Простая эвристика, не доказательство — сигнал для ручной проверки, а не автоматический бан. Смотрим на всплески одинаковых по времени отзывов и отзывы без привязки к реальной записи.</div>`;
