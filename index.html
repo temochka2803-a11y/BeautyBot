@@ -1242,6 +1242,9 @@ async function fillHelpScreen(){
   <div class="section-pad" style="text-align:center;padding-top:6px;">
     <button class="btn primary" style="width:auto;padding:14px 26px;" onclick="openAnnouncementChat()">🎧 Поддержка</button>
   </div>
+  <div class="section-pad" style="text-align:center;padding-top:10px;">
+    <button class="link-btn" style="color:var(--danger);" onclick='openReportModal({type:"general",label:"Общая жалоба (не привязана к конкретной записи)"})'>🚩 Пожаловаться на мастера или клиента</button>
+  </div>
   `;
 }
 window.fillHelpScreen = fillHelpScreen;
@@ -2786,6 +2789,8 @@ async function fillMyBookings(){
       ${isCompleted && m ? `<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <button class="btn ghost small" onclick="repeatBooking('${entry.masterId}','${bk.serviceId}')">🔁 Повторить запись</button>
         <button class="btn ghost small" onclick="goToReview('${entry.masterId}')">⭐ Оставить отзыв</button>
+      </div>` : ''}
+      ${(bk.status!=='cancelled' && m) ? `<div style="margin-top:8px;">
         <button class="btn ghost small" style="color:var(--danger);" onclick='openReportModal({type:"booking",masterId:"${entry.masterId}",bookingId:"${bk.id}",label:"Запись: ${escapeHtml(bk.serviceName)} у мастера ${escapeHtml(m.name)}"})'>🚩 Пожаловаться</button>
       </div>` : ''}
     </div>`);
@@ -4274,7 +4279,7 @@ async function renderMBookings(m, bookings, isDemo){
       <button class="btn ghost small" onclick="sendReceipt('${m.id}','${b.id}')">🧾 ${b.receiptSentAt?'Отправить чек ещё раз':'Отправить чек клиенту'}</button>
       ${b.receiptSentAt?`<div style="font-size:11px;color:var(--ink-soft);margin-top:4px;">Отправлен ${new Date(b.receiptSentAt).toLocaleDateString('ru-RU')}</div>`:''}
     </div>`:''}
-    ${isCompleted ? `<div style="margin-top:8px;">
+    ${b.status!=='cancelled' ? `<div style="margin-top:8px;">
       <button class="btn ghost small" style="color:var(--danger);" onclick='openReportModal({type:"booking",masterId:"${m.id}",bookingId:"${b.id}",label:"Клиент ${escapeHtml(b.clientName)}, запись ${escapeHtml(b.serviceName)}"})'>🚩 Пожаловаться на клиента</button>
     </div>` : ''}
   </div>`;
