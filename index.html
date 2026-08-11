@@ -1675,6 +1675,7 @@ function render(){
   else if(state.view==='settings') html += `<div class="loading">Загрузка…</div>`;
   else if(state.view==='help') html += `<div class="loading">Загрузка…</div>`;
   else if(state.view==='legal') html += `<div class="loading">Загрузка…</div>`;
+  else if(state.view==='taxpreview') html += `<div class="loading">Загрузка…</div>`;
   html += '</div>' + renderNav();
   if(state.toast) html += `<div class="toast">${escapeHtml(state.toast)}</div>`;
   app.innerHTML = html;
@@ -1692,6 +1693,7 @@ function render(){
   if(state.view==='settings') safeFill(fillSettingsScreen);
   if(state.view==='help') safeFill(fillHelpScreen);
   if(state.view==='legal') safeFill(fillLegalScreen);
+  if(state.view==='taxpreview') safeFill(fillTaxPreview);
 }
 
 /* Ловит любую ошибку внутри асинхронных экранов и показывает её текстом
@@ -4217,6 +4219,7 @@ async function renderMBookings(m, bookings, isDemo){
       <div class="field"><label>Сумма, ₽</label><input id="expAmount" type="number" min="0" placeholder="800"></div>
     </div>
     <button class="btn ghost small" onclick="addExpense('${m.id}')">Добавить расход</button>
+    ${expenses.length ? `<button class="btn ghost small" style="margin-top:8px;" onclick="exportExpensesReport('${m.id}')">📤 Выгрузить список расходов</button>` : ''}
     ${expenses.length ? `<div class="divider"></div>${expenses.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10).map(e=>`
       <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;">
         <div><div style="font-size:13px;font-weight:600;">${escapeHtml(e.name)}</div><div style="font-size:11px;color:var(--ink-soft);">${fmtDate(e.date)}</div></div>
@@ -4233,7 +4236,10 @@ async function renderMBookings(m, bookings, isDemo){
         <option value="year">Текущий год</option>
       </select></div>
     </div>
-    <button class="btn ghost small" onclick="exportTaxReport('${m.id}')">Сформировать отчёт</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn ghost small" onclick="exportTaxReport('${m.id}')">📄 Скачать .txt</button>
+      <button class="btn ghost small" onclick="state._taxPreviewMasterId='${m.id}'; goto('taxpreview');">🖨️ Красивая версия для просмотра</button>
+    </div>
   </div>`;
 
   const exportBtn = bookings.length ? `<div class="section-pad"><button class="btn ghost small" onclick="exportMyBookingsCSV()">📤 Экспорт записей в CSV</button></div>` : '';
@@ -4432,6 +4438,51 @@ function copyDownloadFallbackContent(){
 }
 window.copyDownloadFallbackContent = copyDownloadFallbackContent;
 
+/* ============ КРАСИВЫЙ ПРЕДПРОСМОТР ОТЧЁТА (для скриншота/печати) ============
+   Не программное скачивание PDF — оно проходит через тот же ненадёжный механизм,
+   что мы чинили для .txt-экспортов, только без запасного варианта (бинарный файл
+   не скопируешь как текст). Вместо этого — красиво оформленный экран внутри
+   приложения: пользователь сохраняет его штатными средствами телефона
+   (скриншот, «Печать» браузера → «Сохранить как PDF», если доступно). */
+async function fillTaxPreview(){
+  const masterId = state._taxPreviewMasterId;
+  const m = await loadMaster(masterId);
+  const period = state._taxPreviewPeriod || 'month';
+  const bookings = await loadBookings(masterId);
+  const now = new Date();
+  const startDate = period==='year' ? `${now.getFullYear()}-01-01` : todayISO(-now.getDate()+1);
+  const came = bookings.filter(b=>b.status==='confirmed' && isBookingPast(b) && b.attendance!=='no-show' && b.date>=startDate);
+  const total = came.reduce((s,b)=>s+(b.price||0),0);
+  const tax = Math.round(total*0.04);
+  const periodLabel = period==='year' ? `${now.getFullYear()} год` : now.toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="goto('master')">←</button><div style="font-weight:700">Отчёт для просмотра</div></div>
+  <div class="section-pad" style="display:flex;gap:8px;padding-bottom:10px;">
+    <button class="chip ${period==='month'?'active':''}" onclick="state._taxPreviewPeriod='month'; fillTaxPreview();">Текущий месяц</button>
+    <button class="chip ${period==='year'?'active':''}" onclick="state._taxPreviewPeriod='year'; fillTaxPreview();">Текущий год</button>
+  </div>
+  <div class="card" style="padding:26px 22px;">
+    <div style="text-align:center;margin-bottom:18px;">
+      <div style="font-weight:800;font-size:19px;">Отчёт по доходу</div>
+      <div style="color:var(--ink-soft);font-size:13px;margin-top:2px;">${escapeHtml(m.name)} · ${periodLabel}</div>
+    </div>
+    <div class="divider"></div>
+    ${came.length ? came.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(b=>`
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;">
+        <div>${fmtDate(b.date)} · ${escapeHtml(b.serviceName)}</div>
+        <b>${b.price}₽</b>
+      </div>`).join('') : `<div class="empty" style="padding:20px 0;">Нет визитов за этот период</div>`}
+    <div class="divider"></div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;"><span>Итого визитов</span><b>${came.length}</b></div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;"><span>Итого доход</span><b>${total}₽</b></div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;color:var(--rose-deep);"><span>К отложению на налог (НПД 4%)</span><b>${tax}₽</b></div>
+  </div>
+  <div class="pillnote" style="background:#FFF;border:1px solid var(--line);color:var(--ink-soft);">Чтобы сохранить: сделайте скриншот экрана, либо, если в вашем браузере доступна функция «Печать», используйте «Сохранить как PDF».</div>
+  `;
+}
+window.fillTaxPreview = fillTaxPreview;
+
 async function exportTaxReport(masterId){
   const period = document.getElementById('taxPeriod').value;
   const bookings = await loadBookings(masterId);
@@ -4441,8 +4492,30 @@ async function exportTaxReport(masterId){
   const total = came.reduce((s,b)=>s+(b.price||0),0);
   const tax = Math.round(total*0.04);
   const periodLabel = period==='year' ? `${now.getFullYear()} год` : now.toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
+
+  const monthNames = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  let monthlyBlock = [];
+  if(period==='year'){
+    // Разбивка по месяцам — помогает увидеть сезонность, а не только общую сумму за год
+    const byMonth = {};
+    came.forEach(b=>{
+      const mIdx = Number(b.date.slice(5,7))-1;
+      byMonth[mIdx] = byMonth[mIdx] || {sum:0, count:0};
+      byMonth[mIdx].sum += b.price||0;
+      byMonth[mIdx].count += 1;
+    });
+    monthlyBlock = ['По месяцам:', ''];
+    for(let i=0;i<12;i++){
+      if(byMonth[i]) monthlyBlock.push(`${monthNames[i]}: ${byMonth[i].sum}₽ (визитов: ${byMonth[i].count})`);
+    }
+    monthlyBlock.push('');
+  }
+
   const lines = [
     `Отчёт по доходу — ${periodLabel}`,
+    '',
+    ...monthlyBlock,
+    'Все визиты:',
     '',
     ...came.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(b=>`${fmtDate(b.date)} · ${b.serviceName} · ${b.price}₽`),
     '',
@@ -4475,6 +4548,23 @@ async function deleteExpense(masterId, expenseId){
   fillMasterArea();
 }
 window.deleteExpense = deleteExpense;
+
+async function exportExpensesReport(masterId){
+  const expenses = await sget('expenses:'+masterId, true) || [];
+  if(!expenses.length){ showToast('Пока нет расходов для выгрузки'); return; }
+  const sorted = expenses.slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const total = sorted.reduce((s,e)=>s+(e.amount||0),0);
+  const lines = [
+    'Расходы на материалы',
+    '',
+    ...sorted.map(e=>`${fmtDate(e.date)} · ${e.name} · ${e.amount}₽`),
+    '',
+    `Итого расходов: ${sorted.length}`,
+    `Итого сумма: ${total}₽`,
+  ];
+  downloadTextFile(`beautyhub-expenses-${todayISO(0)}.txt`, '\uFEFF'+lines.join('\n'), 'text/plain;charset=utf-8;');
+}
+window.exportExpensesReport = exportExpensesReport;
 
 /* ============ МИНИ-CRM: КЛИЕНТЫ + РАССЫЛКА ============ */
 async function renderMClients(m, isDemo, bookings){
@@ -5041,6 +5131,11 @@ async function renderAdminDashboard(){
     </button>
   </div>
   <div class="section-pad">
+    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="exportPlatformSummaryReport()">
+      📊 Сводный отчёт по платформе
+    </button>
+  </div>
+  <div class="section-pad">
     <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="exportFullBackup()">
       💾 Полный бэкап базы
     </button>
@@ -5229,6 +5324,7 @@ async function renderAdminAuditLog(){
     add_admin:'👤 Добавил администратора', remove_admin:'👤 Убрал администратора',
     create_banner:'📣 Опубликовал баннер',
     export_backup:'💾 Выгрузил полный бэкап',
+    export_platform_summary:'📊 Выгрузил сводный отчёт по платформе',
   };
   const rows = log.length ? log.map(e=>`<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -5545,6 +5641,60 @@ async function exportFullBackup(){
   }
 }
 window.exportFullBackup = exportFullBackup;
+
+async function exportPlatformSummaryReport(){
+  showToast('Собираем сводный отчёт, это может занять немного времени…');
+  try{
+    const masterIds = await sget('masters-index', true) || [];
+    const masters = [];
+    for(const id of masterIds){
+      const m = await sget('master:'+id, true);
+      if(m && !m.isDemo) masters.push(m);
+    }
+    const approved = masters.filter(m=>m.moderationStatus==='approved');
+    const pending = masters.filter(m=>m.moderationStatus==='pending');
+
+    const byCityCount = {};
+    masters.forEach(m=>{ const c=m.city||'—'; byCityCount[c]=(byCityCount[c]||0)+1; });
+    const cityLines = Object.entries(byCityCount).sort((a,b)=>b[1]-a[1]).map(([city,n])=>`${city}: ${n}`);
+
+    let totalBookings = 0, totalGMV = 0;
+    const masterStats = [];
+    for(const m of approved){
+      const bookings = await sget('bookings:'+m.id, true) || [];
+      const done = bookings.filter(b=>b.status==='confirmed' && isBookingPast(b) && b.attendance!=='no-show');
+      const sum = done.reduce((s,b)=>s+(b.price||0),0);
+      totalBookings += done.length;
+      totalGMV += sum;
+      masterStats.push({ name:m.name, city:m.city, visits:done.length, sum });
+    }
+    const topMasters = masterStats.slice().sort((a,b)=>b.sum-a.sum).slice(0,10);
+
+    const lines = [
+      `Сводный отчёт по платформе BeautyHub`,
+      `Сформирован: ${new Date().toLocaleString('ru-RU',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})}`,
+      '',
+      `Всего мастеров/компаний: ${masters.length}`,
+      `Одобрено и активно: ${approved.length}`,
+      `На модерации: ${pending.length}`,
+      '',
+      `Всего состоявшихся визитов (по всем мастерам): ${totalBookings}`,
+      `Суммарный оборот через платформу (GMV): ${totalGMV}₽`,
+      '',
+      'По городам:',
+      ...cityLines,
+      '',
+      'Топ-10 мастеров по обороту:',
+      ...topMasters.map((t,i)=>`${i+1}. ${t.name} (${t.city||'—'}) — ${t.sum}₽, визитов: ${t.visits}`),
+    ];
+    downloadTextFile(`beautyhub-platform-summary-${todayISO(0)}.txt`, '\uFEFF'+lines.join('\n'), 'text/plain;charset=utf-8;');
+    logAdminAction('export_platform_summary', `${masters.length} мастеров`);
+  }catch(e){
+    console.error('platform summary failed', e);
+    showToast('Не удалось собрать отчёт — попробуйте ещё раз');
+  }
+}
+window.exportPlatformSummaryReport = exportPlatformSummaryReport;
 
 /* ============ ПРОВЕРКА НАКРУТОК ОТЗЫВОВ (эвристика, не доказательство) ============ */
 /* ============ ОБНАРУЖЕНИЕ ДУБЛЕЙ МАСТЕРОВ (эвристика) ============ */
