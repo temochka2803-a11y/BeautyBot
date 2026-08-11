@@ -4346,12 +4346,7 @@ function exportMyBookingsCSV(){
     b.attendance==='came'?'Пришёл':b.attendance==='no-show'?'Не пришёл':''
   ]);
   const csv = [headers, ...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `beautyhub-bookings-${todayISO(0)}.csv`;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+  downloadTextFile(`beautyhub-bookings-${todayISO(0)}.csv`, '\uFEFF'+csv, 'text/csv;charset=utf-8;');
 }
 window.exportMyBookingsCSV = exportMyBookingsCSV;
 
@@ -4386,14 +4381,56 @@ async function exportBookingToICS(masterId, bookingId){
     'LOCATION:'+loc,
     'END:VEVENT','END:VCALENDAR'
   ].join('\r\n');
-  const blob = new Blob([ics], {type:'text/calendar;charset=utf-8;'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `beautyhub-${bk.date}.ics`;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+  downloadTextFile(`beautyhub-${bk.date}.ics`, ics, 'text/calendar;charset=utf-8;');
 }
 window.exportBookingToICS = exportBookingToICS;
+
+/* ============ СКАЧИВАНИЕ ФАЙЛОВ — с гарантированным запасным вариантом ============
+   Обычное скачивание через Blob+<a download> часто НЕ работает внутри WebView
+   Telegram (особенно на iOS) — это подтверждённое ограничение платформы, не наш баг.
+   Поэтому после попытки автоматического скачивания ВСЕГДА показываем модалку с
+   содержимым и кнопкой «Скопировать» — она использует copyText(), который уже
+   надёжно работает везде в приложении. */
+let _downloadFallbackContent = null;
+
+function downloadTextFile(filename, content, mimeType){
+  try{
+    const blob = new Blob([content], {type: mimeType || 'text/plain;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 3000);
+  }catch(e){ console.warn('blob download failed (ожидаемо внутри Telegram):', e); }
+
+  showDownloadFallbackModal(filename, content);
+}
+window.downloadTextFile = downloadTextFile;
+
+function showDownloadFallbackModal(filename, content){
+  _downloadFallbackContent = content;
+  const preview = content.length > 2000 ? content.slice(0,2000)+'\n\n…(показаны первые 2000 символов, копируется весь файл целиком)' : content;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'downloadFallbackOverlay';
+  overlay.innerHTML = `<div class="modal-card" style="max-height:82vh;overflow-y:auto;">
+    <h3 style="color:var(--ink);">📄 ${escapeHtml(filename)}</h3>
+    <p>Если файл не скачался автоматически (частое ограничение Telegram, особенно на iPhone) — скопируйте содержимое и вставьте в заметки или отправьте себе сообщением.</p>
+    <div style="background:var(--bg);border-radius:12px;padding:12px;font-size:11px;font-family:monospace;white-space:pre-wrap;word-break:break-all;max-height:280px;overflow-y:auto;margin-bottom:14px;">${escapeHtml(preview)}</div>
+    <button class="btn primary" style="margin-bottom:8px;" onclick="copyDownloadFallbackContent()">📋 Скопировать всё содержимое</button>
+    <button class="btn ghost" onclick="document.getElementById('downloadFallbackOverlay').remove();">Закрыть</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+window.showDownloadFallbackModal = showDownloadFallbackModal;
+
+function copyDownloadFallbackContent(){
+  if(_downloadFallbackContent){
+    copyText(_downloadFallbackContent);
+    document.getElementById('downloadFallbackOverlay').remove();
+  }
+}
+window.copyDownloadFallbackContent = copyDownloadFallbackContent;
 
 async function exportTaxReport(masterId){
   const period = document.getElementById('taxPeriod').value;
@@ -4414,13 +4451,7 @@ async function exportTaxReport(masterId){
     `К отложению на налог (НПД 4%): ${tax}₽`,
   ];
   const text = lines.join('\n');
-  const blob = new Blob(['\uFEFF'+text], {type:'text/plain;charset=utf-8;'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `beautyhub-tax-report-${period}-${todayISO(0)}.txt`;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url), 3000);
-  showToast('Отчёт скачан');
+  downloadTextFile(`beautyhub-tax-report-${period}-${todayISO(0)}.txt`, '\uFEFF'+text, 'text/plain;charset=utf-8;');
 }
 window.exportTaxReport = exportTaxReport;
 
@@ -4636,12 +4667,7 @@ function exportMyClientsCSV(){
   const headers = ['Имя','Контакт','Визитов','Последний визит','Потрачено','Теги','Заметка'];
   const rows = list.map(c=>[c.name, c.contact, c.visits, c.lastDate||'', c.spent, c.tags.join('; '), c.note]);
   const csv = [headers, ...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `beautyhub-clients-${todayISO(0)}.csv`;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+  downloadTextFile(`beautyhub-clients-${todayISO(0)}.csv`, '\uFEFF'+csv, 'text/csv;charset=utf-8;');
 }
 window.exportMyClientsCSV = exportMyClientsCSV;
 
@@ -5078,13 +5104,7 @@ function exportMastersCSV(){
     m.telegramId||'', ratingOf(m).toFixed(1), m.ratingCount||0
   ]);
   const csv = [headers, ...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `beautyhub-masters-${todayISO(0)}.csv`;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url), 3000);
-  showToast('Файл готов — проверьте загрузки браузера');
+  downloadTextFile(`beautyhub-masters-${todayISO(0)}.csv`, '\uFEFF'+csv, 'text/csv;charset=utf-8;');
 }
 window.exportMastersCSV = exportMastersCSV;
 
@@ -5516,12 +5536,7 @@ async function exportFullBackup(){
       rows: data
     };
     const json = JSON.stringify(backup, null, 2);
-    const blob = new Blob([json], {type:'application/json;charset=utf-8;'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `beautyhub-backup-${todayISO(0)}.json`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(()=>URL.revokeObjectURL(url), 3000);
+    downloadTextFile(`beautyhub-backup-${todayISO(0)}.json`, json, 'application/json;charset=utf-8;');
     showToast(`Бэкап готов: ${data.length} записей`);
     logAdminAction('export_backup', `${data.length} записей`);
   }catch(e){
