@@ -1100,7 +1100,7 @@ async function fillClientProfile(){
   </div>` : '';
 
   document.getElementById('content').innerHTML = `
-  <div class="hero" style="padding-bottom:0;"><h1>Профиль</h1></div>
+  <div class="backbar"><button class="backbtn" onclick="goto('mybookings')">←</button><div style="font-weight:700">Профиль</div></div>
   <div class="card" style="text-align:center;">
     <button class="link-btn" style="float:right;" onclick="toggleClientProfileEdit()">${state._clientProfileEditing?'Отмена':'Редактировать'}</button>
     <div style="width:88px;height:88px;border-radius:50%;background:linear-gradient(135deg,var(--rose),var(--rose-deep));display:flex;align-items:center;justify-content:center;color:#fff;font-size:32px;font-weight:800;margin:8px auto 14px;">${initial}</div>
@@ -1482,6 +1482,30 @@ async function detectTelegramIdentity(){
       tg.ready(); tg.expand();
       state.isTelegramContext = true;
       state.tgUser = (tg.initDataUnsafe && tg.initDataUnsafe.user) || null;
+
+      // ШАГ 2 из разбора безопасности: получаем настоящий JWT, подписанный сервером
+      // на основе проверенной подписи Telegram, и пересоздаём клиент Supabase с ним —
+      // до этого момента (и если этот шаг не удастся) приложение работает под общим
+      // анонимным ключом, как раньше, поэтому ничего не ломается при сбое сети.
+      try{
+        const authResp = await fetch(SUPABASE_URL + '/functions/v1/telegram-auth', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+SUPABASE_ANON_KEY },
+          body: JSON.stringify({ initData: tg.initData }),
+        });
+        const authData = await authResp.json();
+        if(authResp.ok && authData.token){
+          sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            global: { headers: { Authorization: 'Bearer '+authData.token } }
+          });
+          state._authenticated = true;
+        } else {
+          console.warn('telegram-auth не подтвердил подпись, работаем под анонимным доступом:', authData.error||authData.reason);
+        }
+      }catch(authErr){
+        console.warn('telegram-auth недоступна, работаем под анонимным доступом:', authErr);
+      }
+
       const idStr = state.tgUser ? String(state.tgUser.id) : null;
       const isMainOwner = !!idStr && OWNER_TELEGRAM_IDS.includes(idStr);
       let supportRole = null;
@@ -1523,6 +1547,11 @@ async function init(){
     // Если у устройства уже есть профиль мастера, роль всегда «мастер», даже если раньше выбрали иначе.
     state.userRole = 'master';
     await sset('my-role', 'master', false);
+  }
+  if(state.userRole === 'master' && state.view === 'catalog'){
+    // У мастера в нижнем меню больше нет кнопки «Каталог» — сразу открываем его кабинет,
+    // иначе он окажется на экране, с которого некуда перейти.
+    state.view = 'master';
   }
   state.clientName = await sget('my-client-name', false) || '';
   state.clientContact = await sget('my-client-contact', false) || '';
@@ -1727,19 +1756,27 @@ function renderTopbar(){
 function renderNav(){
   const pendingBadge = state._pendingCount ? `<span class="navdot"></span>` : '';
   const ownerBadge = state._ownerAlertCount ? `<span class="navdot"></span>` : '';
+  const isMaster = state.userRole === 'master';
   const showAdminTab = state.isOwner || !state.isTelegramContext; // hidden entirely for non-owners inside real Telegram
-  const showMasterTab = state.userRole !== 'client'; // клиенты, искавшие мастеров при регистрации, эту вкладку не видят
-  const showClientProfileTab = state.userRole === 'client'; // отдельная вкладка «Профиль» только у чистых клиентов
   const adminTab = showAdminTab ? `<button class="navbtn ${state.view==='admin'?'active':''}" onclick="goto('admin')">${ownerBadge}<span class="ic">🛠️</span>Владельцу</button>` : '';
-  const masterTab = showMasterTab ? `<button class="navbtn ${state.view==='master'?'active':''}" onclick="goto('master')">${pendingBadge}<span class="ic">💼</span>Мастеру</button>` : '';
-  const clientProfileTab = showClientProfileTab ? `<button class="navbtn ${state.view==='clientprofile'?'active':''}" onclick="goto('clientprofile')"><span class="ic">👤</span>Профиль</button>` : '';
+  const masterTab = `<button class="navbtn ${state.view==='master'?'active':''}" onclick="goto('master')">${pendingBadge}<span class="ic">💼</span>Мастеру</button>`;
+
+  // Мастер видит только свой кабинет (+ кабинет владельца, если это ещё и он) —
+  // никаких клиентских вкладок, чтобы не путать с чужой ролью в интерфейсе.
+  if(isMaster){
+    return `
+    <div class="navbar"><div class="navbar-inner">
+      ${masterTab}
+      ${adminTab}
+    </div></div>`;
+  }
+
+  // Чистый клиент видит только каталог и свои записи — ничего лишнего.
   return `
   <div class="navbar"><div class="navbar-inner">
     <button class="navbtn ${state.view==='catalog'?'active':''}" onclick="goto('catalog')"><span class="ic">🔎</span>Каталог</button>
     <button class="navbtn ${state.view==='mybookings'?'active':''}" onclick="goto('mybookings')"><span class="ic">🗓️</span>Мои записи</button>
-    ${masterTab}
     ${adminTab}
-    ${clientProfileTab}
   </div></div>`;
 }
 
@@ -2719,7 +2756,10 @@ window.submitBooking = submitBooking;
    ============================================================ */
 async function fillMyBookings(){
   const mine = await sget('my-client-bookings', false) || [];
-  const hero = `<div class="hero"><h1>Мои записи</h1><p>Статусы ваших заявок к мастерам.</p></div>`;
+  const hero = `<div class="hero" style="display:flex;justify-content:space-between;align-items:flex-start;">
+    <div><h1>Мои записи</h1><p>Статусы ваших заявок к мастерам.</p></div>
+    <button class="hdr-icon" style="margin-top:26px;" onclick="goto('clientprofile')" title="Профиль и настройки">👤</button>
+  </div>`;
 
   const myHealthNotes = await sget('my-health-notes', false) || '';
   const selfNotesCard = `<div class="card">
@@ -3190,15 +3230,24 @@ async function renderMasterDashboard(m, isDemo){
     }
   }
 
+  const mainTab = ['profile','services','portfolio'].includes(state.masterTab) ? 'profile'
+    : ['schedule','bookings'].includes(state.masterTab) ? 'work'
+    : state.masterTab; // 'clients' | 'chat' остаются как есть
   const tabs = `<div class="subnav">
-    <button class="${state.masterTab==='profile'?'active':''}" onclick="setMTab('profile')">Профиль</button>
-    <button class="${state.masterTab==='services'?'active':''}" onclick="setMTab('services')">Услуги</button>
-    <button class="${state.masterTab==='portfolio'?'active':''}" onclick="setMTab('portfolio')">Работы</button>
-    <button class="${state.masterTab==='schedule'?'active':''}" onclick="setMTab('schedule')">Расписание</button>
-    <button class="${state.masterTab==='bookings'?'active':''}" onclick="setMTab('bookings')">Записи${pending?` (${pending})`:''}</button>
-    <button class="${state.masterTab==='clients'?'active':''}" onclick="setMTab('clients')">👥 Клиенты</button>
-    <button class="${state.masterTab==='chat'?'active':''}" onclick="setMTab('chat')">💬 Чат${chatUnread?` (${chatUnread})`:''}</button>
+    <button class="${mainTab==='profile'?'active':''}" onclick="setMTab('profile')">Профиль</button>
+    <button class="${mainTab==='work'?'active':''}" onclick="setMTab('schedule')">Работа${pending?` (${pending})`:''}</button>
+    <button class="${mainTab==='clients'?'active':''}" onclick="setMTab('clients')">👥 Клиенты</button>
+    <button class="${mainTab==='chat'?'active':''}" onclick="setMTab('chat')">💬 Чат${chatUnread?` (${chatUnread})`:''}</button>
   </div>`;
+  const profileSubTabs = mainTab==='profile' ? `<div class="chiprow" style="padding:0 18px 14px;">
+    <span class="chip ${state.masterTab==='profile'?'active':''}" onclick="state.masterTab='profile'; fillMasterArea();">Основное</span>
+    <span class="chip ${state.masterTab==='services'?'active':''}" onclick="state.masterTab='services'; fillMasterArea();">Услуги</span>
+    <span class="chip ${state.masterTab==='portfolio'?'active':''}" onclick="state.masterTab='portfolio'; fillMasterArea();">Портфолио</span>
+  </div>` : '';
+  const workSubTabs = mainTab==='work' ? `<div class="chiprow" style="padding:0 18px 14px;">
+    <span class="chip ${state.masterTab==='schedule'?'active':''}" onclick="state.masterTab='schedule'; fillMasterArea();">Расписание</span>
+    <span class="chip ${state.masterTab==='bookings'?'active':''}" onclick="state.masterTab='bookings'; fillMasterArea();">Записи${pending?` (${pending})`:''}</span>
+  </div>` : '';
 
   let body='';
   if(state.masterTab==='profile') body = await renderMProfile(m, isDemo, bookings);
@@ -3210,7 +3259,7 @@ async function renderMasterDashboard(m, isDemo){
   else if(state.masterTab==='chat') body = renderMChat(m, isDemo, chat);
   else if(state.masterTab==='clientchat') body = await renderMasterClientChatThread(m);
   else if(state.masterTab==='instructions') body = renderInstructionsCarousel();
-  const tabsHtml = (state.masterTab==='clientchat' || state.masterTab==='instructions') ? '' : tabs;
+  const tabsHtml = (state.masterTab==='clientchat' || state.masterTab==='instructions') ? '' : (tabs + profileSubTabs + workSubTabs);
 
   const dashHeader = `<div class="hero" style="padding-top:20px;padding-bottom:0;display:flex;align-items:center;gap:12px;">
     <div class="avatar" style="width:44px;height:44px;font-size:20px;border-radius:14px;${avatarStyle(m)}">${avatarInner(m,SPECS[m.specialization])}</div>
@@ -4869,6 +4918,10 @@ async function fillAdmin(){
     if(state.adminScreen==='reports') return renderAdminReports();
     if(state.adminScreen==='fraudCheck') return renderAdminFraudCheck();
     if(state.adminScreen==='duplicates') return renderAdminDuplicates();
+    if(state.adminScreen==='hub-masters') return renderAdminHubMasters();
+    if(state.adminScreen==='hub-analytics') return renderAdminHubAnalytics();
+    if(state.adminScreen==='hub-communication') return renderAdminHubCommunication();
+    if(state.adminScreen==='hub-system') return renderAdminHubSystem();
     if(state.adminScreen==='adrequests') return renderAdminAdRequests();
     if(state.adminScreen==='adrequest' && state.adminAdRequestKey) return renderAdminAdRequestThread(state.adminAdRequestKey);
     if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
@@ -4890,6 +4943,10 @@ async function fillAdmin(){
     if(state.adminScreen==='reports') return renderAdminReports();
     if(state.adminScreen==='fraudCheck') return renderAdminFraudCheck();
     if(state.adminScreen==='duplicates') return renderAdminDuplicates();
+    if(state.adminScreen==='hub-masters') return renderAdminHubMasters();
+    if(state.adminScreen==='hub-analytics') return renderAdminHubAnalytics();
+    if(state.adminScreen==='hub-communication') return renderAdminHubCommunication();
+    if(state.adminScreen==='hub-system') return renderAdminHubSystem();
   if(state.adminScreen==='adrequests') return renderAdminAdRequests();
   if(state.adminScreen==='adrequest' && state.adminAdRequestKey) return renderAdminAdRequestThread(state.adminAdRequestKey);
   if(state.adminScreen==='chatpicker') return renderAdminChatPicker();
@@ -5077,67 +5134,27 @@ async function renderAdminDashboard(){
     </button>
   </div>
   ${isOwnerRole ? `<div class="section-pad" style="display:flex;gap:10px;">
-    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='broadcast'; fillAdmin();">
-      📢 Всем мастерам
+    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='hub-masters'; fillAdmin();">
+      🧑‍🤝‍🧑 Мастера
     </button>
-    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="exportMastersCSV()">
-      📤 Экспорт CSV
-    </button>
-  </div>
-  <div class="section-pad" style="display:flex;gap:10px;">
-    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='funnel'; fillAdmin();">
-      🚪 Воронка регистрации
-    </button>
-    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='auditlog'; fillAdmin();">
-      📋 Журнал действий
+    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='hub-analytics'; fillAdmin();">
+      📊 Аналитика
     </button>
   </div>
   <div class="section-pad" style="display:flex;gap:10px;">
-    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='admins'; fillAdmin();">
-      👤 Администраторы
+    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='hub-communication'; fillAdmin();">
+      💬 Общение${totalChatUnread?` (${totalChatUnread})`:''}
     </button>
     <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reviewsShowcase'; fillAdmin();">
-      🌟 Витрина отзывов
+      🌟 Продвижение
     </button>
   </div>
-  <div class="section-pad">
-    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='banners'; fillAdmin();">
-      📣 Баннеры / объявления
-    </button>
-  </div>
-  <div class="section-pad">
-    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='adrequests'; fillAdmin();">
-      🗣️ Заявки на объявления
-    </button>
-  </div>
-  <div class="section-pad">
-    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='fraudCheck'; fillAdmin();">
-      🚨 Проверка накруток отзывов
-    </button>
-  </div>
-  <div class="section-pad">
-    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='duplicates'; fillAdmin();">
-      👥 Возможные дубли
-    </button>
-  </div>
-  <div class="section-pad">
-    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reports'; fillAdmin();">
+  <div class="section-pad" style="display:flex;gap:10px;">
+    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reports'; fillAdmin();">
       🚩 Жалобы
     </button>
-  </div>
-  <div class="section-pad">
-    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='visitHistory'; fillAdmin();">
-      🕒 История заходов
-    </button>
-  </div>
-  <div class="section-pad">
-    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="exportPlatformSummaryReport()">
-      📊 Сводный отчёт по платформе
-    </button>
-  </div>
-  <div class="section-pad">
-    <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="exportFullBackup()">
-      💾 Полный бэкап базы
+    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='hub-system'; fillAdmin();">
+      ⚙️ Система
     </button>
   </div>` : `<div class="section-pad">
     <button class="btn ghost" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reviewsShowcase'; fillAdmin();">
@@ -5522,6 +5539,64 @@ async function submitReport(context){
 window.submitReport = submitReport;
 
 /* ============ ЭКРАН ВЛАДЕЛЬЦА: ЖАЛОБЫ ============ */
+/* ============ ХАБЫ-ГРУППЫ ГЛАВНОГО ЭКРАНА ВЛАДЕЛЬЦА ============
+   Компактность: вместо 16 отдельных кнопок на главном экране — 6 групп,
+   внутри каждой — список её реальных разделов (существующие экраны не менялись). */
+function renderHubRow(icon, title, meta, onclick){
+  return `<div class="linkrow" onclick="${onclick}">
+    <div class="linkic">${icon}</div>
+    <div class="linkbody"><div class="linkname">${title}</div>${meta?`<div class="linkmeta">${meta}</div>`:''}</div>
+    <div class="linkarrow">›</div>
+  </div>`;
+}
+
+function renderAdminHubMasters(){
+  const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Мастера</div></div>`;
+  const rows = `<div class="card" style="padding:4px 18px;">
+    ${renderHubRow('👥','Возможные дубли','Похожие или повторные профили', "state.adminScreen='duplicates'; fillAdmin();")}
+    ${renderHubRow('🚨','Проверка накруток отзывов','Эвристика подозрительных всплесков', "state.adminScreen='fraudCheck'; fillAdmin();")}
+  </div>
+  <div class="pillnote" style="margin:0 18px 14px;">Модерация заявок и список всех мастеров — прямо на главном экране кабинета, ниже этого блока.</div>`;
+  document.getElementById('content').innerHTML = back + rows;
+}
+window.renderAdminHubMasters = renderAdminHubMasters;
+
+function renderAdminHubAnalytics(){
+  const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Аналитика</div></div>`;
+  const rows = `<div class="card" style="padding:4px 18px;">
+    ${renderHubRow('📈','Динамика','MRR, рост базы мастеров', "state.adminScreen='trends'; fillAdmin();")}
+    ${renderHubRow('🚪','Воронка регистрации','Сколько доходит до конца анкеты', "state.adminScreen='funnel'; fillAdmin();")}
+    ${renderHubRow('📊','Сводный отчёт по платформе','Оборот, топ-мастера, города', "exportPlatformSummaryReport();")}
+    ${renderHubRow('🕒','История заходов','Кто и когда открывал приложение', "state.adminScreen='visitHistory'; fillAdmin();")}
+    ${renderHubRow('📤','Экспорт мастеров в CSV','Список всех профилей', "exportMastersCSV();")}
+  </div>`;
+  document.getElementById('content').innerHTML = back + rows;
+}
+window.renderAdminHubAnalytics = renderAdminHubAnalytics;
+
+function renderAdminHubCommunication(){
+  const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Общение</div></div>`;
+  const rows = `<div class="card" style="padding:4px 18px;">
+    ${renderHubRow('💬','Чаты с мастерами','Личные обращения', "state.adminScreen='chatlist'; fillAdmin();")}
+    ${renderHubRow('📢','Рассылка всем мастерам','Одно сообщение всей базе', "state.adminScreen='broadcast'; fillAdmin();")}
+    ${renderHubRow('📣','Баннеры / объявления','Акции на главном экране', "state.adminScreen='banners'; fillAdmin();")}
+    ${renderHubRow('🗣️','Заявки на объявления','От клиентов и мастеров', "state.adminScreen='adrequests'; fillAdmin();")}
+  </div>`;
+  document.getElementById('content').innerHTML = back + rows;
+}
+window.renderAdminHubCommunication = renderAdminHubCommunication;
+
+function renderAdminHubSystem(){
+  const back = `<div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">Система</div></div>`;
+  const rows = `<div class="card" style="padding:4px 18px;">
+    ${renderHubRow('👤','Администраторы','Роли доступа к кабинету', "state.adminScreen='admins'; fillAdmin();")}
+    ${renderHubRow('📋','Журнал действий','Кто и что изменил', "state.adminScreen='auditlog'; fillAdmin();")}
+    ${renderHubRow('💾','Полный бэкап базы','Выгрузка всех данных', "exportFullBackup();")}
+  </div>`;
+  document.getElementById('content').innerHTML = back + rows;
+}
+window.renderAdminHubSystem = renderAdminHubSystem;
+
 async function renderAdminReports(){
   const reports = (await sget('reports', true) || []).slice().sort((a,b)=>b.createdAt-a.createdAt);
   const rows = reports.length ? reports.map(r=>`<div class="card">
