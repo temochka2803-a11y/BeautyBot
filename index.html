@@ -337,6 +337,39 @@ input,select,textarea{font-family:inherit;}
 }
 .modal-card h3{color:var(--danger);font-size:18px;margin:0 0 10px;font-family:'Inter',sans-serif;font-weight:800;}
 .modal-card p{font-size:13.5px;color:var(--ink-soft);line-height:1.5;margin:0 0 16px;}
+
+/* ============ ИНТЕРАКТИВНЫЙ ТУР С ПОДСВЕТКОЙ (по образцу референса) ============
+   Тёмный фон везде, кроме одного реального элемента на странице — вокруг него
+   светящаяся рамка. Технически: box-shadow гигантского размера у прозрачной рамки,
+   позиционированной ровно поверх целевого элемента — «дыра» в затемнении. */
+.tour-highlight{
+  position:fixed; z-index:300; border-radius:16px;
+  box-shadow: 0 0 0 9999px rgba(20,10,30,.72);
+  border:2.5px solid var(--rose); pointer-events:none;
+  transition: top .25s ease, left .25s ease, width .25s ease, height .25s ease;
+}
+.tour-sheet{
+  position:fixed; left:0; right:0; bottom:0; z-index:301;
+  background:var(--surface); border-radius:22px 22px 0 0;
+  padding:20px 20px 26px; box-shadow:0 -14px 40px rgba(0,0,0,.25);
+  max-width:430px; margin:0 auto;
+}
+.tour-sheet .ttitle{font-weight:800;font-size:16px;margin-bottom:6px;}
+.tour-sheet .ttext{font-size:13.5px;color:var(--ink-soft);line-height:1.55;margin-bottom:16px;}
+.tour-dots{display:flex;gap:6px;justify-content:center;margin-bottom:16px;}
+.tour-dots span{width:7px;height:7px;border-radius:50%;background:var(--line);}
+.tour-dots span.on{background:var(--rose);width:18px;border-radius:4px;transition:.2s;}
+.tour-trigger{
+  width:40px;height:40px;border-radius:50%;flex:0 0 40px;
+  background:var(--pink-tint); border:1.5px solid rgba(236,24,118,.35);
+  display:flex;align-items:center;justify-content:center;font-size:17px;
+  box-shadow:0 0 0 0 rgba(236,24,118,.4); animation: tourPulse 2.4s infinite;
+}
+@keyframes tourPulse{
+  0%{ box-shadow:0 0 0 0 rgba(236,24,118,.35); }
+  70%{ box-shadow:0 0 0 9px rgba(236,24,118,0); }
+  100%{ box-shadow:0 0 0 0 rgba(236,24,118,0); }
+}
 </style>
 </head>
 <body>
@@ -1100,7 +1133,7 @@ async function fillClientProfile(){
   </div>` : '';
 
   document.getElementById('content').innerHTML = `
-  <div class="backbar"><button class="backbtn" onclick="goto('mybookings')">←</button><div style="font-weight:700">Профиль</div></div>
+  <div class="backbar"><button class="backbtn" onclick="goto('mybookings')">←</button><div style="font-weight:700;flex:1;">Профиль</div><button class="tour-trigger" onclick="startClientProfileTour()" title="Краткий тур">✨</button></div>
   <div class="card" style="text-align:center;">
     <button class="link-btn" style="float:right;" onclick="toggleClientProfileEdit()">${state._clientProfileEditing?'Отмена':'Редактировать'}</button>
     <div style="width:88px;height:88px;border-radius:50%;background:linear-gradient(135deg,var(--rose),var(--rose-deep));display:flex;align-items:center;justify-content:center;color:#fff;font-size:32px;font-weight:800;margin:8px auto 14px;">${initial}</div>
@@ -1110,15 +1143,24 @@ async function fillClientProfile(){
   </div>
   ${editForm}
   <div class="section-pad" style="display:flex;gap:${'var(--gap)'};">
-    <button class="btn ghost" style="flex:1;flex-direction:column;height:auto;padding:18px 10px;gap:8px;" onclick="goto('help')">
+    <button id="tourHelpBtn" class="btn ghost" style="flex:1;flex-direction:column;height:auto;padding:18px 10px;gap:8px;" onclick="goto('help')">
       <span style="font-size:20px;">❓</span><span>Помощь</span>
     </button>
-    <button class="btn ghost" style="flex:1;flex-direction:column;height:auto;padding:18px 10px;gap:8px;" onclick="goto('settings')">
+    <button id="tourSettingsBtn" class="btn ghost" style="flex:1;flex-direction:column;height:auto;padding:18px 10px;gap:8px;" onclick="goto('settings')">
       <span style="font-size:20px;">⚙️</span><span>Настройки</span>
     </button>
   </div>`;
 }
 window.fillClientProfile = fillClientProfile;
+
+function startClientProfileTour(){
+  const candidates = [
+    { selector:'#tourHelpBtn', title:'Помощь', text:'Частые вопросы и поддержка — если что-то непонятно.' },
+    { selector:'#tourSettingsBtn', title:'Настройки', text:'Смена роли (клиент/мастер), ссылка-приглашение, юридические документы.' },
+  ];
+  startSpotlightTour(candidates.filter(s=>document.querySelector(s.selector)));
+}
+window.startClientProfileTour = startClientProfileTour;
 
 function toggleClientProfileEdit(){
   state._clientProfileEditing = !state._clientProfileEditing;
@@ -1521,11 +1563,14 @@ async function detectTelegramIdentity(){
       state.isTelegramContext = false;
       state.isOwner = false;
       state.adminRole = null;
+      state._telegramDetectError = tg ? 'window.Telegram.WebApp есть, но initData пустой или отсутствует' : 'window.Telegram.WebApp вообще не найден на странице';
       // Для тестирования в обычном браузере: ?startapp=book_<id> в адресной строке
       const urlParam = new URLSearchParams(window.location.search).get('startapp');
       state._startParam = urlParam || readStartParamFromLocation() || null;
     }
   }catch(e){
+    console.error('detectTelegramIdentity упал с ошибкой (это и есть причина, почему приложение думает, что оно вне Telegram):', e);
+    state._telegramDetectError = (e && e.message) ? e.message : String(e);
     state.isTelegramContext = false;
     state.isOwner = false;
     state.adminRole = null;
@@ -1746,12 +1791,56 @@ async function safeFill(fn){
 
 function renderTopbar(){
   const hasFavs = state.favorites && state.favorites.length;
+  const showTour = state.view==='catalog' && state.catalogStep==='list';
   return `
   <div class="topbar">
     <div class="brand"><div class="mark">💄</div><div class="word">Beauty<em>Hub</em></div></div>
-    <button class="hdr-icon" style="position:relative;" onclick="goto('favorites')">♥${hasFavs?`<span class="navdot" style="top:2px;right:2px;"></span>`:''}</button>
+    <div style="display:flex;align-items:center;gap:8px;">
+      ${showTour?`<button class="tour-trigger" onclick="startCatalogTour()" title="Краткий тур">✨</button>`:''}
+      <button class="hdr-icon" style="position:relative;" onclick="goto('favorites')">♥${hasFavs?`<span class="navdot" style="top:2px;right:2px;"></span>`:''}</button>
+    </div>
   </div>`;
 }
+function startAdminHomeTour(){
+  const candidates = [
+    { selector:'#tourHubMasters', title:'Мастера', text:'Модерация заявок, проверка дублей и накруток отзывов — всё об управлении аккаунтами мастеров.' },
+    { selector:'#tourHubAnalytics', title:'Аналитика', text:'Динамика, воронка регистрации, сводный отчёт по платформе, история заходов.' },
+    { selector:'#tourHubCommunication', title:'Общение', text:'Чаты с мастерами, рассылка всем сразу, баннеры и заявки на объявления.' },
+    { selector:'#tourHubPromotion', title:'Продвижение', text:'Витрина лучших отзывов — готовый текст для публикации в канале.' },
+    { selector:'#tourHubReports', title:'Жалобы', text:'Обращения от клиентов и мастеров, требующие ручного разбора.' },
+    { selector:'#tourHubSystem', title:'Система', text:'Администраторы, журнал действий и полный бэкап базы.' },
+  ];
+  startSpotlightTour(candidates.filter(s=>document.querySelector(s.selector)));
+}
+window.startAdminHomeTour = startAdminHomeTour;
+
+function startMyBookingsTour(){
+  const candidates = [
+    { selector:'#tourSelfNotesCard', title:'Заметка о себе', text:'Укажите один раз аллергии или предпочтения — мастер увидит это при каждой новой записи.' },
+    { selector:'#tourReferralCard', title:'Пригласите подругу', text:'Обе станете приоритетными клиентами у мастеров.' },
+  ];
+  startSpotlightTour(candidates.filter(s=>document.querySelector(s.selector)));
+}
+window.startMyBookingsTour = startMyBookingsTour;
+
+function startMasterDetailTour(){
+  const candidates = [
+    { selector:'#tourReviewsTab', title:'Отзывы', text:'С оценками по критериям: качество, пунктуальность, атмосфера — не только звёзды.' },
+    { selector:'#tourChatTab', title:'Чат с мастером', text:'Есть вопрос до записи? Напишите напрямую, не выходя из приложения.' },
+    { selector:'#tourBookTab', title:'Записаться', text:'Выберите услугу, дату и время — заявка сразу уйдёт мастеру.' },
+  ];
+  startSpotlightTour(candidates.filter(s=>document.querySelector(s.selector)));
+}
+window.startMasterDetailTour = startMasterDetailTour;
+
+function startCatalogTour(){
+  const candidates = [
+    { selector:'#tourFilterbar', title:'Фильтры', text:'Сортировка по рейтингу, минимальная оценка, «свободен сегодня/завтра» — сужайте список под себя.' },
+    { selector:'#tourMapToggle', title:'Список или карта', text:'Переключитесь на карту, чтобы увидеть мастеров рядом с вами географически.' },
+  ];
+  startSpotlightTour(candidates.filter(s=>document.querySelector(s.selector)));
+}
+window.startCatalogTour = startCatalogTour;
 
 function renderNav(){
   const pendingBadge = state._pendingCount ? `<span class="navdot"></span>` : '';
@@ -2019,7 +2108,7 @@ function renderListStep(masters){
     ${Object.entries(SPECS).map(([k,v])=>`<button class="chip ${state.filters.spec===k?'active':''}" onclick="chooseSpec('${k}')">${v.icon} ${v.label}</button>`).join('')}
   </div>`;
 
-  const filterbar = `<div class="filterbar">
+  const filterbar = `<div class="filterbar" id="tourFilterbar">
     <select class="selectbox" onchange="setSort(this.value)">
       <option value="rating" ${state.filters.sort==='rating'?'selected':''}>По рейтингу</option>
       <option value="price" ${state.filters.sort==='price'?'selected':''}>По цене</option>
@@ -2065,7 +2154,7 @@ function renderListStep(masters){
   }
 
   const withCoords = list.filter(m=>m.lat && m.lng);
-  const mapToggle = `<div class="section-pad" style="display:flex;gap:8px;">
+  const mapToggle = `<div class="section-pad" id="tourMapToggle" style="display:flex;gap:8px;">
     <button class="btn ${state.catalogView!=='map'?'primary':'ghost'} small" style="flex:1" onclick="setCatalogView('list')">☰ Список</button>
     <button class="btn ${state.catalogView==='map'?'primary':'ghost'} small" style="flex:1" onclick="setCatalogView('map')">🗺️ Карта${withCoords.length?` (${withCoords.length})`:''}</button>
   </div>`;
@@ -2176,9 +2265,9 @@ async function fillMasterDetail(){
   state._eligibleReviewBookings = eligibleBookings;
 
   const back = state._adminPreviewReturn
-    ? `<div class="backbar"><button class="backbtn" onclick="backFromAdminPreview()">←</button><div style="font-weight:700">${escapeHtml(m.name)}</div></div>
+    ? `<div class="backbar"><button class="backbtn" onclick="backFromAdminPreview()">←</button><div style="font-weight:700;flex:1;">${escapeHtml(m.name)}</div></div>
        <div class="pillnote" style="margin:0 18px 10px;background:#E4DCF3;border-color:#D6C6EE;color:#4B3B7A;">👁 Вы смотрите профиль глазами клиента. <button class="link-btn" style="margin-left:4px" onclick="backFromAdminPreview()">Вернуться в кабинет владельца</button></div>`
-    : `<div class="backbar"><button class="backbtn" onclick="backToCatalog()">←</button><div style="font-weight:700">${escapeHtml(m.name)}</div></div>`;
+    : `<div class="backbar"><button class="backbtn" onclick="backToCatalog()">←</button><div style="font-weight:700;flex:1;">${escapeHtml(m.name)}</div><button class="tour-trigger" onclick="startMasterDetailTour()" title="Краткий тур">✨</button></div>`;
 
   const header = `<div class="card" style="display:flex;gap:12px;align-items:center;">
     <div class="avatar" style="width:64px;height:64px;font-size:30px;${avatarStyle(m)}">${avatarInner(m,spec)}</div>
@@ -2196,9 +2285,9 @@ async function fillMasterDetail(){
     <button class="${state.masterDetailTab==='about'?'active':''}" onclick="setDTab('about')">О мастере</button>
     <button class="${state.masterDetailTab==='services'?'active':''}" onclick="setDTab('services')">Услуги</button>
     <button class="${state.masterDetailTab==='portfolio'?'active':''}" onclick="setDTab('portfolio')">Работы</button>
-    <button class="${state.masterDetailTab==='reviews'?'active':''}" onclick="setDTab('reviews')">Отзывы (${reviews.length})</button>
-    <button class="${state.masterDetailTab==='chat'?'active':''}" onclick="setDTab('chat')">💬 Чат</button>
-    <button class="${state.masterDetailTab==='book'?'active':''}" onclick="setDTab('book')">Записаться</button>
+    <button id="tourReviewsTab" class="${state.masterDetailTab==='reviews'?'active':''}" onclick="setDTab('reviews')">Отзывы (${reviews.length})</button>
+    <button id="tourChatTab" class="${state.masterDetailTab==='chat'?'active':''}" onclick="setDTab('chat')">💬 Чат</button>
+    <button id="tourBookTab" class="${state.masterDetailTab==='book'?'active':''}" onclick="setDTab('book')">Записаться</button>
   </div>`;
 
   let body='';
@@ -2758,11 +2847,14 @@ async function fillMyBookings(){
   const mine = await sget('my-client-bookings', false) || [];
   const hero = `<div class="hero" style="display:flex;justify-content:space-between;align-items:flex-start;">
     <div><h1>Мои записи</h1><p>Статусы ваших заявок к мастерам.</p></div>
-    <button class="hdr-icon" style="margin-top:26px;" onclick="goto('clientprofile')" title="Профиль и настройки">👤</button>
+    <div style="display:flex;gap:8px;margin-top:26px;">
+      <button class="tour-trigger" onclick="startMyBookingsTour()" title="Краткий тур">✨</button>
+      <button class="hdr-icon" onclick="goto('clientprofile')" title="Профиль и настройки">👤</button>
+    </div>
   </div>`;
 
   const myHealthNotes = await sget('my-health-notes', false) || '';
-  const selfNotesCard = `<div class="card">
+  const selfNotesCard = `<div class="card" id="tourSelfNotesCard">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">📝 Заметка о себе</div>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Аллергии, чувствительность, предпочтения по материалам — заполните один раз, и мастер увидит это при каждой новой записи.</div>
     <textarea id="myHealthNotesInput" placeholder="Например: аллергия на гипоаллергенный гель, чувствительная кутикула" style="min-height:60px;">${escapeHtml(myHealthNotes)}</textarea>
@@ -2771,7 +2863,7 @@ async function fillMyBookings(){
 
   const refLink = `https://t.me/${BOT_USERNAME}?startapp=ref_${ownerId()}`;
   const referrals = await sget('referrals:'+ownerId(), true) || [];
-  const referralCard = `<div class="card">
+  const referralCard = `<div class="card" id="tourReferralCard">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">👯 Пригласите подругу</div>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Отправьте эту ссылку — когда подруга откроет приложение по ней, вы обе станете приоритетными клиентами у мастеров (это отметка для мастера, помогает при прочих равных).${referrals.length?` Уже приглашено: ${referrals.length}.`:''}</div>
     <div class="pinkfield">
@@ -3070,6 +3162,89 @@ function setRegAccountType(type){
 }
 window.setRegAccountType = setRegAccountType;
 
+/* ============ ИНТЕРАКТИВНЫЙ ТУР С ПОДСВЕТКОЙ ЭЛЕМЕНТОВ ============
+   Универсальный движок: принимает массив шагов {selector, title, text} и по очереди
+   подсвечивает реальные элементы прямо на текущей странице — не отдельный экран,
+   а оверлей поверх того, что уже открыто. */
+let _tourSteps = null;
+let _tourIndex = 0;
+
+function startSpotlightTour(steps){
+  if(!steps || !steps.length) return;
+  _tourSteps = steps;
+  _tourIndex = 0;
+  renderTourStep();
+  window.addEventListener('resize', repositionTourHighlight);
+}
+window.startSpotlightTour = startSpotlightTour;
+
+function renderTourStep(){
+  closeTourOverlayEls(); // на случай повторного вызова — не плодим дубликаты
+  const step = _tourSteps[_tourIndex];
+  const target = document.querySelector(step.selector);
+
+  const highlight = document.createElement('div');
+  highlight.className = 'tour-highlight';
+  highlight.id = 'tourHighlightEl';
+  document.body.appendChild(highlight);
+  positionTourHighlight(target);
+
+  if(target) target.scrollIntoView({block:'center', behavior:'smooth'});
+
+  const isFirst = _tourIndex===0;
+  const isLast = _tourIndex===_tourSteps.length-1;
+  const dots = _tourSteps.map((_,i)=>`<span class="${i===_tourIndex?'on':''}"></span>`).join('');
+
+  const sheet = document.createElement('div');
+  sheet.className = 'tour-sheet';
+  sheet.id = 'tourSheetEl';
+  sheet.innerHTML = `
+    <div class="tour-dots">${dots}</div>
+    <div class="ttitle">${escapeHtml(step.title)}</div>
+    <div class="ttext">${escapeHtml(step.text)}</div>
+    <div style="display:flex;gap:10px;">
+      ${!isFirst?`<button class="btn ghost" onclick="tourStep(-1)">Назад</button>`:''}
+      ${!isLast?`<button class="btn primary" onclick="tourStep(1)">Далее</button>`:`<button class="btn primary" onclick="closeTour()">Готово</button>`}
+    </div>
+    <button class="link-btn" style="display:block;text-align:center;width:100%;margin-top:12px;" onclick="closeTour()">Закрыть</button>
+  `;
+  document.body.appendChild(sheet);
+}
+
+function positionTourHighlight(target){
+  const el = document.getElementById('tourHighlightEl');
+  if(!el) return;
+  if(!target){ el.style.top='-9999px'; el.style.left='-9999px'; el.style.width='0'; el.style.height='0'; return; }
+  const r = target.getBoundingClientRect();
+  const pad = 8;
+  el.style.top = (r.top-pad)+'px';
+  el.style.left = (r.left-pad)+'px';
+  el.style.width = (r.width+pad*2)+'px';
+  el.style.height = (r.height+pad*2)+'px';
+}
+function repositionTourHighlight(){
+  if(!_tourSteps) return;
+  const step = _tourSteps[_tourIndex];
+  positionTourHighlight(document.querySelector(step.selector));
+}
+
+function tourStep(dir){
+  _tourIndex = Math.max(0, Math.min(_tourSteps.length-1, _tourIndex+dir));
+  renderTourStep();
+}
+window.tourStep = tourStep;
+
+function closeTourOverlayEls(){
+  const h = document.getElementById('tourHighlightEl'); if(h) h.remove();
+  const s = document.getElementById('tourSheetEl'); if(s) s.remove();
+}
+function closeTour(){
+  closeTourOverlayEls();
+  window.removeEventListener('resize', repositionTourHighlight);
+  _tourSteps = null;
+}
+window.closeTour = closeTour;
+
 function showLegalModal(doc){
   const title = doc==='terms' ? 'Пользовательское соглашение' : 'Политика конфиденциальности';
   const text = doc==='terms' ? TERMS_OF_SERVICE : PRIVACY_POLICY;
@@ -3234,10 +3409,10 @@ async function renderMasterDashboard(m, isDemo){
     : ['schedule','bookings'].includes(state.masterTab) ? 'work'
     : state.masterTab; // 'clients' | 'chat' остаются как есть
   const tabs = `<div class="subnav">
-    <button class="${mainTab==='profile'?'active':''}" onclick="setMTab('profile')">Профиль</button>
-    <button class="${mainTab==='work'?'active':''}" onclick="setMTab('schedule')">Работа${pending?` (${pending})`:''}</button>
-    <button class="${mainTab==='clients'?'active':''}" onclick="setMTab('clients')">👥 Клиенты</button>
-    <button class="${mainTab==='chat'?'active':''}" onclick="setMTab('chat')">💬 Чат${chatUnread?` (${chatUnread})`:''}</button>
+    <button id="tourTabProfile" class="${mainTab==='profile'?'active':''}" onclick="setMTab('profile')">Профиль</button>
+    <button id="tourTabWork" class="${mainTab==='work'?'active':''}" onclick="setMTab('schedule')">Работа${pending?` (${pending})`:''}</button>
+    <button id="tourTabClients" class="${mainTab==='clients'?'active':''}" onclick="setMTab('clients')">👥 Клиенты</button>
+    <button id="tourTabChat" class="${mainTab==='chat'?'active':''}" onclick="setMTab('chat')">💬 Чат${chatUnread?` (${chatUnread})`:''}</button>
   </div>`;
   const profileSubTabs = mainTab==='profile' ? `<div class="chiprow" style="padding:0 18px 14px;">
     <span class="chip ${state.masterTab==='profile'?'active':''}" onclick="state.masterTab='profile'; fillMasterArea();">Основное</span>
@@ -3263,7 +3438,8 @@ async function renderMasterDashboard(m, isDemo){
 
   const dashHeader = `<div class="hero" style="padding-top:20px;padding-bottom:0;display:flex;align-items:center;gap:12px;">
     <div class="avatar" style="width:44px;height:44px;font-size:20px;border-radius:14px;${avatarStyle(m)}">${avatarInner(m,SPECS[m.specialization])}</div>
-    <h1 style="font-size:22px;margin:0;">${escapeHtml(m.name)}</h1>
+    <h1 style="font-size:22px;margin:0;flex:1;">${escapeHtml(m.name)}</h1>
+    ${!isDemo ? renderTourTriggerFor(mainTab) : ''}
   </div>`;
   const ownerBannersHtml = isDemo ? '' : renderBannersHtml(await getActiveBanners('masters'));
   const placeAdLink = isDemo ? '' : `<div class="section-pad" style="padding-top:${ownerBannersHtml?'0':'14px'};padding-bottom:0;text-align:center;">
@@ -3273,6 +3449,70 @@ async function renderMasterDashboard(m, isDemo){
 }
 function setMTab(t){ state.masterTab=t; fillMasterArea(); }
 window.setMTab = setMTab;
+
+function renderTourTriggerFor(mainTab){
+  const map = {
+    profile: (state.masterTab==='services') ? 'startServicesTour' : (state.masterTab==='portfolio') ? 'startPortfolioTour' : 'startMasterHomeTour',
+    work: (state.masterTab==='bookings') ? 'startBookingsTour' : 'startScheduleTour',
+    clients: 'startClientsTour',
+    chat: null, // чат простой сам по себе, отдельный тур не нужен
+  };
+  const fn = map[mainTab];
+  if(!fn) return '';
+  return `<button class="tour-trigger" onclick="${fn}()" title="Краткий тур">✨</button>`;
+}
+window.renderTourTriggerFor = renderTourTriggerFor;
+
+function startServicesTour(){
+  const candidates = [
+    { selector:'#tourPackagesCard', title:'Пакеты услуг', text:'Например «5 визитов по цене 4» — клиент платит один раз, а посещения списываются в CRM по факту.' },
+  ];
+  startSpotlightTour(candidates.filter(s=>document.querySelector(s.selector)));
+}
+window.startServicesTour = startServicesTour;
+
+function startPortfolioTour(){
+  const candidates = [
+    { selector:'#tourPortfolioCard', title:'Портфолио', text:'Загрузите фото работ прямо с телефона или вставьте ссылку — клиенты видят их на вашей странице.' },
+  ];
+  startSpotlightTour(candidates.filter(s=>document.querySelector(s.selector)));
+}
+window.startPortfolioTour = startPortfolioTour;
+
+function startClientsTour(){
+  const candidates = [
+    { selector:'#tourWinBackCard', title:'Давно не были', text:'Клиенты, которые обычно приходят чаще — стоит написать и напомнить о себе.' },
+    { selector:'#tourBirthdayCard', title:'Скоро день рождения', text:'Приложение само подскажет, кого пора поздравить.' },
+    { selector:'#tourImportCard', title:'Импорт базы', text:'Вставьте список клиентов текстом (например, из блокнота) — приложение разберёт его само.' },
+  ];
+  startSpotlightTour(candidates.filter(s=>document.querySelector(s.selector)));
+}
+window.startClientsTour = startClientsTour;
+
+function startBookingsTour(){
+  const candidates = [
+    { selector:'#tourFinanceCard', title:'Финансовый отчёт', text:'Доход за 30 дней, топ-услуга и самый загруженный день — считается автоматически по завершённым визитам.' },
+    { selector:'#tourExpensesCard', title:'Расходы на материалы', text:'Списывайте по факту оказанной услуги — гель, краска — чтобы видеть не доход, а реальную маржу.' },
+    { selector:'#tourTaxCard', title:'Отчёт для налоговой', text:'Для самозанятых: выгрузка дохода за месяц или год с расчётом суммы к отложению на налог (НПД 4%).' },
+  ];
+  startSpotlightTour(candidates.filter(s=>document.querySelector(s.selector)));
+}
+window.startBookingsTour = startBookingsTour;
+
+function startMasterHomeTour(){
+  // Шаги строятся по факту — если какого-то элемента сейчас нет на экране
+  // (например, чек-лист уже полностью выполнен и скрыт), просто пропускаем его.
+  const candidates = [
+    { selector:'#tourLinkCard', title:'Ваша ссылка для клиентов', text:'Отправьте её клиентам в любой соцсети или мессенджере — откроется в обычном браузере, клиент бронирует сам, без звонков и переписки.' },
+    { selector:'#tourOnboardCard', title:'Заполните профиль', text:'Чек-лист подсказывает, что осталось сделать до первой записи: услуги, портфолио, расписание.' },
+    { selector:'#tourTabWork', title:'Работа', text:'Здесь расписание и записи — открывайте свободное время и следите за заявками клиентов.' },
+    { selector:'#tourTabClients', title:'Клиенты', text:'Мини-CRM: заметки, теги, история визитов, дни рождения и напоминания о тех, кто давно не был.' },
+    { selector:'#tourTabChat', title:'Чат', text:'Переписка с клиентами и с владельцем платформы — в одном месте.' },
+  ];
+  const steps = candidates.filter(s => document.querySelector(s.selector));
+  startSpotlightTour(steps);
+}
+window.startMasterHomeTour = startMasterHomeTour;
 
 /* ============ MASTER ↔ OWNER CHAT (master side) ============ */
 function renderMChat(m, isDemo, chat){
@@ -3571,7 +3811,7 @@ async function renderMProfile(m, isDemo, bookings){
   const onboardDone = onboardTasks.filter(t=>t.done).length;
   const onboardTotal = onboardTasks.length;
   const onboardDismissed = !isDemo && (await sget('onboard-checklist-dismissed:'+m.id, true));
-  const onboardCard = (!isDemo && onboardDone<onboardTotal && !onboardDismissed) ? `<div class="card" style="background:var(--pink-tint);border:1px solid rgba(236,24,118,0.28);">
+  const onboardCard = (!isDemo && onboardDone<onboardTotal && !onboardDismissed) ? `<div class="card" id="tourOnboardCard" style="background:var(--pink-tint);border:1px solid rgba(236,24,118,0.28);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
       <div style="font-weight:700;font-size:13.5px;color:var(--rose-deep);">✨ Заполните профиль (${onboardDone}/${onboardTotal})</div>
       <button onclick="dismissOnboardChecklist('${m.id}')" style="background:none;border:none;color:var(--rose-deep);font-size:16px;">✕</button>
@@ -3620,7 +3860,7 @@ async function renderMProfile(m, isDemo, bookings){
     </div>
   </div>`;
 
-  const linkCard = isDemo ? '' : `<div class="card">
+  const linkCard = isDemo ? '' : `<div class="card" id="tourLinkCard">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🔗 Ваша ссылка для клиентов</div>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Отправьте эту ссылку клиентам в директ, сторис или на сайт — она откроет ваш профиль в приложении сразу на странице записи.</div>
     <div class="pinkfield">
@@ -3990,7 +4230,7 @@ function renderMServices(m, isDemo){
 
   const packages = m.packages || [];
   const svcOptions = m.services.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
-  const packagesCard = isDemo ? '' : `<div class="card">
+  const packagesCard = isDemo ? "" : `<div class="card" id="tourPackagesCard">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">📦 Пакеты услуг</div>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Например «5 визитов по цене 4» — клиент платит один раз, а посещения списываются по факту. Начислять и списывать визиты можно в CRM по каждому клиенту.</div>
     ${packages.length ? packages.map(p=>{
@@ -4063,7 +4303,7 @@ async function deleteService(sid){
 window.addService=addService; window.deleteService=deleteService;
 
 function renderMPortfolio(m, isDemo){
-  return `<div class="card">
+  return `<div class="card" id="tourPortfolioCard">
     <div class="gallery">${m.portfolio.map(p=>`<div style="position:relative;"><img src="${p.url}">${isDemo?'':`<button onclick="deletePortfolio('${p.id}')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,.55);color:#fff;border-radius:50%;width:20px;height:20px;font-size:12px;">✕</button>`}</div>`).join('')}</div>
     ${!m.portfolio.length? '<div class="empty" style="padding:10px 0">Пока нет фото работ</div>':''}
     ${isDemo? '<div class="pillnote" style="margin:12px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">В демо-режиме нельзя сохранить фото.</div>' : `
@@ -4149,7 +4389,7 @@ function renderMSchedule(m, isDemo){
   const slotsRef = staffId ? ((m.staffSlots&&m.staffSlots[staffId])||{}) : (m.slots||{});
   const daySlots = slotsRef[state.masterScheduleDate] || [];
   const slotGrid = TIMES.map(t=>`<div class="slot ${daySlots.includes(t)?'on':''}" onclick="${isDemo?'':`toggleSlot('${t}')`}">${t}</div>`).join('');
-  const templates = isDemo ? '' : `<div class="card">
+  const templates = isDemo ? '' : `<div class="card" id="tourTemplatesCard">
     ${staffChips}
     <div style="font-weight:700;font-size:13.5px;margin-bottom:8px;">Быстрые шаблоны</div>
     <div style="display:flex;flex-direction:column;gap:8px;">
@@ -4159,7 +4399,7 @@ function renderMSchedule(m, isDemo){
     </div>
     <div style="font-size:11.5px;color:var(--ink-soft);margin-top:8px;">Шаблон не трогает дни, которые вы уже настроили вручную под другим расписанием — при необходимости поправьте отдельные дни ниже.</div>
   </div>`;
-  return templates + `<div class="card">
+  return templates + `<div class="card" id="tourSlotsCard">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:8px;">Выберите дату</div>
     <div class="chiprow" style="padding:0;overflow-x:auto;">${dayChips}</div>
     <div class="divider"></div>
@@ -4169,6 +4409,14 @@ function renderMSchedule(m, isDemo){
     ${isDemo?'<div class="pillnote" style="margin:12px 0 0;padding-left:0;padding-right:0;background:none;border:none;color:var(--ink-soft);">В демо-режиме расписание не сохраняется.</div>':''}
   </div>`;
 }
+function startScheduleTour(){
+  const candidates = [
+    { selector:'#tourTemplatesCard', title:'Быстрые шаблоны', text:'Заполните расписание на месяц вперёд одним нажатием — по будням или каждый день. Отдельные дни потом можно поправить вручную.' },
+    { selector:'#tourSlotsCard', title:'Свободное время', text:'Выберите дату и нажимайте на нужные часы — они станут доступны клиентам для записи. Повторное нажатие закрывает слот.' },
+  ];
+  startSpotlightTour(candidates.filter(s=>document.querySelector(s.selector)));
+}
+window.startScheduleTour = startScheduleTour;
 function pickScheduleStaff(staffId){ state.masterScheduleStaffId=staffId; (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)(); }
 window.pickScheduleStaff=pickScheduleStaff;
 function pickScheduleDate(d){ state.masterScheduleDate=d; (state._forceEdit? fillMasterAreaEditMode : fillMasterArea)(); }
@@ -4246,7 +4494,7 @@ async function renderMBookings(m, bookings, isDemo){
   const expenses30 = expenses.filter(e=>e.date>=since30).reduce((sum,e)=>sum+(e.amount||0),0);
   const netProfit30 = revenue30 - expenses30;
 
-  const financeCard = came.length ? `<div class="card">
+  const financeCard = came.length ? `<div class="card" id="tourFinanceCard">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:10px;">💰 Финансовый отчёт</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div><div style="font-size:19px;font-weight:700;font-family:'Inter',sans-serif;">${revenue30}₽</div><div style="font-size:10.5px;color:var(--ink-soft);">выручка за 30 дней</div></div>
@@ -4260,7 +4508,7 @@ async function renderMBookings(m, bookings, isDemo){
     ${Math.max(...byWeekday)>0?`<div style="font-size:12px;color:var(--ink-soft);margin-top:4px;">📅 Самый загруженный день: <b style="color:var(--ink);">${wdNames[busiestIdx]}</b></div>`:''}
   </div>` : '';
 
-  const expensesCard = isDemo ? '' : `<div class="card">
+  const expensesCard = isDemo ? '' : `<div class="card" id="tourExpensesCard">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">🧾 Расходы на материалы</div>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Списывайте по факту оказанной услуги — гель, краска, расходники — чтобы видеть не только доход, но и реальную маржу.</div>
     <div class="row2">
@@ -4276,7 +4524,7 @@ async function renderMBookings(m, bookings, isDemo){
       </div>`).join('')}` : ''}
   </div>`;
 
-  const taxReportCard = isDemo ? '' : `<div class="card">
+  const taxReportCard = isDemo ? '' : `<div class="card" id="tourTaxCard">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">📋 Отчёт для налоговой</div>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Для самозанятых: выгрузка дохода за месяц или год списком, с суммой к отложению на налог (НПД, 4% при работе с физлицами).</div>
     <div class="row2">
@@ -4694,13 +4942,13 @@ async function renderMClients(m, isDemo, bookings){
     <button class="btn primary small" style="margin-top:8px;" onclick="broadcastToClients('${m.id}')" ${withTelegram?'':'disabled'}>Отправить всем (${withTelegram})</button>
   </div>`;
 
-  const winBackCard = winBackCount ? `<div class="card" style="background:#FBEFD6;border:1px solid #F3DFA8;">
+  const winBackCard = winBackCount ? `<div class="card" id="tourWinBackCard" style="background:#FBEFD6;border:1px solid #F3DFA8;">
     <div style="font-weight:700;font-size:13.5px;color:#8A5A1F;margin-bottom:4px;">⏰ Давно не были (${winBackCount})</div>
     <div style="font-size:12px;color:#8A5A1F;line-height:1.5;">Обычно приходят чаще — возможно, стоит написать и напомнить о себе. Ищите бейдж «⏰ давно не был(а)» в списке ниже.</div>
   </div>` : '';
 
   const birthdaySoonList = list.filter(c=>c.birthdaySoon).sort((a,b)=>a.daysUntilBirthday-b.daysUntilBirthday);
-  const birthdayCard = birthdaySoonList.length ? `<div class="card" style="background:var(--pink-tint);border:1px solid rgba(236,24,118,0.28);">
+  const birthdayCard = birthdaySoonList.length ? `<div class="card" id="tourBirthdayCard" style="background:var(--pink-tint);border:1px solid rgba(236,24,118,0.28);">
     <div style="font-weight:700;font-size:13.5px;color:var(--rose-deep);margin-bottom:6px;">🎂 Скоро день рождения (${birthdaySoonList.length})</div>
     ${birthdaySoonList.map(c=>`<div style="font-size:12.5px;color:var(--rose-deep);padding:3px 0;">${escapeHtml(c.name)} — ${c.daysUntilBirthday===0?'сегодня!':c.daysUntilBirthday===1?'завтра':`через ${c.daysUntilBirthday} дн.`}</div>`).join('')}
   </div>` : '';
@@ -4717,7 +4965,7 @@ async function renderMClients(m, isDemo, bookings){
     </div>`).join('')}
   </div>` : '';
 
-  const importCard = `<div class="card">
+  const importCard = `<div class="card" id="tourImportCard">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:4px;">📥 Импортировать базу клиентов</div>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;line-height:1.5;">Переносите базу из блокнота или другого сервиса — по одному клиенту на строке, формат «Имя, телефон или @username». Так вы сразу увидите их здесь.</div>
     <textarea id="importClientsText" placeholder="Анна, +79001234567&#10;Мария, @maria_beauty" style="min-height:80px;"></textarea>
@@ -4969,7 +5217,8 @@ function renderAdminLogin(){
     <div class="field"><label>Пароль администратора</label><input id="admPass" type="password" placeholder="Введите пароль" onkeydown="if(event.key==='Enter') tryAdminLogin()"></div>
     <button class="btn primary" onclick="tryAdminLogin()">Войти</button>
   </div>
-  <div class="pillnote">Вы открыли приложение вне Telegram, поэтому используется резервный пароль для тестирования: <b>${ADMIN_PASSWORD}</b>. Внутри настоящего Telegram-бота этот экран не появится — доступ будет автоматически определяться по вашему Telegram ID (${OWNER_TELEGRAM_IDS.join(', ')}), без пароля.</div>`;
+  <div class="pillnote">Вы открыли приложение вне Telegram, поэтому используется резервный пароль для тестирования: <b>${ADMIN_PASSWORD}</b>. Внутри настоящего Telegram-бота этот экран не появится — доступ будет автоматически определяться по вашему Telegram ID (${OWNER_TELEGRAM_IDS.join(', ')}), без пароля.</div>
+  ${state._telegramDetectError ? `<div class="pillnote" style="background:#FCE1EE;border-color:#F5C7E0;color:var(--danger);">⚠️ Если вы точно открыли это внутри настоящего Telegram — вот техническая причина, почему приложение так не считает (пришлите это разработчику): <br><b>${escapeHtml(state._telegramDetectError)}</b></div>` : ''}`;
 }
 function tryAdminLogin(){
   const v = document.getElementById('admPass').value;
@@ -5134,26 +5383,26 @@ async function renderAdminDashboard(){
     </button>
   </div>
   ${isOwnerRole ? `<div class="section-pad" style="display:flex;gap:10px;">
-    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='hub-masters'; fillAdmin();">
+    <button id="tourHubMasters" class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='hub-masters'; fillAdmin();">
       🧑‍🤝‍🧑 Мастера
     </button>
-    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='hub-analytics'; fillAdmin();">
+    <button id="tourHubAnalytics" class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='hub-analytics'; fillAdmin();">
       📊 Аналитика
     </button>
   </div>
   <div class="section-pad" style="display:flex;gap:10px;">
-    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='hub-communication'; fillAdmin();">
+    <button id="tourHubCommunication" class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='hub-communication'; fillAdmin();">
       💬 Общение${totalChatUnread?` (${totalChatUnread})`:''}
     </button>
-    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reviewsShowcase'; fillAdmin();">
+    <button id="tourHubPromotion" class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reviewsShowcase'; fillAdmin();">
       🌟 Продвижение
     </button>
   </div>
   <div class="section-pad" style="display:flex;gap:10px;">
-    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reports'; fillAdmin();">
+    <button id="tourHubReports" class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='reports'; fillAdmin();">
       🚩 Жалобы
     </button>
-    <button class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='hub-system'; fillAdmin();">
+    <button id="tourHubSystem" class="btn ghost" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="state.adminScreen='hub-system'; fillAdmin();">
       ⚙️ Система
     </button>
   </div>` : `<div class="section-pad">
@@ -5175,6 +5424,7 @@ async function renderAdminDashboard(){
   document.getElementById('content').innerHTML = `
     <div class="hero" style="padding-top:20px;display:flex;justify-content:space-between;align-items:flex-start;">
       <div><h1 style="font-size:22px;">Владелец платформы</h1><p>Управление мастерами и подписками</p></div>
+      ${isOwnerRole ? `<button class="tour-trigger" style="margin-top:2px;" onclick="startAdminHomeTour()" title="Краткий тур">✨</button>` : ''}
     </div>
     ${identityLine}
     ${freeModeBanner}
