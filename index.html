@@ -384,7 +384,7 @@ input,select,textarea{font-family:inherit;}
 /* ============ CONFIG ============ */
 const OWNER_TELEGRAM_IDS = ['8078091086']; // владелец платформы — доступ к кабинету только с этого Telegram-аккаунта
 const OWNER_TELEGRAM_USERNAME = 'whitespirited'; // ваш @username в Telegram (без @) — сюда попадут мастера с кнопки «Отправить квитанцию»
-const BOT_USERNAME = 'BeautyHubs_bot'; // ⚠️ ЗАПОЛНИТЕ: username вашего Telegram-бота (без @), через который открывается это приложение.
+const BOT_USERNAME = 'BeautyHubs_bot'; // реальный username бота, без @
 const NEWS_CHANNEL_USERNAME = 'beautyhub_place'; // ⚠️ ЗАПОЛНИТЕ: username новостного канала приложения (без @), если он у вас есть.
 
 // ⚠️ Мониторинг ошибок (Sentry). Зарегистрируйтесь на sentry.io (есть бесплатный тариф),
@@ -1186,12 +1186,12 @@ window.saveClientProfileFields = saveClientProfileFields;
 /* ============ ЮРИДИЧЕСКИЕ ДОКУМЕНТЫ (просмотр в приложении) ============ */
 async function fillLegalScreen(){
   const isTerms = state.legalDoc !== 'privacy';
-  const title = isTerms ? 'Пользовательское соглашение' : 'Политика конфиденциальности';
+  const title = isTerms ? 'Публичная оферта' : 'Политика конфиденциальности';
   const text = isTerms ? TERMS_OF_SERVICE : PRIVACY_POLICY;
   document.getElementById('content').innerHTML = `
   <div class="backbar"><button class="backbtn" onclick="goto('settings')">←</button><div style="font-weight:700">${title}</div></div>
   <div class="section-pad" style="display:flex;gap:8px;padding-bottom:14px;">
-    <button class="chip ${isTerms?'active':''}" onclick="state.legalDoc='terms'; fillLegalScreen();">Соглашение</button>
+    <button class="chip ${isTerms?'active':''}" onclick="state.legalDoc='terms'; fillLegalScreen();">Оферта</button>
     <button class="chip ${!isTerms?'active':''}" onclick="state.legalDoc='privacy'; fillLegalScreen();">Конфиденциальность</button>
   </div>
   <div class="card"><div style="font-size:13.5px;line-height:1.7;color:var(--ink);white-space:pre-wrap;">${escapeHtml(text)}</div></div>
@@ -1233,7 +1233,7 @@ async function fillSettingsScreen(){
   <div class="card" style="padding:6px 18px;">
     <div class="linkrow" onclick="state.legalDoc='terms'; goto('legal');">
       <div class="linkic">📄</div>
-      <div class="linkbody"><div class="linkname">Пользовательское соглашение</div></div>
+      <div class="linkbody"><div class="linkname">Публичная оферта</div></div>
       <div class="linkarrow">›</div>
     </div>
     <div class="linkrow" onclick="state.legalDoc='privacy'; goto('legal');">
@@ -3144,7 +3144,7 @@ function startRegistration(){
     </div>
     <div class="checkrow"><input type="checkbox" id="regNoAddress" onchange="toggleRegNoAddress()"><label for="regNoAddress">Нет физического адреса (выезд к клиенту / удалённые услуги)</label></div>
     <div class="field"><label>О себе (необязательно)</label><textarea id="regBio" placeholder="Опыт, специализация, материалы… можно добавить позже"></textarea></div>
-    <div class="checkrow"><input type="checkbox" id="regConsent"><label for="regConsent">Согласен(на) с <a href="#" onclick="event.stopPropagation(); event.preventDefault(); showLegalModal('terms');" style="color:var(--rose-deep);">условиями использования</a> и <a href="#" onclick="event.stopPropagation(); event.preventDefault(); showLegalModal('privacy');" style="color:var(--rose-deep);">политикой конфиденциальности</a></label></div>
+    <div class="checkrow"><input type="checkbox" id="regConsent"><label for="regConsent">Согласен(на) с <a href="#" onclick="event.stopPropagation(); event.preventDefault(); showLegalModal('terms');" style="color:var(--rose-deep);">публичной офертой</a> и <a href="#" onclick="event.stopPropagation(); event.preventDefault(); showLegalModal('privacy');" style="color:var(--rose-deep);">политикой конфиденциальности</a></label></div>
     <button class="btn primary" onclick="finishRegistration()">Создать профиль</button>
   </div>`;
 }
@@ -3246,7 +3246,7 @@ function closeTour(){
 window.closeTour = closeTour;
 
 function showLegalModal(doc){
-  const title = doc==='terms' ? 'Пользовательское соглашение' : 'Политика конфиденциальности';
+  const title = doc==='terms' ? 'Публичная оферта' : 'Политика конфиденциальности';
   const text = doc==='terms' ? TERMS_OF_SERVICE : PRIVACY_POLICY;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
