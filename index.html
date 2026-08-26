@@ -519,7 +519,17 @@ try{
 /* Персональные данные (shared:false) привязываются к Telegram ID текущего пользователя.
    Вне Telegram (тестирование в браузере) используется временный тестовый идентификатор. */
 function ownerId(){
-  return (state.tgUser && state.tgUser.id) ? String(state.tgUser.id) : 'anon-test-user';
+  if(state.tgUser && state.tgUser.id) return String(state.tgUser.id);
+  // Гость без входа (ни Mini App, ни вход через сайт) — у каждого браузера своя,
+  // никогда ни с кем не пересекающаяся анонимная личность, а не общая строка на всех.
+  // Общая строка означала, что случайные посетители сайта могли увидеть чужие
+  // тестовые данные, оставшиеся от предыдущих проверок — реальная дыра.
+  let guestId = localStorage.getItem('bh_guest_id');
+  if(!guestId){
+    guestId = 'guest-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,10);
+    localStorage.setItem('bh_guest_id', guestId);
+  }
+  return guestId;
 }
 
 /* ============ STORAGE HELPERS (Supabase-backed, повторяют сигнатуру window.storage) ============ */
@@ -1242,6 +1252,7 @@ async function fillSettingsScreen(){
       <div class="linkarrow">›</div>
     </div>
   </div>
+  ${state.isWebLogin ? `<div class="section-pad"><button class="btn ghost" onclick="logoutWebsiteSession()">Выйти из аккаунта</button></div>` : ''}
   <div class="pillnote" style="background:#FFF;border:1px solid var(--line);color:var(--ink-soft);">Удаление аккаунта и всех данных — напишите в «Помощь → Поддержка», обработаем вручную.</div>
   `;
 }
@@ -1517,6 +1528,39 @@ function readStartParamFromLocation(){
   }catch(e){ return null; }
 }
 
+/* ============ ПРОВЕРКА БЛОКИРОВКИ (вызывается при каждом заходе) ============ */
+async function checkIfBlocked(telegramId){
+  try{
+    const blocked = await sget('blocked-users', true) || {};
+    const entry = blocked[telegramId];
+    if(!entry) return null;
+    if(entry.expiresAt && entry.expiresAt <= Date.now()) return null; // срок вышел — не считается
+    return entry;
+  }catch(e){
+    console.warn('checkIfBlocked failed, пропускаем проверку чтобы не заблокировать всех при сбое сети:', e);
+    return null;
+  }
+}
+
+function renderBlockedScreen(block){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+  <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;background:var(--bg);">
+    <div style="width:64px;height:64px;border-radius:18px;background:var(--danger);display:flex;align-items:center;justify-content:center;color:#fff;font-size:30px;margin-bottom:20px;">🚫</div>
+    <div style="font-weight:800;font-size:22px;margin-bottom:10px;">Доступ ограничен</div>
+    <div style="color:var(--ink-soft);font-size:14px;line-height:1.6;max-width:320px;margin-bottom:6px;">Ваш доступ к BeautyHub временно заблокирован владельцем платформы.</div>
+    <div style="background:#fff;border-radius:16px;padding:16px 18px;margin-top:14px;max-width:320px;box-shadow:var(--shadow);">
+      <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-bottom:4px;">ПРИЧИНА</div>
+      <div style="font-size:14px;color:var(--ink);margin-bottom:12px;">${escapeHtml(block.reason)}</div>
+      <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-bottom:4px;">СРОК</div>
+      <div style="font-size:14px;color:var(--ink);">${block.expiresAt ? 'до ' + new Date(block.expiresAt).toLocaleDateString('ru-RU') : 'бессрочно'}</div>
+    </div>
+    <div style="color:var(--ink-soft);font-size:12.5px;margin-top:20px;">Если считаете, что это ошибка — напишите в поддержку через другой канал связи.</div>
+  </div>`;
+  app.dataset.rendered = 'true';
+}
+window.renderBlockedScreen = renderBlockedScreen;
+
 async function detectTelegramIdentity(){
   try{
     const tg = window.Telegram && window.Telegram.WebApp;
@@ -1564,9 +1608,42 @@ async function detectTelegramIdentity(){
       state.isOwner = false;
       state.adminRole = null;
       state._telegramDetectError = tg ? 'window.Telegram.WebApp есть, но initData пустой или отсутствует' : 'window.Telegram.WebApp вообще не найден на странице';
-      // Для тестирования в обычном браузере: ?startapp=book_<id> в адресной строке
       const urlParam = new URLSearchParams(window.location.search).get('startapp');
       state._startParam = urlParam || readStartParamFromLocation() || null;
+
+      // ============ ВХОД НА САЙТЕ ЧЕРЕЗ TELEGRAM LOGIN WIDGET ============
+      // Мы не внутри Mini App (нет initData), но, возможно, уже входили на сайте раньше —
+      // тогда в localStorage лежит сохранённый JWT. Проверяем срок годности и восстанавливаем
+      // сессию точно так же, как если бы это был настоящий Telegram-контекст: те же RLS-правила,
+      // тот же telegram_id, просто выданный через другой (веб-)механизм проверки подписи.
+      try{
+        const saved = JSON.parse(localStorage.getItem('bh_website_session') || 'null');
+        if(saved && saved.token && saved.exp && (Date.now()/1000) < saved.exp){
+          sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            global: { headers: { Authorization: 'Bearer '+saved.token } }
+          });
+          state._authenticated = true;
+          state.isTelegramContext = true; // с точки зрения доступа к данным — идентичная гарантия личности
+          state.isWebLogin = true; // но НЕ настоящий Telegram WebView — нативные функции (tg.*) недоступны
+          state.tgUser = { id: saved.telegram_id, first_name: saved.first_name, last_name: saved.last_name, username: saved.username, photo_url: saved.photo_url };
+
+          const idStr = String(saved.telegram_id);
+          const isMainOwner = OWNER_TELEGRAM_IDS.includes(idStr);
+          let supportRole = null;
+          if(!isMainOwner){
+            const adminRoles = await sget('admin-roles', true) || {};
+            supportRole = adminRoles[idStr] || null;
+          }
+          state.isOwner = isMainOwner || !!supportRole;
+          state.adminRole = isMainOwner ? 'owner' : supportRole;
+        } else {
+          localStorage.removeItem('bh_website_session'); // протухшая сессия — просто чистим
+          state._needsWebsiteLogin = !state._guestMode; // гость, уже согласившийся смотреть без входа, не должен снова упираться в экран логина
+        }
+      }catch(webAuthErr){
+        console.warn('восстановление веб-сессии не удалось:', webAuthErr);
+        state._needsWebsiteLogin = true;
+      }
     }
   }catch(e){
     console.error('detectTelegramIdentity упал с ошибкой (это и есть причина, почему приложение думает, что оно вне Telegram):', e);
@@ -1578,12 +1655,90 @@ async function detectTelegramIdentity(){
   }
 }
 
+/* ============ ВХОД НА САЙТЕ ЧЕРЕЗ TELEGRAM LOGIN WIDGET ============
+   Показывается только когда сайт открыт НЕ как Telegram Mini App (обычный браузер)
+   и нет сохранённой веб-сессии. Внутри Mini App этот экран никогда не появляется —
+   там идентификация уже есть автоматически. */
+function renderWebsiteLoginScreen(){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+  <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
+    <div style="width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,var(--rose),var(--rose-deep));display:flex;align-items:center;justify-content:center;color:#fff;font-size:30px;margin-bottom:20px;box-shadow:0 14px 30px rgba(180,40,120,.3);">💄</div>
+    <div style="font-weight:800;font-size:24px;margin-bottom:8px;">Beauty<em style="color:var(--rose);font-style:normal;">Hub</em></div>
+    <div style="color:var(--ink-soft);font-size:14px;line-height:1.55;max-width:320px;margin-bottom:28px;">Войдите через Telegram, чтобы видеть свои записи, кабинет мастера или владельца — как в самом приложении.</div>
+    <div id="telegramLoginWidgetContainer"></div>
+    <div style="color:var(--ink-soft);font-size:12px;margin-top:22px;max-width:300px;">Можно и без входа — <a href="#" onclick="continueAsGuestOnWebsite(); return false;" style="color:var(--rose-deep);font-weight:700;">посмотреть каталог мастеров</a> без личного кабинета.</div>
+  </div>`;
+
+  const script = document.createElement('script');
+  script.async = true;
+  script.src = 'https://telegram.org/js/telegram-widget.js?22';
+  script.setAttribute('data-telegram-login', BOT_USERNAME);
+  script.setAttribute('data-size', 'large');
+  script.setAttribute('data-radius', '100');
+  script.setAttribute('data-onauth', 'onTelegramWidgetAuth(user)');
+  script.setAttribute('data-request-access', 'write');
+  document.getElementById('telegramLoginWidgetContainer').appendChild(script);
+}
+window.renderWebsiteLoginScreen = renderWebsiteLoginScreen;
+
+async function onTelegramWidgetAuth(user){
+  try{
+    const resp = await fetch(SUPABASE_URL + '/functions/v1/telegram-widget-auth', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+SUPABASE_ANON_KEY },
+      body: JSON.stringify(user),
+    });
+    const data = await resp.json();
+    if(!resp.ok || !data.token){
+      alert('Не удалось подтвердить вход через Telegram: ' + (data.error||data.reason||'неизвестная ошибка'));
+      return;
+    }
+    const session = {
+      token: data.token, exp: Math.floor(Date.now()/1000) + 24*60*60,
+      telegram_id: data.telegram_id, first_name: data.first_name, last_name: data.last_name,
+      username: data.username, photo_url: data.photo_url,
+    };
+    localStorage.setItem('bh_website_session', JSON.stringify(session));
+    window.location.reload();
+  }catch(e){
+    console.error('onTelegramWidgetAuth failed:', e);
+    alert('Не удалось войти — проверьте интернет и попробуйте ещё раз.');
+  }
+}
+window.onTelegramWidgetAuth = onTelegramWidgetAuth;
+
+function continueAsGuestOnWebsite(){
+  state._guestMode = true;
+  state._needsWebsiteLogin = false;
+  state.isTelegramContext = false;
+  init();
+}
+window.continueAsGuestOnWebsite = continueAsGuestOnWebsite;
+
+function logoutWebsiteSession(){
+  localStorage.removeItem('bh_website_session');
+  window.location.reload();
+}
+window.logoutWebsiteSession = logoutWebsiteSession;
+
 async function init(){
   if(SUPABASE_INIT_ERROR){
     renderSetupError(SUPABASE_INIT_ERROR);
     return;
   }
   await detectTelegramIdentity();
+  if(state._needsWebsiteLogin){
+    renderWebsiteLoginScreen();
+    return;
+  }
+  if(state.tgUser && state.tgUser.id){
+    const isBlocked = await checkIfBlocked(String(state.tgUser.id));
+    if(isBlocked){
+      renderBlockedScreen(isBlocked);
+      return;
+    }
+  }
   await seedIfEmpty();
   state.myMasterId = await sget('my-master-id', false);
   if(state.myMasterId){ state.myMaster = await loadMaster(state.myMasterId); }
@@ -5166,6 +5321,7 @@ async function fillAdmin(){
     if(state.adminScreen==='reports') return renderAdminReports();
     if(state.adminScreen==='fraudCheck') return renderAdminFraudCheck();
     if(state.adminScreen==='duplicates') return renderAdminDuplicates();
+    if(state.adminScreen==='blockedUsers') return renderAdminBlockedUsers();
     if(state.adminScreen==='hub-masters') return renderAdminHubMasters();
     if(state.adminScreen==='hub-analytics') return renderAdminHubAnalytics();
     if(state.adminScreen==='hub-communication') return renderAdminHubCommunication();
@@ -5191,6 +5347,7 @@ async function fillAdmin(){
     if(state.adminScreen==='reports') return renderAdminReports();
     if(state.adminScreen==='fraudCheck') return renderAdminFraudCheck();
     if(state.adminScreen==='duplicates') return renderAdminDuplicates();
+    if(state.adminScreen==='blockedUsers') return renderAdminBlockedUsers();
     if(state.adminScreen==='hub-masters') return renderAdminHubMasters();
     if(state.adminScreen==='hub-analytics') return renderAdminHubAnalytics();
     if(state.adminScreen==='hub-communication') return renderAdminHubCommunication();
@@ -5592,6 +5749,8 @@ async function renderAdminAuditLog(){
     create_banner:'📣 Опубликовал баннер',
     export_backup:'💾 Выгрузил полный бэкап',
     export_platform_summary:'📊 Выгрузил сводный отчёт по платформе',
+    block_user:'🚫 Заблокировал пользователя',
+    unblock_user:'✅ Разблокировал пользователя',
   };
   const rows = log.length ? log.map(e=>`<div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -5887,13 +6046,23 @@ async function renderAdminVisitHistory(){
   visitors.sort((a,b)=>b.lastSeen-a.lastSeen);
   state._visitHistoryCache = visitors;
 
+  const blocked = await sget('blocked-users', true) || {};
+  const now = Date.now();
+
   const roleLabel = { client:'клиент', master:'мастер', owner:'владелец', unknown:'роль не выбрана' };
   const roleBadgeClass = { client:'demo', master:'active', owner:'pending', unknown:'inactive' };
+
+  const blockedActiveCount = Object.values(blocked).filter(b=>!b.expiresAt || b.expiresAt>now).length;
+  const blockedBanner = blockedActiveCount ? `<div class="section-pad" style="padding-bottom:14px;">
+    <button class="btn ghost" style="width:100%;color:var(--danger);" onclick="state.adminScreen='blockedUsers'; fillAdmin();">🚫 Заблокированные (${blockedActiveCount})</button>
+  </div>` : '';
 
   const rows = visitors.length ? visitors.map((v,i)=>{
     const name = [v.firstName, v.lastName].filter(Boolean).join(' ') || 'Без имени';
     const lastSeenStr = new Date(v.lastSeen).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
     const firstSeenStr = new Date(v.firstSeen).toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'});
+    const block = blocked[String(v.id)];
+    const isBlocked = block && (!block.expiresAt || block.expiresAt>now);
     return `<div class="card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
         <div>
@@ -5903,14 +6072,21 @@ async function renderAdminVisitHistory(){
         </div>
         <span class="badge ${roleBadgeClass[v.role]||'inactive'}">${roleLabel[v.role]||v.role}</span>
       </div>
+      ${isBlocked ? `<div class="pillnote" style="margin:10px 0 0;background:#FCE1EE;border-color:#F5C7E0;color:var(--danger);">🚫 Заблокирован — ${escapeHtml(block.reason)}${block.expiresAt?` · до ${new Date(block.expiresAt).toLocaleDateString('ru-RU')}`:' · навсегда'}</div>` : ''}
       <div class="divider"></div>
-      <button class="btn ghost small" onclick="messageVisitor(${i})">✉️ Написать в личку</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn ghost small" onclick="messageVisitor(${i})">✉️ Написать в личку</button>
+        ${isBlocked
+          ? `<button class="btn ghost small" style="color:var(--teal);" onclick="unblockUser('${v.id}')">✅ Разблокировать</button>`
+          : `<button class="btn ghost small" style="color:var(--danger);" onclick="openBlockUserModal('${v.id}','${escapeHtml(name).replace(/'/g,"\\'")}')">🚫 Заблокировать</button>`}
+      </div>
     </div>`;
   }).join('') : `<div class="empty"><div class="big">🕒</div>Пока никто не заходил, либо приложение открывали только вне Telegram.</div>`;
 
   document.getElementById('content').innerHTML = `
   <div class="backbar"><button class="backbtn" onclick="state.adminScreen='dashboard'; fillAdmin();">←</button><div style="font-weight:700">История заходов (${visitors.length})</div></div>
   <div class="pillnote" style="margin:0 18px 14px;">Список всех, кто открывал приложение в Telegram — клиенты, мастера и вы сами. Сортировка — по последнему визиту.</div>
+  ${blockedBanner}
   <div class="section-pad"><input placeholder="🔍 Поиск по имени или @username…" oninput="filterVisitHistory(this.value)" style="width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:14px;"></div>
   <div id="visitHistoryList">${rows}</div>`;
 }
@@ -5925,6 +6101,88 @@ function filterVisitHistory(q){
   });
 }
 window.filterVisitHistory = filterVisitHistory;
+
+/* ============ БЛОКИРОВКА ПОЛЬЗОВАТЕЛЯ (причина + срок) ============
+   Хранится общим объектом 'blocked-users' — { telegramId: { reason, expiresAt, blockedAt, blockedBy } }.
+   expiresAt=null означает блокировку навсегда. Сама блокировка проверяется при каждом
+   заходе приложения (см. checkIfBlocked в init()) — заблокированный видит отдельный
+   экран вместо обычного приложения, с причиной и сроком, без доступа к данным. */
+function openBlockUserModal(telegramId, name){
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'blockUserOverlay';
+  overlay.innerHTML = `<div class="modal-card">
+    <h3 style="color:var(--danger);">Заблокировать пользователя</h3>
+    <p>${escapeHtml(name)} (ID ${escapeHtml(telegramId)}) больше не сможет пользоваться приложением, пока блокировка активна.</p>
+    <div class="field"><label>Причина</label><textarea id="blockReasonInput" placeholder="Например: спам в чате, накрутка отзывов"></textarea></div>
+    <div class="field"><label>Срок</label><select id="blockDurationInput">
+      <option value="1">1 день</option>
+      <option value="7">7 дней</option>
+      <option value="30">30 дней</option>
+      <option value="permanent">Навсегда</option>
+    </select></div>
+    <button class="btn danger" style="background:var(--danger);color:#fff;border:none;margin-bottom:8px;" onclick="confirmBlockUser('${telegramId}')">Заблокировать</button>
+    <button class="btn ghost" onclick="document.getElementById('blockUserOverlay').remove();">Отмена</button>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+window.openBlockUserModal = openBlockUserModal;
+
+async function confirmBlockUser(telegramId){
+  const reason = document.getElementById('blockReasonInput').value.trim();
+  const duration = document.getElementById('blockDurationInput').value;
+  if(!reason){ showToast('Укажите причину блокировки'); return; }
+
+  const expiresAt = duration==='permanent' ? null : (Date.now() + Number(duration)*24*60*60*1000);
+  const blocked = await sget('blocked-users', true) || {};
+  blocked[telegramId] = {
+    reason, expiresAt, blockedAt: Date.now(),
+    blockedBy: state.tgUser ? String(state.tgUser.id) : 'owner',
+  };
+  await sset('blocked-users', blocked, true);
+  logAdminAction('block_user', `ID ${telegramId}: ${reason}`);
+
+  const el = document.getElementById('blockUserOverlay');
+  if(el) el.remove();
+  showToast('Пользователь заблокирован');
+  renderAdminVisitHistory();
+}
+window.confirmBlockUser = confirmBlockUser;
+
+async function unblockUser(telegramId){
+  const blocked = await sget('blocked-users', true) || {};
+  delete blocked[telegramId];
+  await sset('blocked-users', blocked, true);
+  logAdminAction('unblock_user', `ID ${telegramId}`);
+  showToast('Разблокирован(а)');
+  if(state.adminScreen==='blockedUsers') renderAdminBlockedUsers();
+  else renderAdminVisitHistory();
+}
+window.unblockUser = unblockUser;
+
+/* ============ ЭКРАН СПИСКА ЗАБЛОКИРОВАННЫХ ============ */
+async function renderAdminBlockedUsers(){
+  const blocked = await sget('blocked-users', true) || {};
+  const now = Date.now();
+  const entries = Object.entries(blocked).filter(([id,b])=>!b.expiresAt || b.expiresAt>now);
+
+  const rows = entries.length ? entries.map(([id,b])=>{
+    const v = (state._visitHistoryCache||[]).find(x=>String(x.id)===id);
+    const name = v ? ([v.firstName,v.lastName].filter(Boolean).join(' ')||'Без имени') : `ID ${id}`;
+    return `<div class="card">
+      <div class="mcard-name" style="font-size:14px;">${escapeHtml(name)}</div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">Telegram ID ${escapeHtml(id)}</div>
+      <div class="pillnote" style="margin:10px 0 0;background:#FCE1EE;border-color:#F5C7E0;color:var(--danger);">${escapeHtml(b.reason)}${b.expiresAt?` · до ${new Date(b.expiresAt).toLocaleDateString('ru-RU')}`:' · навсегда'}</div>
+      <div class="divider"></div>
+      <button class="btn ghost small" style="color:var(--teal);" onclick="unblockUser('${id}')">✅ Разблокировать</button>
+    </div>`;
+  }).join('') : `<div class="empty"><div class="big">✅</div>Никто не заблокирован.</div>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="backbar"><button class="backbtn" onclick="state.adminScreen='visitHistory'; fillAdmin();">←</button><div style="font-weight:700">Заблокированные (${entries.length})</div></div>
+  ${rows}`;
+}
+window.renderAdminBlockedUsers = renderAdminBlockedUsers;
 
 function messageVisitor(i){
   const v = (state._visitHistoryCache||[])[i];
